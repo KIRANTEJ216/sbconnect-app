@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { signOut } from '../../lib/auth';
-import { getTotalBusinessValue } from '../../lib/firestore';
+import { getTotalBusinessValue, getBusinessProfile } from '../../lib/firestore';
 import { useNavigate } from 'react-router-dom';
 
 const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -26,6 +26,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   const navigate = useNavigate();
   const [total, setTotal] = useState(0);
   const [now, setNow] = useState(new Date());
+  const [ownerName, setOwnerName] = useState('');
 
   useEffect(() => {
     getTotalBusinessValue().then(setTotal).catch(() => {});
@@ -35,6 +36,14 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
     }, 30000);
     return () => { clearInterval(t); clearInterval(unsub); };
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      getBusinessProfile(user.uid).then((bp) => {
+        if (bp?.ownerName) setOwnerName(bp.ownerName);
+      }).catch(() => {});
+    }
+  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -72,20 +81,25 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
         <p className="text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
       </div>
 
-      <div className="flex items-center gap-5">
+      <div className="flex items-center gap-4">
         {user && (
           <>
-            <span className="text-sm text-steel hidden sm:inline tracking-tight">
-              {user.displayName || user.email}
+            <span className="text-sm font-medium text-charcoal hidden sm:inline tracking-tight">
+              {ownerName || user.displayName || user.email}
             </span>
             <div className="w-9 h-9 bg-canvas rounded-xl flex items-center justify-center text-charcoal font-semibold text-sm border border-border">
-              {(user.displayName || user.email || '?').charAt(0).toUpperCase()}
+              {(ownerName || user.displayName || user.email || '?').charAt(0).toUpperCase()}
             </div>
             <button
               onClick={handleSignOut}
-              className="text-sm text-muted hover:text-charcoal transition-colors font-medium"
+              className="p-2 rounded-xl text-muted hover:text-danger hover:bg-danger-light transition-all duration-200 cursor-pointer"
+              title="Sign out"
             >
-              Sign out
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
             </button>
           </>
         )}
