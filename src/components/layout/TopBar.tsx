@@ -67,8 +67,9 @@ export function TopBar() {
             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
           <span className="text-4xl font-bold text-charcoal tracking-tight">₹ {total.toLocaleString('en-IN')}</span>
+          <span className="text-xs text-muted font-mono tracking-tight ml-1.5">Total Revenue &middot; FY {fyLabel}</span>
         </div>
-        <p className="text-xs text-muted font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} — Total Revenue &middot; FY {fyLabel}</p>
+        <p className="text-xs text-muted font-mono tracking-tight mt-0.5">Rs. {total > 0 ? toWords(total) : 'Zero'}</p>
       </div>
 
       <div className="flex items-center gap-5">
