@@ -283,7 +283,7 @@ export default function Dashboard() {
                 <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
               ) : (
                 <div className="divide-y divide-border">
-                  {leaderboard.slice(0, 10).map((entry, i) => (
+                  {leaderboard.slice(0, 7).map((entry, i) => (
                     <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-base shrink-0">
