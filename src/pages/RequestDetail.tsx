@@ -18,6 +18,7 @@ export default function RequestDetail() {
   const [request, setRequest] = useState<Request | null>(null);
   const [requester, setRequester] = useState<UserProfile | null>(null);
   const [interests, setInterests] = useState<Interest[]>([]);
+  const [interestPhones, setInterestPhones] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
   const [showInterestForm, setShowInterestForm] = useState(false);
@@ -38,6 +39,12 @@ export default function RequestDetail() {
         ]);
         setRequester(up);
         setInterests(ints);
+        const phones: Record<string, string> = {};
+        await Promise.all(ints.map(async (int) => {
+          const bp = await getBusinessProfile(int.uid);
+          if (bp?.phone) phones[int.uid] = bp.phone;
+        }));
+        setInterestPhones(phones);
       }
       setLoading(false);
     }
@@ -59,7 +66,14 @@ export default function RequestDetail() {
       setSuccess('Interest submitted! The requester will review it.');
       setInterestMessage('');
       setShowInterestForm(false);
-      setInterests(await getInterests(id));
+      const updatedInts = await getInterests(id);
+      setInterests(updatedInts);
+      const phones: Record<string, string> = {};
+      await Promise.all(updatedInts.map(async (int) => {
+        const bp = await getBusinessProfile(int.uid);
+        if (bp?.phone) phones[int.uid] = bp.phone;
+      }));
+      setInterestPhones(phones);
     } catch (err) {
       console.error('Failed to express interest:', err);
       setError('Failed to submit. Try again.');
@@ -180,33 +194,52 @@ export default function RequestDetail() {
                   {formatDate(request.createdAt)}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {!isOwner && request.status === 'open' && (
                   <>
-                    {requester?.phone && (
-                      <a
-                        href={`tel:${requester.phone}`}
-                        className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-[0.75rem] border border-border text-charcoal hover:bg-canvas transition-colors"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                        </svg>
-                        Call
-                      </a>
-                    )}
-                    <Button size="sm" onClick={handleChat}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                      </svg>
-                      Chat
-                    </Button>
-                    {!hasInterested && (
-                      <Button size="sm" variant="outline" onClick={() => setShowInterestForm(true)}>
-                        Express Interest
-                      </Button>
-                    )}
-                    {hasInterested && (
-                      <Badge variant="accent">Interest Sent</Badge>
+                    {hasInterested ? (
+                      <>
+                        {requester?.phone && (
+                          <a
+                            href={`tel:${requester.phone}`}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-[0.75rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                            Call
+                          </a>
+                        )}
+                        <Button size="sm" variant="outline" onClick={handleChat}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                          Chat
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {requester?.phone && (
+                          <a
+                            href={`tel:${requester.phone}`}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-[0.75rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                            </svg>
+                            Call
+                          </a>
+                        )}
+                        <Button size="sm" variant="outline" onClick={handleChat}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                          Chat
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowInterestForm(true)}>
+                          Express Interest
+                        </Button>
+                      </>
                     )}
                   </>
                 )}
@@ -252,15 +285,42 @@ export default function RequestDetail() {
             </h3>
             <div className="space-y-3">
               {interests.map((int) => (
-                <div key={int.id} className="flex items-center justify-between p-4 rounded-2xl border border-border">
-                  <div>
-                    <p className="font-medium text-charcoal text-sm">{int.companyName}</p>
-                    <p className="text-sm text-steel mt-0.5">{int.message}</p>
-                    <p className="text-xs text-muted font-mono mt-1 tracking-tight">{formatDate(int.createdAt)}</p>
+                <div key={int.id} className="p-4 rounded-2xl border border-border">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-medium text-charcoal text-sm">{int.companyName}</p>
+                      <p className="text-sm text-steel mt-0.5">{int.message}</p>
+                      <p className="text-xs text-muted font-mono mt-1 tracking-tight">{formatDate(int.createdAt)}</p>
+                    </div>
+                    <Button size="sm" onClick={() => handleAward(int)} loading={closing}>
+                      Award Contract
+                    </Button>
                   </div>
-                  <Button size="sm" onClick={() => handleAward(int)} loading={closing}>
-                    Award Contract
-                  </Button>
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                    {interestPhones[int.uid] && (
+                      <a
+                        href={`tel:${interestPhones[int.uid]}`}
+                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-[0.5rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                        {interestPhones[int.uid]}
+                      </a>
+                    )}
+                    <button
+                      onClick={async () => {
+                        const convId = await getOrCreateConversation(user!.uid, int.uid);
+                        window.location.href = `/chat/${convId}`;
+                      }}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-[0.5rem] border border-border text-charcoal hover:bg-canvas transition-colors"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      Chat
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

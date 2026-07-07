@@ -73,6 +73,7 @@ export async function getAllProfiles(): Promise<BusinessProfile[]> {
 export async function createRequest(
   uid: string, companyName: string, title: string, description: string,
   category: string, customCategory: string, budget: string, deadline: string,
+  requesterPhone?: string,
 ) {
   const ref = await addDoc(collection(db, 'requests'), {
     uid,
@@ -87,6 +88,7 @@ export async function createRequest(
     awardedTo: null,
     interestCount: 0,
     interestedUids: [],
+    requesterPhone: requesterPhone || '',
     createdAt: Date.now(),
   });
   return ref.id;

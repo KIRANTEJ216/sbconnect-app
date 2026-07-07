@@ -38,7 +38,8 @@ export default function CreateRequest() {
     try {
       const profile = await getBusinessProfile(user.uid);
       const companyName = profile?.companyName || user.displayName || 'Unknown';
-      await createRequest(user.uid, companyName, title, description, category, customCategory, budget, deadline);
+      const phone = profile?.phone || '';
+      await createRequest(user.uid, companyName, title, description, category, customCategory, budget, deadline, phone);
       navigate('/requests');
     } catch (err) {
       console.error('Failed to create request:', err);

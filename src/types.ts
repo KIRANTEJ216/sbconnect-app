@@ -57,6 +57,7 @@ export interface Request {
   awardedTo: string | null;
   interestCount: number;
   interestedUids: string[];
+  requesterPhone: string;
   createdAt: number;
 }
 
