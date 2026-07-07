@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation } from '../lib/firestore';
 import { getUserProfile } from '../lib/auth';
-import { uploadProfilePhoto, uploadProfileCatalog } from '../lib/storage';
+import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { formatDate } from '../lib/format';
 import type { BusinessProfile, UserProfile } from '../types';
 import { INDUSTRIES, COMPANY_SIZES } from '../types';
@@ -44,8 +44,7 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
-  const [catalogFile, setCatalogFile] = useState<File | null>(null);
-  const [catalogName, setCatalogName] = useState('');
+  const [catalogFiles, setCatalogFiles] = useState<File[]>([]);
   const photoRef = useRef<HTMLInputElement>(null);
   const catalogRef = useRef<HTMLInputElement>(null);
 
@@ -56,10 +55,13 @@ export default function Profile() {
     categories: [] as string[],
     companySize: '',
     location: '',
+    keywords: [] as string[],
     contactEmail: '',
     website: '',
     description: '',
   });
+
+  const [keywordInput, setKeywordInput] = useState('');
 
   const [editingMembership, setEditingMembership] = useState(false);
   const [membershipStatus, setMembershipStatus] = useState<'active' | 'inactive' | 'expired'>('active');
@@ -106,12 +108,12 @@ export default function Profile() {
       categories: [...(profile.categories ?? [])],
       companySize: profile.companySize,
       location: profile.location,
+      keywords: [...(profile.keywords ?? [])],
       contactEmail: profile.contactEmail,
       website: profile.website,
       description: profile.description,
     });
     setPhotoPreview(profile.photoURL || '');
-    setCatalogName(profile.catalogPDFURL ? 'catalog.pdf' : '');
     setEditing(true);
   };
 
@@ -147,20 +149,21 @@ export default function Profile() {
   };
 
   const handleCatalog = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      setError('Catalog PDF must be under 10MB.');
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const total = catalogFiles.length + files.length;
+    if (total > 5) {
+      setError(`Maximum 5 files allowed. You can add ${5 - catalogFiles.length} more.`);
       return;
     }
-    if (file.type !== 'application/pdf') {
-      setError('Only PDF files are allowed for catalogs.');
-      return;
+    const maxSize = 10 * 1024 * 1024;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    for (const f of files) {
+      if (f.size > maxSize) { setError(`"${f.name}" exceeds 10MB limit.`); return; }
+      if (!allowed.includes(f.type)) { setError(`"${f.name}" must be JPG, PNG, WebP or PDF.`); return; }
     }
-    setCatalogFile(file);
+    setCatalogFiles((prev) => [...prev, ...files]);
     setError('');
-    setCatalogName(file.name);
   };
 
   const handleSave = async () => {
@@ -197,15 +200,15 @@ export default function Profile() {
     setSaving(true);
     try {
       let photoURL = profile.photoURL || '';
-      let catalogPDFURL = profile.catalogPDFURL || '';
+      let catalogURLs = [...(profile.catalogURLs || [])];
       const newEditCount = (profile.editCount || 0) + 1;
       const locked = newEditCount >= 3;
 
       if (photoFile) {
         photoURL = await uploadProfilePhoto(user.uid, photoFile);
       }
-      if (catalogFile) {
-        catalogPDFURL = await uploadProfileCatalog(user.uid, catalogFile);
+      if (catalogFiles.length > 0) {
+        catalogURLs = await uploadCatalogFiles(user.uid, catalogFiles);
       }
 
       await updateBusinessProfile(user.uid, {
@@ -215,11 +218,12 @@ export default function Profile() {
         categories: form.categories,
         companySize: form.companySize,
         location: form.location,
+        keywords: form.keywords,
         contactEmail: form.contactEmail,
         website: form.website,
         description: form.description,
         photoURL,
-        catalogPDFURL,
+        catalogURLs,
         editCount: newEditCount,
         locked,
       });
@@ -232,17 +236,18 @@ export default function Profile() {
         categories: form.categories,
         companySize: form.companySize,
         location: form.location,
+        keywords: form.keywords,
         contactEmail: form.contactEmail,
         website: form.website,
         description: form.description,
         photoURL,
-        catalogPDFURL,
+        catalogURLs,
         editCount: newEditCount,
         locked,
       });
       setEditing(false);
       setPhotoFile(null);
-      setCatalogFile(null);
+      setCatalogFiles([]);
       setError('');
     } catch (err) {
       console.error('Failed to update profile:', err);
@@ -280,6 +285,25 @@ export default function Profile() {
 
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
+
+  const addKeyword = (kw: string) => {
+    const trimmed = kw.trim();
+    if (!trimmed) return;
+    if (form.keywords.includes(trimmed.toLowerCase())) return;
+    setForm((f) => ({ ...f, keywords: [...f.keywords, trimmed] }));
+  };
+
+  const removeKeyword = (kw: string) => {
+    setForm((f) => ({ ...f, keywords: f.keywords.filter((k) => k !== kw) }));
+  };
+
+  const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addKeyword(keywordInput);
+      setKeywordInput('');
+    }
+  };
 
   const isOwnProfile = user?.uid === id;
 
@@ -430,6 +454,33 @@ export default function Profile() {
                 />
 
                 <div>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
+                    Keywords <span className="text-muted font-normal">(sub-business categories)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                    {form.keywords.map((kw) => (
+                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-light text-primary">
+                        {kw}
+                        <button type="button" onClick={() => removeKeyword(kw)} className="hover:text-danger transition-colors cursor-pointer">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="e.g. steel-supply, it-services, pvc-pipes, solar-panels, packaging"
+                      value={keywordInput}
+                      onChange={(e) => setKeywordInput(e.target.value)}
+                      onKeyDown={handleKeywordKeyDown}
+                      onBlur={() => { if (keywordInput.trim()) { addKeyword(keywordInput); setKeywordInput(''); } }}
+                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted font-mono">Enter</span>
+                  </div>
+                  <p className="text-xs text-muted mt-1.5">Type a keyword and press Enter. e.g. steel-supply, it-services, pvc-pipes, packaging, solar-panels</p>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Company Photo</label>
                   <div className="flex items-center gap-4">
                     <div className="w-20 h-20 rounded-2xl border border-border bg-muted-bg flex items-center justify-center overflow-hidden shrink-0">
@@ -458,22 +509,27 @@ export default function Profile() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog / Brochure (PDF)</label>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog / Brochure (up to 5 files)</label>
                   <div className="flex items-center gap-3">
-                    <input ref={catalogRef} type="file" accept=".pdf" onChange={handleCatalog} className="hidden" />
+                    <input ref={catalogRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple onChange={handleCatalog} className="hidden" />
                     <Button type="button" variant="outline" size="sm" onClick={() => catalogRef.current?.click()}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
                       </svg>
-                      {catalogName || 'Upload PDF'}
+                      {catalogFiles.length > 0 ? `${catalogFiles.length} file${catalogFiles.length > 1 ? 's' : ''} selected` : 'Upload Files'}
                     </Button>
-                    {catalogName && (
-                      <button type="button" onClick={() => { setCatalogFile(null); setCatalogName(''); }} className="text-xs text-danger hover:underline cursor-pointer">
-                        Remove
-                      </button>
-                    )}
                   </div>
+                  {catalogFiles.length > 0 && (
+                    <div className="mt-3 space-y-1.5">
+                      {catalogFiles.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-canvas text-xs text-steel">
+                          <span className="truncate">{f.name}</span>
+                          <button type="button" onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))} className="text-danger hover:underline shrink-0 ml-2 cursor-pointer">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <Input
@@ -561,6 +617,13 @@ export default function Profile() {
                   <p className="text-steel leading-relaxed">
                     {profile.description || 'No description provided.'}
                   </p>
+                  {(profile.keywords ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-border">
+                      {(profile.keywords ?? []).map((kw) => (
+                        <span key={kw} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               </TiltCard>
@@ -602,20 +665,28 @@ export default function Profile() {
               </Card>
               </TiltCard>
 
-              {profile.catalogPDFURL && (
+              {(profile.catalogURLs ?? []).length > 0 && (
               <TiltCard>
               <Card>
                 <CardContent className="p-8">
                   <h3 className="font-semibold text-charcoal tracking-tight mb-4">Catalog</h3>
-                  <a href={profile.catalogPDFURL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2.5 px-4 py-2.5 bg-primary-light text-primary rounded-xl text-sm font-medium hover:bg-primary-light/80 transition-colors">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                      <polyline points="14 2 14 8 20 8" />
-                      <line x1="16" y1="13" x2="8" y2="13" />
-                      <line x1="16" y1="17" x2="8" y2="17" />
-                    </svg>
-                    View Catalog PDF
-                  </a>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {(profile.catalogURLs ?? []).map((url, i) => (
+                      url.endsWith('.pdf') ? (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-canvas border border-border hover:bg-primary-light transition-colors">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                          </svg>
+                          <span className="text-[11px] text-muted font-mono">PDF {i + 1}</span>
+                        </a>
+                      ) : (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity">
+                          <img src={url} alt={`Catalog ${i + 1}`} className="w-full h-full object-cover" />
+                        </a>
+                      )
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
               </TiltCard>

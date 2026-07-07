@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { createBusinessProfile } from '../lib/firestore';
-import { uploadProfilePhoto, uploadProfileCatalog } from '../lib/storage';
+import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
@@ -18,8 +18,7 @@ export default function CreateProfile() {
   const [error, setError] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
-  const [catalogFile, setCatalogFile] = useState<File | null>(null);
-  const [catalogName, setCatalogName] = useState('');
+  const [catalogFiles, setCatalogFiles] = useState<File[]>([]);
   const photoRef = useRef<HTMLInputElement>(null);
   const catalogRef = useRef<HTMLInputElement>(null);
 
@@ -30,10 +29,32 @@ export default function CreateProfile() {
     categories: [] as string[],
     companySize: '',
     location: '',
+    keywords: [] as string[],
     contactEmail: '',
     website: '',
     description: '',
   });
+
+  const [keywordInput, setKeywordInput] = useState('');
+
+  const addKeyword = (kw: string) => {
+    const trimmed = kw.trim();
+    if (!trimmed) return;
+    if (form.keywords.includes(trimmed.toLowerCase())) return;
+    setForm((f) => ({ ...f, keywords: [...f.keywords, trimmed] }));
+  };
+
+  const removeKeyword = (kw: string) => {
+    setForm((f) => ({ ...f, keywords: f.keywords.filter((k) => k !== kw) }));
+  };
+
+  const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addKeyword(keywordInput);
+      setKeywordInput('');
+    }
+  };
 
   useEffect(() => {
     if (user?.email) {
@@ -73,20 +94,21 @@ export default function CreateProfile() {
   };
 
   const handleCatalog = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      setError('Catalog PDF must be under 10MB.');
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const total = catalogFiles.length + files.length;
+    if (total > 5) {
+      setError(`Maximum 5 files allowed. You can add ${5 - catalogFiles.length} more.`);
       return;
     }
-    if (file.type !== 'application/pdf') {
-      setError('Only PDF files are allowed for catalogs.');
-      return;
+    const maxSize = 10 * 1024 * 1024;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    for (const f of files) {
+      if (f.size > maxSize) { setError(`"${f.name}" exceeds 10MB limit.`); return; }
+      if (!allowed.includes(f.type)) { setError(`"${f.name}" must be JPG, PNG, WebP or PDF.`); return; }
     }
-    setCatalogFile(file);
+    setCatalogFiles((prev) => [...prev, ...files]);
     setError('');
-    setCatalogName(file.name);
   };
 
   const fields = [
@@ -94,10 +116,11 @@ export default function CreateProfile() {
     { key: 'phone', label: 'Phone', weight: 10, filled: form.phone.trim().length > 0 },
     { key: 'companyName', label: 'Company Name', weight: 15, filled: form.companyName.trim().length > 0 },
     { key: 'categories', label: 'Categories', weight: 15, filled: form.categories.length > 0 },
+    { key: 'keywords', label: 'Keywords', weight: 5, filled: form.keywords.length > 0 },
     { key: 'companySize', label: 'Company Size', weight: 10, filled: form.companySize.length > 0 },
     { key: 'location', label: 'Location', weight: 10, filled: form.location.trim().length > 0 },
     { key: 'photo', label: 'Photo', weight: 10, filled: photoFile !== null },
-    { key: 'catalog', label: 'Catalog', weight: 5, filled: catalogFile !== null },
+    { key: 'catalog', label: 'Catalog', weight: 5, filled: catalogFiles.length > 0 },
     { key: 'contactEmail', label: 'Contact Email', weight: 15, filled: form.contactEmail.trim().length > 0 },
     { key: 'website', label: 'Website', weight: 5, filled: form.website.trim().length > 0 },
     { key: 'description', label: 'Description', weight: 15, filled: form.description.trim().length > 0 },
@@ -119,13 +142,13 @@ export default function CreateProfile() {
     setError('');
     try {
       let photoURL = '';
-      let catalogPDFURL = '';
+      let catalogURLs: string[] = [];
 
       if (photoFile) {
         photoURL = await uploadProfilePhoto(user.uid, photoFile);
       }
-      if (catalogFile) {
-        catalogPDFURL = await uploadProfileCatalog(user.uid, catalogFile);
+      if (catalogFiles.length > 0) {
+        catalogURLs = await uploadCatalogFiles(user.uid, catalogFiles);
       }
 
       await createBusinessProfile(user.uid, {
@@ -138,11 +161,12 @@ export default function CreateProfile() {
         contactEmail: form.contactEmail,
         website: form.website,
         description: form.description,
+        keywords: form.keywords,
       });
 
-      if (photoURL || catalogPDFURL) {
+      if (photoURL || catalogURLs.length > 0) {
         const { updateBusinessProfile } = await import('../lib/firestore');
-        await updateBusinessProfile(user.uid, { photoURL, catalogPDFURL });
+        await updateBusinessProfile(user.uid, { photoURL, catalogURLs });
       }
 
       navigate('/dashboard');
@@ -182,21 +206,21 @@ export default function CreateProfile() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <Input
                   label="Owner / Business Owner Name"
-                  placeholder="e.g. John Doe"
+                  placeholder="e.g. Ravi Sharma"
                   value={form.ownerName}
                   onChange={(e) => update('ownerName', e.target.value)}
                 />
                 <Input
                   label="Phone Number"
                   type="tel"
-                  placeholder="e.g. +254 712 345 678"
+                  placeholder="e.g. +91-9876543210"
                   value={form.phone}
                   onChange={(e) => update('phone', e.target.value)}
                   required
                 />
                 <Input
                   label="Company Name"
-                  placeholder="e.g. Acme Solutions Ltd"
+                  placeholder="e.g. Sri Sai Enterprises"
                   value={form.companyName}
                   onChange={(e) => update('companyName', e.target.value)}
                   required
@@ -244,11 +268,38 @@ export default function CreateProfile() {
 
                 <Input
                   label="Location"
-                  placeholder="e.g. Nairobi, Kenya"
+                  placeholder="e.g. Hyderabad, India"
                   value={form.location}
                   onChange={(e) => update('location', e.target.value)}
                   required
                 />
+
+                <div>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
+                    Keywords <span className="text-muted font-normal">(sub-business categories)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+                    {form.keywords.map((kw) => (
+                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-light text-primary">
+                        {kw}
+                        <button type="button" onClick={() => removeKeyword(kw)} className="hover:text-danger transition-colors cursor-pointer">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="e.g. steel-supply, it-services, pvc-pipes, solar-panels, packaging"
+                      value={keywordInput}
+                      onChange={(e) => setKeywordInput(e.target.value)}
+                      onKeyDown={handleKeywordKeyDown}
+                      onBlur={() => { if (keywordInput.trim()) { addKeyword(keywordInput); setKeywordInput(''); } }}
+                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted font-mono">Enter</span>
+                  </div>
+                  <p className="text-xs text-muted mt-1.5">Type a keyword and press Enter to add it. e.g. steel-supply, it-services, pvc-pipes, packaging, solar-panels</p>
+                </div>
 
                 <div className="border-t border-border pt-6">
                   <div>
@@ -291,12 +342,13 @@ export default function CreateProfile() {
                   </div>
 
                   <div className="mt-5">
-                    <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog / Brochure (PDF)</label>
+                    <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog / Brochure (up to 5 files)</label>
                     <div className="flex items-center gap-3">
                       <input
                         ref={catalogRef}
                         type="file"
-                        accept=".pdf"
+                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                        multiple
                         onChange={handleCatalog}
                         className="hidden"
                       />
@@ -305,19 +357,26 @@ export default function CreateProfile() {
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                           <polyline points="14 2 14 8 20 8" />
                         </svg>
-                        {catalogName || 'Upload PDF'}
+                        {catalogFiles.length > 0 ? `${catalogFiles.length} file${catalogFiles.length > 1 ? 's' : ''} selected` : 'Upload Files'}
                       </Button>
-                      {catalogName && (
-                        <button
-                          type="button"
-                          onClick={() => { setCatalogFile(null); setCatalogName(''); }}
-                          className="text-xs text-danger hover:underline cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      )}
                     </div>
-                    <p className="text-xs text-muted mt-1.5">Showcase your products or services. Max 10MB.</p>
+                    {catalogFiles.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {catalogFiles.map((f, i) => (
+                          <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-canvas text-xs text-steel">
+                            <span className="truncate">{f.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))}
+                              className="text-danger hover:underline shrink-0 ml-2 cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted mt-1.5">JPG, PNG, WebP or PDF. Max 10MB each, up to 5 files.</p>
                   </div>
                 </div>
 

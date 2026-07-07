@@ -19,6 +19,7 @@ export default function Requests() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [closingId, setClosingId] = useState<string | null>(null);
   const [pitching, setPitching] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -29,19 +30,25 @@ export default function Requests() {
 
   const handlePitch = async (req: Request) => {
     if (!user) return;
+    if (req.interestedUids?.includes(user.uid)) {
+      setError('You have already pitched for this request');
+      return;
+    }
     setPitching(req.id);
     try {
       const bp = await getBusinessProfile(user.uid);
       const companyName = bp?.companyName || user.displayName || 'Unknown';
-      const msg = `Hi, I'm from ${companyName}. I'd love to help with this request. Let's connect!`;
-      await expressInterest(req.id, user.uid, companyName, msg);
+      const phone = bp?.phone || '';
+      const msg = `Hi, I'm from ${companyName}. Reach me at ${phone} — let's connect!`;
+      await expressInterest(req.id, user.uid, companyName, phone, msg);
       setRequests((prev) =>
         prev.map((r) =>
-          r.id === req.id ? { ...r, interestCount: r.interestCount + 1 } : r,
+          r.id === req.id ? { ...r, interestCount: r.interestCount + 1, interestedUids: [...(r.interestedUids ?? []), user.uid] } : r,
         ),
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to pitch:', err);
+      setError(err?.message || 'Failed to pitch');
     } finally {
       setPitching(null);
     }
@@ -85,6 +92,10 @@ export default function Requests() {
           </Button>
         </Link>
       </div>
+
+      {error && (
+        <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl">{error}</p>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         <button

@@ -60,16 +60,16 @@ export function TopBar() {
         </div>
       </div>
 
-      <div className="flex flex-col items-center">
-        <div className="flex items-center gap-2.5">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <div className="flex flex-col items-center leading-tight">
+        <div className="flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="1" x2="12" y2="23" />
             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
           <span className="text-4xl font-bold text-charcoal tracking-tight">₹ {total.toLocaleString('en-IN')}</span>
-          <span className="text-xs text-muted font-mono tracking-tight ml-1.5">Total Revenue &middot; FY {fyLabel}</span>
         </div>
-        <p className="text-xs text-muted font-mono tracking-tight mt-0.5">Rs. {total > 0 ? toWords(total) : 'Zero'}</p>
+        <span className="text-xs text-muted font-mono tracking-tight mt-1">Total Revenue &middot; FY {fyLabel}</span>
+        <p className="text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
       </div>
 
       <div className="flex items-center gap-5">

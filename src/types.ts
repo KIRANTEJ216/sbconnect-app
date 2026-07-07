@@ -32,7 +32,8 @@ export interface BusinessProfile {
   website: string;
   description: string;
   photoURL: string;
-  catalogPDFURL: string;
+  keywords: string[];
+  catalogURLs: string[];
   qrCodeURL: string;
   verified: boolean;
   membershipStatus: 'active' | 'inactive' | 'expired';
@@ -66,6 +67,7 @@ export interface Interest {
   requestId: string;
   uid: string;
   companyName: string;
+  phone: string;
   message: string;
   createdAt: number;
 }

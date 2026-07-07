@@ -11,13 +11,13 @@ import type {
 
 export async function createBusinessProfile(
   uid: string,
-  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogPDFURL' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'editCount' | 'locked' | 'createdAt' | 'updatedAt'>,
+  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'editCount' | 'locked' | 'createdAt' | 'updatedAt'>,
 ) {
   const profile: BusinessProfile = {
     ...data,
     uid,
     photoURL: '',
-    catalogPDFURL: '',
+    catalogURLs: [],
     verified: false,
     qrCodeURL: `${window.location.origin}/profile/${uid}`,
     membershipStatus: 'active',
@@ -32,8 +32,9 @@ export async function createBusinessProfile(
 }
 
 const DEFAULTS = {
-  photoURL: '',
-  catalogPDFURL: '',
+    photoURL: '',
+    keywords: [],
+    catalogURLs: [],
   qrCodeURL: '',
   verified: false,
   membershipStatus: 'active' as const,
@@ -50,7 +51,12 @@ const DEFAULTS = {
 };
 
 function fillDefaults(data: Record<string, unknown>): BusinessProfile {
-  return { ...DEFAULTS, ...data } as BusinessProfile;
+  const migrated = { ...data } as Record<string, unknown>;
+  if (migrated.catalogPDFURL && !migrated.catalogURLs) {
+    migrated.catalogURLs = [migrated.catalogPDFURL as string];
+  }
+  delete migrated.catalogPDFURL;
+  return { ...DEFAULTS, ...migrated } as unknown as BusinessProfile;
 }
 
 export async function getBusinessProfile(uid: string): Promise<BusinessProfile | null> {
@@ -126,19 +132,31 @@ export async function getUserRequests(uid: string): Promise<Request[]> {
 
 // ─── Interest & Deals ───
 
-export async function expressInterest(requestId: string, uid: string, companyName: string, message: string) {
-  const ref = await addDoc(collection(db, 'requests', requestId, 'interests'), {
-    requestId,
-    uid,
-    companyName,
-    message,
-    createdAt: Date.now(),
+export async function expressInterest(requestId: string, uid: string, companyName: string, phone: string, message: string) {
+  const reqRef = doc(db, 'requests', requestId);
+  const result = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(reqRef);
+    if (!snap.exists()) throw new Error('Request not found');
+    const data = snap.data();
+    if ((data.interestedUids ?? []).includes(uid)) {
+      throw new Error('You have already pitched for this request');
+    }
+    tx.update(reqRef, {
+      interestCount: increment(1),
+      interestedUids: arrayUnion(uid),
+    });
+    const ref = doc(collection(db, 'requests', requestId, 'interests'));
+    tx.set(ref, {
+      requestId,
+      uid,
+      companyName,
+      phone,
+      message,
+      createdAt: Date.now(),
+    });
+    return ref.id;
   });
-  await updateDoc(doc(db, 'requests', requestId), {
-    interestCount: increment(1),
-    interestedUids: arrayUnion(uid),
-  });
-  return ref.id;
+  return result;
 }
 
 export async function getInterests(requestId: string): Promise<Interest[]> {

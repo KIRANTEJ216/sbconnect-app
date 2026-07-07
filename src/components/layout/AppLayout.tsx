@@ -40,13 +40,22 @@ export function AppLayout() {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <TopBar />
-        <main className="flex-1 p-8 overflow-auto bg-canvas">
+        <main className="flex-1 p-8 pb-4 overflow-auto bg-canvas">
           <AnimatePresence mode="wait">
             <motion.div key={location.pathname}>
               <Outlet />
             </motion.div>
           </AnimatePresence>
         </main>
+        <footer className="px-8 py-4 border-t border-border text-center text-xs text-muted space-y-1 bg-surface">
+          <p>SB Connect &mdash; Together We Grow in Business</p>
+          <p>
+            Developed by{' '}
+            <a href="https://flologixautomations.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover transition-colors">
+              FlologixAutomations
+            </a>
+          </p>
+        </footer>
       </div>
     </div>
   );

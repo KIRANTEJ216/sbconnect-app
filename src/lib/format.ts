@@ -11,6 +11,6 @@ export function formatDateStr(dateStr: string): string {
 
 export function formatCurrency(value: string): string {
   if (!value) return '';
-  const cleaned = value.replace(/[₹$€KSh\s,]/g, '');
+  const cleaned = value.replace(/[₹€KSh\s,]/g, '');
   return cleaned ? `₹ ${cleaned}` : value;
 }

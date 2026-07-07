@@ -67,7 +67,7 @@ export default function Register() {
             <Input
               label="Full Name"
               type="text"
-              placeholder="John Doe"
+              placeholder="Ravi Sharma"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               required
@@ -83,7 +83,7 @@ export default function Register() {
             <Input
               label="Phone"
               type="tel"
-              placeholder="+254712345678"
+              placeholder="+91-9876543210"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               required

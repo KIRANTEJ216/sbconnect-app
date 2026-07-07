@@ -62,7 +62,9 @@ export default function RequestDetail() {
     try {
       const bp = await getBusinessProfile(user.uid);
       const companyName = bp?.companyName || user.displayName || 'Unknown';
-      await expressInterest(id, user.uid, companyName, interestMessage);
+      const phone = bp?.phone || '';
+      const msg = `${interestMessage}\n\nReach me at: ${phone}`;
+      await expressInterest(id, user.uid, companyName, phone, msg);
       setSuccess('Interest submitted! The requester will review it.');
       setInterestMessage('');
       setShowInterestForm(false);
@@ -308,18 +310,6 @@ export default function RequestDetail() {
                         {interestPhones[int.uid]}
                       </a>
                     )}
-                    <button
-                      onClick={async () => {
-                        const convId = await getOrCreateConversation(user!.uid, int.uid);
-                        window.location.href = `/chat/${convId}`;
-                      }}
-                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-[0.5rem] border border-border text-charcoal hover:bg-canvas transition-colors"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                      </svg>
-                      Chat
-                    </button>
                   </div>
                 </div>
               ))}
