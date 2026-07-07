@@ -1,0 +1,7 @@
+export const ADMIN_EMAILS = [
+  'kktej3d@gmail.com',
+]
+
+export function isAdminEmail(email: string): boolean {
+  return ADMIN_EMAILS.includes(email.toLowerCase().trim())
+}

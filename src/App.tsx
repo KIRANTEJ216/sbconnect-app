@@ -12,15 +12,22 @@ import Profiles from './pages/Profiles';
 import Requests from './pages/Requests';
 import CreateRequest from './pages/CreateRequest';
 import RequestDetail from './pages/RequestDetail';
-import Chat from './pages/Chat';
-import ChatDetail from './pages/ChatDetail';
 import Admin from './pages/Admin';
 import SeedAdmin from './pages/SeedAdmin';
 import { AdminGuard } from './components/AdminGuard';
 
-function ProfileRedirect() {
-  const { user } = useAuth();
+function RootRedirect() {
+  const { user, profile } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+  if (isAdmin) return <Navigate to="/admin" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
+function ProfileRedirect() {
+  const { user, profile } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (profile?.role === 'admin' || profile?.role === 'super_admin') return <Navigate to="/admin" replace />;
   return <Navigate to={`/profile/${user.uid}`} replace />;
 }
 
@@ -42,11 +49,9 @@ export default function App() {
               <Route path="/requests" element={<Requests />} />
               <Route path="/requests/create" element={<CreateRequest />} />
               <Route path="/requests/:id" element={<RequestDetail />} />
-              <Route path="/chat" element={<Chat />} />
-              <Route path="/chat/:id" element={<ChatDetail />} />
               <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
               <Route path="/seed-admin" element={<SeedAdmin />} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<RootRedirect />} />
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

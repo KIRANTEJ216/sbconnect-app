@@ -378,7 +378,7 @@ export default function Profile() {
         <div className="lg:col-span-2 space-y-6">
           {editing ? (
             <Card>
-              <CardContent className="p-8 space-y-6">
+              <CardContent className="p-4 sm:p-6 lg:p-8 space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-charcoal tracking-tight">Edit Profile</h3>
                   <div className="flex gap-2">
@@ -568,13 +568,13 @@ export default function Profile() {
             <>
               <TiltCard>
               <Card>
-                <CardContent className="p-8">
+                <CardContent className="p-4 sm:p-6 lg:p-8">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-3 mb-4">
                         {profile.photoURL ? (
                           <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
-                            <img src={profile.photoURL} alt={profile.companyName} className="w-full h-full object-cover" />
+                            <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover" />
                           </div>
                         ) : (
                           <div className="w-12 h-12 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold text-lg">
@@ -612,7 +612,7 @@ export default function Profile() {
 
               <TiltCard>
               <Card>
-                <CardContent className="p-8">
+                <CardContent className="p-4 sm:p-6 lg:p-8">
                   <h3 className="font-semibold text-charcoal tracking-tight mb-4">About</h3>
                   <p className="text-steel leading-relaxed">
                     {profile.description || 'No description provided.'}
@@ -630,7 +630,7 @@ export default function Profile() {
 
               <TiltCard>
               <Card>
-                <CardContent className="p-8">
+                <CardContent className="p-4 sm:p-6 lg:p-8">
                   <h3 className="font-semibold text-charcoal tracking-tight mb-4">Contact</h3>
                   <div className="space-y-3 text-sm">
                     <div className="flex items-center gap-3">
@@ -668,13 +668,13 @@ export default function Profile() {
               {(profile.catalogURLs ?? []).length > 0 && (
               <TiltCard>
               <Card>
-                <CardContent className="p-8">
+                <CardContent className="p-4 sm:p-6 lg:p-8">
                   <h3 className="font-semibold text-charcoal tracking-tight mb-4">Catalog</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {(profile.catalogURLs ?? []).map((url, i) => (
                       url.endsWith('.pdf') ? (
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-canvas border border-border hover:bg-primary-light transition-colors">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                           </svg>
@@ -682,7 +682,7 @@ export default function Profile() {
                         </a>
                       ) : (
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity">
-                          <img src={url} alt={`Catalog ${i + 1}`} className="w-full h-full object-cover" />
+                          <img src={url} alt={`Catalog ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
                         </a>
                       )
                     ))}
@@ -697,7 +697,7 @@ export default function Profile() {
           {editingMembership ? (
           <TiltCard>
           <Card>
-            <CardContent className="p-8">
+            <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-charcoal tracking-tight">Edit Membership</h3>
                 <button onClick={() => setEditingMembership(false)} className="text-sm text-muted hover:text-charcoal transition-colors cursor-pointer">Cancel</button>
@@ -724,7 +724,7 @@ export default function Profile() {
           ) : (
           <TiltCard>
           <Card>
-            <CardContent className="p-8">
+            <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-charcoal tracking-tight">Membership</h3>
                 {isOwnProfile && (
@@ -772,7 +772,7 @@ export default function Profile() {
           <Card>
             <CardContent className="p-6">
               <div className="aspect-square rounded-2xl overflow-hidden">
-                <img src={profile.photoURL} alt={profile.companyName} className="w-full h-full object-cover" />
+                <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover" />
               </div>
             </CardContent>
           </Card>
@@ -780,7 +780,7 @@ export default function Profile() {
           )}
           <TiltCard>
           <Card>
-            <CardContent className="p-8 text-center">
+            <CardContent className="p-4 sm:p-6 lg:p-8 text-center">
               <h3 className="font-semibold text-charcoal tracking-tight mb-6">QR Code</h3>
               <div className="bg-white p-5 rounded-2xl border border-border inline-block">
                 <QrCode value={profileUrl} size={180} fgColor="#18181B" />

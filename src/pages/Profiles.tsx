@@ -24,6 +24,7 @@ export default function Profiles() {
     (p) =>
       p.companyName.toLowerCase().includes(search.toLowerCase()) ||
       p.categories.some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
+      (p.keywords ?? []).some((k) => k.toLowerCase().includes(search.toLowerCase())) ||
       p.location.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -45,12 +46,12 @@ export default function Profiles() {
     <AnimatedPage>
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-charcoal tracking-tight">Business Profiles</h1>
+        <h1 className="text-3xl font-bold text-charcoal tracking-tight">Business Directory</h1>
         <p className="text-steel mt-1.5 gradient-text">Discover businesses in the community</p>
       </div>
 
       <Input
-        placeholder="Search by name, category, or location..."
+        placeholder="Search by name, category, keyword, or location..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />

@@ -1,6 +1,6 @@
 import {
   doc, setDoc, getDoc, getDocs, updateDoc,
-  collection, query, where, orderBy, increment, arrayUnion,
+  collection, query, where, orderBy, limit, increment, arrayUnion,
   addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -409,4 +409,29 @@ export async function getUnverifiedProfiles(): Promise<BusinessProfile[]> {
   const q = query(collection(db, 'profiles'), where('verified', '==', false));
   const snap = await getDocs(q);
   return snap.docs.map((d) => fillDefaults(d.data()));
+}
+
+// ─── Login Logs ───
+
+export interface LoginLog {
+  id: string
+  uid: string
+  email: string
+  displayName: string
+  timestamp: number
+}
+
+export async function logLogin(uid: string, email: string, displayName: string) {
+  await addDoc(collection(db, 'loginLogs'), {
+    uid,
+    email,
+    displayName: displayName || email.split('@')[0],
+    timestamp: Date.now(),
+  });
+}
+
+export async function getLoginLogs(limitCount = 50): Promise<LoginLog[]> {
+  const q = query(collection(db, 'loginLogs'), orderBy('timestamp', 'desc'), limit(limitCount));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as LoginLog));
 }

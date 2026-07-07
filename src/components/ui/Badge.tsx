@@ -7,11 +7,11 @@ interface Props {
 }
 
 const variants: Record<string, string> = {
-  accent: 'bg-primary-light text-primary',
-  success: 'bg-accent-light text-accent-hover',
-  warning: 'bg-amber-50 text-amber-700',
-  danger: 'bg-danger-light text-danger',
-  neutral: 'bg-muted-bg text-steel',
+  accent: 'bg-primary-light text-primary border border-primary/10',
+  success: 'bg-accent-light text-accent-hover border border-accent/10',
+  warning: 'bg-amber-50 text-amber-700 border border-amber-200/50',
+  danger: 'bg-danger-light text-danger border border-danger/10',
+  neutral: 'bg-muted-bg text-steel border border-border/50',
 };
 
 export function Badge({ children, variant = 'accent', className = '' }: Props) {

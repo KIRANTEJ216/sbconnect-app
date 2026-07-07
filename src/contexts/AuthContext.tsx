@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { AppUser, UserProfile } from '../types';
 import { userToAppUser, setUserOnline } from '../lib/auth';
+import { isAdminEmail } from '../lib/admin';
 
 interface AuthState {
   user: AppUser | null;
@@ -28,8 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
             setState((s) => ({ ...s, profile: data }));
-            if (data.role === 'user' && firebaseUser.email === 'kktej3d@gmail.com') {
-              updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'super_admin' }).catch(console.error);
+            const email = firebaseUser.email;
+            if (email && isAdminEmail(email) && data.role === 'user') {
+              getDoc(doc(db, 'users', firebaseUser.uid)).then((snap2) => {
+                const fresh = snap2.data() as UserProfile | undefined;
+                if (fresh && fresh.role === 'user') {
+                  const role = email === 'kktej3d@gmail.com' ? 'super_admin' : 'admin';
+                  updateDoc(doc(db, 'users', firebaseUser.uid), { role }).catch(console.error);
+                }
+              });
             }
           }
         });

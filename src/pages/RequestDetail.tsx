@@ -156,7 +156,7 @@ export default function RequestDetail() {
 
       <TiltCard>
       <Card>
-        <CardContent className="p-8">
+        <CardContent className="p-4 sm:p-6 lg:p-8">
           <div className="flex items-center gap-2 mb-4">
             <Badge variant="accent">{displayCategory}</Badge>
             <Badge variant={request.status === 'open' ? 'success' : 'neutral'}>
@@ -260,7 +260,7 @@ export default function RequestDetail() {
       {showInterestForm && (
         <TiltCard>
         <Card>
-          <CardContent className="p-8">
+          <CardContent className="p-4 sm:p-6 lg:p-8">
             <h3 className="font-semibold text-charcoal tracking-tight mb-4">Express Interest</h3>
             <textarea
               className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
@@ -281,7 +281,7 @@ export default function RequestDetail() {
       {isOwner && request.status === 'open' && interests.length > 0 && (
         <TiltCard>
         <Card>
-          <CardContent className="p-8">
+          <CardContent className="p-4 sm:p-6 lg:p-8">
             <h3 className="font-semibold text-charcoal tracking-tight mb-4">
               Interested Parties ({interests.length})
             </h3>

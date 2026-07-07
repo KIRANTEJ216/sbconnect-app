@@ -17,7 +17,11 @@ function toWords(n: number): string {
   return toWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + toWords(n % 10000000) : '');
 }
 
-export function TopBar() {
+interface TopBarProps {
+  onMenuToggle?: () => void;
+}
+
+export function TopBar({ onMenuToggle }: TopBarProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [total, setTotal] = useState(0);
@@ -43,31 +47,27 @@ export function TopBar() {
   const fyLabel = `${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`;
 
   return (
-    <header className="h-24 bg-surface border-b border-border flex items-center justify-between px-6 sticky top-0 z-40">
-      <div className="flex items-center gap-4">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="md:hidden">
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
+    <header className="h-24 shrink-0 bg-surface-warm/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
+      <div className="flex items-center gap-3">
+        <button onClick={onMenuToggle} className="md:hidden p-1.5 -ml-1.5 rounded-xl hover:bg-primary-light/50 transition-colors cursor-pointer" aria-label="Toggle menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         <div className="hidden sm:block">
           <p className="text-xs text-muted font-mono tracking-tight leading-tight">
             {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </p>
-          <p className="text-xs font-semibold tracking-tight leading-tight mt-[1px]" style={{ color: '#7C3AED' }}>
+          <p className="text-xs font-semibold tracking-tight leading-tight mt-[1px] text-primary">
             {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
           </p>
         </div>
       </div>
 
       <div className="flex flex-col items-center leading-tight">
-        <div className="flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="1" x2="12" y2="23" />
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-          </svg>
-          <span className="text-4xl font-bold text-charcoal tracking-tight">₹ {total.toLocaleString('en-IN')}</span>
-        </div>
+        <span className="text-4xl font-bold tracking-tight gradient-text">₹ {total.toLocaleString('en-IN')}</span>
         <span className="text-xs text-muted font-mono tracking-tight mt-1">Total Revenue &middot; FY {fyLabel}</span>
         <p className="text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
       </div>

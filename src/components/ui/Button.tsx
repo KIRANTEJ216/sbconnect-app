@@ -10,10 +10,10 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 const base = 'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-ring focus:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed select-none active:scale-[0.97] cursor-pointer';
 
 const variants: Record<string, string> = {
-  primary: 'bg-primary text-white hover:bg-primary-hover shadow-btn',
-  outline: 'border border-border bg-surface text-primary hover:bg-primary-light hover:border-primary',
+  primary: 'bg-primary text-white hover:bg-primary-hover shadow-btn hover:shadow-btn-hover gradient-accent-btn',
+  outline: 'border border-border bg-surface text-primary hover:bg-primary-light hover:border-primary hover:shadow-sm',
   ghost: 'text-steel hover:text-primary hover:bg-primary-light',
-  danger: 'bg-danger text-white hover:bg-red-700',
+  danger: 'bg-danger text-white hover:bg-red-700 shadow-sm hover:shadow-md',
 };
 
 const sizes: Record<string, string> = {

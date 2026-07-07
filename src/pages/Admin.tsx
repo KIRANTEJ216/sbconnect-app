@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, setUserRole, getUserByEmail, getUnverifiedProfiles, verifyBusinessProfile } from '../lib/firestore';
-import { formatDate } from '../lib/format';
+import { getAllUsers, setUserRole, getUserByEmail, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs } from '../lib/firestore';
+import type { LoginLog } from '../lib/firestore';
+import { formatDate, formatTime } from '../lib/format';
 import type { UserProfile, BusinessProfile } from '../types';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -20,11 +21,14 @@ export default function Admin() {
   const [email, setEmail] = useState('');
   const [searchMsg, setSearchMsg] = useState('');
   const [searching, setSearching] = useState(false);
+  const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   const isSuper = profile?.role === 'super_admin';
 
   useEffect(() => {
     loadAll();
+    loadLogs();
   }, []);
 
   async function loadAll() {
@@ -36,6 +40,18 @@ export default function Admin() {
     setUsers(all.sort((a, b) => a.email.localeCompare(b.email)));
     setPending(unverified);
     setLoading(false);
+  }
+
+  async function loadLogs() {
+    setLogsLoading(true);
+    try {
+      const logs = await getLoginLogs();
+      setLoginLogs(logs);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLogsLoading(false);
+    }
   }
 
   const handleSetRole = async (uid: string, role: 'user' | 'admin' | 'super_admin') => {
@@ -175,6 +191,45 @@ export default function Admin() {
         </Card>
         </TiltCard>
       )}
+
+      <TiltCard>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-charcoal tracking-tight">Login Activity ({loginLogs.length})</h3>
+            <Button variant="outline" size="sm" onClick={loadLogs} loading={logsLoading}>Refresh</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loginLogs.length === 0 ? (
+            <p className="text-sm text-muted">No login activity recorded yet.</p>
+          ) : (
+            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left sticky top-0 bg-surface-warm">
+                    <th className="pb-2 font-medium text-muted font-mono tracking-tight text-xs">Name</th>
+                    <th className="pb-2 font-medium text-muted font-mono tracking-tight text-xs">Email</th>
+                    <th className="pb-2 font-medium text-muted font-mono tracking-tight text-xs">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loginLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-canvas/50 transition-colors">
+                      <td className="py-2 pr-4 text-charcoal text-xs">{log.displayName}</td>
+                      <td className="py-2 pr-4 text-steel text-xs">{log.email}</td>
+                      <td className="py-2 text-muted font-mono text-[11px] whitespace-nowrap">
+                        {formatDate(log.timestamp)} {formatTime(log.timestamp)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      </TiltCard>
 
       <TiltCard>
       <Card>

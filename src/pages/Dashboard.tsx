@@ -12,6 +12,52 @@ import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { TiltCard } from '../components/motion/TiltCard';
 
 
+function CollapsibleSection({ title, icon, defaultOpen, children }: { title: string; icon?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen ?? true);
+  return (
+    <TiltCard>
+      <Card>
+        <div className="stat-accent-top">
+          <CardHeader>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-left cursor-pointer group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white shrink-0">
+                  {icon}
+                </div>
+                <h3 className="font-semibold text-charcoal tracking-tight">{title}</h3>
+              </div>
+              <div className={`w-6 h-6 rounded-lg bg-muted-bg flex items-center justify-center transition-colors duration-200 group-hover:bg-primary-light ${open ? 'bg-primary-light' : ''}`}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`text-muted transition-transform duration-200 ${open ? 'rotate-180 text-primary' : ''}`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </button>
+          </CardHeader>
+        </div>
+        <div className={`transition-all duration-300 overflow-hidden ${open ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <CardContent>
+            {children}
+          </CardContent>
+        </div>
+      </Card>
+    </TiltCard>
+  );
+}
+
+
 export default function Dashboard() {
   const { user, profile } = useAuth();
   const [myProfile, setMyProfile] = useState<BusinessProfile | null>(null);
@@ -156,22 +202,43 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {statCards.map((s) => (
-          <TiltCard key={s.label}>
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-xs text-muted font-mono tracking-tight uppercase">{s.label}</p>
-              <div className="mt-3">
+        {statCards.map((s, idx) => (
+          <TiltCard key={s.label} className="h-full">
+          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col">
+            <CardContent className="p-5 flex-1 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-muted font-semibold tracking-tight">{s.label}</p>
+                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                  idx === 0 ? 'bg-primary/8 text-primary' :
+                  idx === 1 ? 'bg-success/8 text-success' :
+                  'bg-warning/8 text-warning'
+                }`}>
+                  {idx === 0 ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
+                    </svg>
+                  ) : idx === 1 ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div className="mt-auto">
                 <Badge variant={s.variant}>{s.value}</Badge>
               </div>
               {s.sub && (
-                <p className="mt-2 text-[11px] text-muted font-mono tracking-tight flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-zinc-300'}`} />
+                <p className="mt-2 text-xs text-muted font-medium tracking-tight flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-muted/40'}`} />
                   {s.sub}
                 </p>
               )}
             </CardContent>
-          </Card>
+          </div>
           </TiltCard>
         ))}
       </div>
@@ -180,7 +247,7 @@ export default function Dashboard() {
         <Card>
           <CardContent className="p-14 text-center">
             <div className="w-16 h-16 bg-primary-light rounded-2xl flex items-center justify-center mx-auto mb-5">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="8.5" cy="7" r="4" />
                 <line x1="20" y1="8" x2="20" y2="14" />
@@ -200,118 +267,118 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <TiltCard>
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold text-charcoal tracking-tight">Quick Actions</h3>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Link
-                to="/requests/create"
-                className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="12" y1="18" x2="12" y2="12" />
-                  <line x1="9" y1="15" x2="15" y2="15" />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <CollapsibleSection
+              title="Quick Actions"
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
-                Create a Request
-              </Link>
-              <Link
-                to={`/profile/${user?.uid}`}
-                className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                View My Profile
-              </Link>
-              <button
-                onClick={() => setShowDealForm(true)}
-                className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal w-full text-left"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="1" x2="12" y2="23" />
-                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
-                Record Business Given
-              </button>
-            </CardContent>
-          </Card>
-          </TiltCard>
-          <TiltCard>
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold text-charcoal tracking-tight">Your Business</h3>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="font-medium text-charcoal">{myProfile.companyName}</p>
-              <p className="text-sm text-steel font-mono tracking-tight">{(myProfile.categories ?? []).join(', ')} &middot; {myProfile.location}</p>
-              <div>
-                {myProfile.verified ? (
-                  <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified Business</span>
-                ) : (
-                  <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending Verification</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          </TiltCard>
-          <TiltCard>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-charcoal tracking-tight flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 6 9 6 9z"/>
-                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 18 9 18 9z"/>
-                    <path d="M4 22h16"/>
-                    <path d="M10 22V4c0-.6.4-1 1-1h2c.6 0 1 .4 1 1v18"/>
+              }
+            >
+              <div className="space-y-3">
+                <Link
+                  to="/requests/create"
+                  className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="12" y1="18" x2="12" y2="12" />
+                    <line x1="9" y1="15" x2="15" y2="15" />
                   </svg>
-                  Leaderboard
-                </h3>
-                <span className="text-xs text-muted font-mono tracking-tight">
-                  {formatCurrency(String(leaderboard.reduce((s, e) => s + e.totalRevenue, 0)))}
-                </span>
+                  Create a Request
+                </Link>
+                <Link
+                  to={`/profile/${user?.uid}`}
+                  className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  View My Profile
+                </Link>
+                <button
+                  onClick={() => setShowDealForm(true)}
+                  className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal w-full text-left"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  Record Business Given
+                </button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {leaderboard.length === 0 ? (
-                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {leaderboard.slice(0, 7).map((entry, i) => (
-                    <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-base shrink-0">
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
-                        </span>
-                        <div className="min-w-0">
-                          <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[140px]">
-                            {entry.ownerName || entry.companyName}
-                          </Link>
-                          <p className="text-[10px] text-muted truncate max-w-[140px]">{entry.companyName}</p>
-                          <p className="text-[10px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-semibold text-charcoal shrink-0 ml-2">{formatCurrency(String(entry.totalRevenue))}</span>
-                    </div>
-                  ))}
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Your Business"
+              defaultOpen={false}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+              }
+            >
+              <div className="space-y-2">
+                <p className="font-medium text-charcoal">{myProfile.companyName}</p>
+                <p className="text-sm text-steel font-mono tracking-tight">{(myProfile.categories ?? []).join(', ')} &middot; {myProfile.location}</p>
+                <div>
+                  {myProfile.verified ? (
+                    <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified Business</span>
+                  ) : (
+                    <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending Verification</span>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-          </TiltCard>
+              </div>
+            </CollapsibleSection>
+          </div>
+
+          <CollapsibleSection
+            title="Leaderboard"
+            icon={
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 6 9 6 9z"/>
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 18 9 18 9z"/>
+                <path d="M4 22h16"/>
+                <path d="M10 22V4c0-.6.4-1 1-1h2c.6 0 1 .4 1 1v18"/>
+              </svg>
+            }
+          >
+            {leaderboard.length === 0 ? (
+              <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {leaderboard.slice(0, 7).map((entry, i) => (
+                  <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'}`}>
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                      </span>
+                      <div className="min-w-0">
+                        <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[180px]">
+                          {entry.ownerName || entry.companyName}
+                        </Link>
+                        <p className="text-[10px] text-muted truncate max-w-[180px]">{entry.companyName}</p>
+                        <p className="text-[10px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-charcoal shrink-0 ml-2">{formatCurrency(String(entry.totalRevenue))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CollapsibleSection>
         </div>
       )}
 
       {showDealForm && myProfile && (
         <TiltCard>
         <Card>
-          <CardContent className="p-8">
+          <CardContent className="p-4 sm:p-6 lg:p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-semibold text-charcoal tracking-tight">Record Business Given</h3>
               <button onClick={() => { setShowDealForm(false); setDealMsg(''); }} className="text-sm text-muted hover:text-charcoal transition-colors cursor-pointer">Cancel</button>

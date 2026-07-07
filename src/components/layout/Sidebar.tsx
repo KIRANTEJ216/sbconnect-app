@@ -12,7 +12,7 @@ function NavItem({ to, label, children }: NavItemProps) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+        `flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator ${
           isActive
             ? 'bg-primary-light text-primary'
             : 'text-steel hover:text-primary hover:bg-primary-light'
@@ -30,18 +30,17 @@ export function Sidebar() {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
   return (
-    <aside className="w-64 bg-surface border-r border-border h-full flex flex-col">
-      <div className="px-6 py-7 border-b border-border">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="font-semibold text-charcoal tracking-tight">SB Connect</h2>
-            <p className="text-xs text-muted font-mono tracking-tight">Business Network</p>
+    <aside className="w-64 bg-surface-warm border-r border-border h-full flex flex-col">
+      <div className="h-24 px-6 border-b border-border flex items-center relative">
+        <div className="flex items-center gap-3">
+          <img
+            src="/sbconnect-logo.png"
+            alt="SB Connect"
+            className="h-9 w-auto object-contain shrink-0"
+          />
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-charcoal tracking-tight leading-tight">SB Connect</h2>
+            <p className="text-xs text-muted font-mono tracking-tight leading-tight mt-0.5">Business Network</p>
           </div>
         </div>
       </div>
@@ -55,7 +54,7 @@ export function Sidebar() {
             <rect x="3" y="14" width="7" height="7" />
           </svg>
         </NavItem>
-        <NavItem to="/profiles" label="Profiles">
+        <NavItem to="/profiles" label="Directory">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
@@ -78,11 +77,6 @@ export function Sidebar() {
             <polyline points="10 9 9 9 8 9" />
           </svg>
         </NavItem>
-        <NavItem to="/chat" label="Chat">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-        </NavItem>
         {isAdmin && (
           <NavItem to="/admin" label="Admin">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -92,9 +86,9 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="px-4 py-4 border-t border-border">
+      <div className="px-4 py-3 border-t border-border bg-gradient-to-t from-premium-warm/50 to-transparent">
         <div className="flex items-center gap-3.5">
-          <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center text-primary font-semibold text-sm">
+          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center text-white font-semibold text-xs shadow-sm">
             {(user?.displayName || user?.email || '?').charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
