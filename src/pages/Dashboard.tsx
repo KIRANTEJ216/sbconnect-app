@@ -166,7 +166,7 @@ export default function Dashboard() {
       sub: profile?.onlineStatus === 'online' ? 'Online' : 'Offline',
     },
     {
-      label: 'Total Businesses',
+      label: 'Members Directory',
       value: String(totalProfiles),
       variant: 'accent',
     },
