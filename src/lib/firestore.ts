@@ -1,7 +1,7 @@
 import {
   doc, setDoc, getDoc, getDocs, updateDoc,
   collection, query, where, orderBy, increment, arrayUnion,
-  addDoc, onSnapshot, runTransaction,
+  addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type {
@@ -274,14 +274,15 @@ export async function getOrCreateConversation(uid1: string, uid2: string): Promi
 }
 
 export async function sendMessage(conversationId: string, senderId: string, text: string) {
+  const convRef = doc(db, 'conversations', conversationId);
   const msgRef = doc(collection(db, 'conversations', conversationId, 'messages'));
   await runTransaction(db, async (transaction) => {
-    const convRef = doc(db, 'conversations', conversationId);
     const convSnap = await transaction.get(convRef);
-    if (!convSnap.exists()) return;
+    if (!convSnap.exists()) throw new Error('Conversation not found');
 
-    const participants = convSnap.data().participants as string[];
-    const unreadCount = { ...convSnap.data().unreadCount } as Record<string, number>;
+    const convData = convSnap.data();
+    const participants = convData.participants as string[];
+    const unreadCount = { ...(convData.unreadCount ?? {}) } as Record<string, number>;
     const otherUid = participants.find((p: string) => p !== senderId);
     if (otherUid) {
       unreadCount[otherUid] = (unreadCount[otherUid] || 0) + 1;
@@ -338,6 +339,21 @@ export async function markConversationRead(conversationId: string, uid: string) 
 
 export async function markMessageRead(conversationId: string, messageId: string) {
   await updateDoc(doc(db, 'conversations', conversationId, 'messages', messageId), { read: true });
+}
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function deleteOldMessages(conversationId: string) {
+  const cutoff = Date.now() - THIRTY_DAYS_MS;
+  const q = query(
+    collection(db, 'conversations', conversationId, 'messages'),
+    where('timestamp', '<', cutoff),
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
 }
 
 // ─── Admin ───

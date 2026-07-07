@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { subscribeToMessages, sendMessage, markConversationRead } from '../lib/firestore';
+import { subscribeToMessages, sendMessage, markConversationRead, deleteOldMessages } from '../lib/firestore';
 import type { Message } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -18,6 +18,7 @@ export default function ChatDetail() {
 
   useEffect(() => {
     if (!id) return;
+    deleteOldMessages(id).catch(console.error);
     const unsub = subscribeToMessages(id, (msgs) => {
       setMessages(msgs);
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -53,6 +54,10 @@ export default function ChatDetail() {
       <Link to="/chat" className="text-sm text-primary hover:text-primary-hover mb-4 inline-block transition-colors">
         &larr; Back to Messages
       </Link>
+
+      <div className="text-[11px] text-muted font-mono tracking-tight text-center mb-2">
+        Messages are automatically deleted after 30 days
+      </div>
 
       <Card className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
