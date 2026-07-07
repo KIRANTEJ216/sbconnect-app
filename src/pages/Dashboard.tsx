@@ -24,9 +24,7 @@ function CollapsibleSection({ title, icon, defaultOpen, children }: { title: str
               className="flex items-center justify-between w-full text-left cursor-pointer group"
             >
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white shrink-0">
-                  {icon}
-                </div>
+                {icon && <span className="text-lg shrink-0">{icon}</span>}
                 <h3 className="font-semibold text-charcoal tracking-tight">{title}</h3>
               </div>
               <div className={`w-6 h-6 rounded-lg bg-muted-bg flex items-center justify-center transition-colors duration-200 group-hover:bg-primary-light ${open ? 'bg-primary-light' : ''}`}>
@@ -271,11 +269,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <CollapsibleSection
               title="Quick Actions"
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              }
+              icon="⚡"
             >
               <div className="space-y-3">
                 <Link
@@ -315,13 +309,7 @@ export default function Dashboard() {
 
             <CollapsibleSection
               title="Your Business"
-              defaultOpen={false}
-              icon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              }
+              icon="🏠"
             >
               <div className="space-y-2">
                 <p className="font-medium text-charcoal">{myProfile.companyName}</p>
@@ -339,14 +327,7 @@ export default function Dashboard() {
 
           <CollapsibleSection
             title="Leaderboard"
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 6 9 6 9z"/>
-                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 18 9 18 9z"/>
-                <path d="M4 22h16"/>
-                <path d="M10 22V4c0-.6.4-1 1-1h2c.6 0 1 .4 1 1v18"/>
-              </svg>
-            }
+            icon="🏆"
           >
             {leaderboard.length === 0 ? (
               <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
