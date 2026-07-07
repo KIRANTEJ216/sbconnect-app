@@ -57,10 +57,10 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
           </svg>
         </button>
         <div className="hidden sm:block">
-          <p className="text-xs text-muted font-mono tracking-tight leading-tight">
+          <p className="text-sm text-muted font-mono tracking-tight leading-tight">
             {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </p>
-          <p className="text-xs font-semibold tracking-tight leading-tight mt-[1px] text-primary">
+          <p className="text-sm font-semibold tracking-tight leading-tight mt-[1px] text-primary">
             {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
           </p>
         </div>
