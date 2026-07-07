@@ -5,7 +5,7 @@ import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { AppUser, UserProfile } from '../types';
 import { userToAppUser, setUserOnline } from '../lib/auth';
-import { isAdminEmail } from '../lib/admin';
+import { isAdminEmail, isSuperAdminEmail } from '../lib/admin';
 
 interface AuthState {
   user: AppUser | null;
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               getDoc(doc(db, 'users', firebaseUser.uid)).then((snap2) => {
                 const fresh = snap2.data() as UserProfile | undefined;
                 if (fresh && fresh.role === 'user') {
-                  const role = email === 'kktej3d@gmail.com' ? 'super_admin' : 'admin';
+                  const role = isSuperAdminEmail(email) ? 'super_admin' : 'admin';
                   updateDoc(doc(db, 'users', firebaseUser.uid), { role }).catch(console.error);
                 }
               });
