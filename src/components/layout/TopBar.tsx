@@ -37,6 +37,11 @@ export function TopBar() {
     navigate('/login');
   };
 
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth() + 1;
+  const fyStart = nowMonth >= 4 ? nowYear : nowYear - 1;
+  const fyLabel = `${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`;
+
   return (
     <header className="h-24 bg-surface border-b border-border flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
@@ -63,7 +68,7 @@ export function TopBar() {
           </svg>
           <span className="text-4xl font-bold text-charcoal tracking-tight">₹ {total.toLocaleString('en-IN')}</span>
         </div>
-        <p className="text-xs text-muted font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} — Network Total</p>
+        <p className="text-xs text-muted font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} — Total Revenue &middot; FY {fyLabel}</p>
       </div>
 
       <div className="flex items-center gap-5">
