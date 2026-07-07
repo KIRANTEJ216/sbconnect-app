@@ -60,9 +60,11 @@ export default function Login() {
   return (
     <AnimatedPage>
     <div className="min-h-[100dvh] flex bg-canvas">
-      <div className="hidden lg:flex w-1/2 bg-[#F2EFEA] items-center justify-center p-12 relative overflow-hidden">
+      <div className="hidden lg:flex w-1/2 items-center justify-center p-12 relative overflow-hidden" style={{
+        background: 'linear-gradient(135deg, #F5F0E8 0%, #F0E8F5 30%, #FAF5F0 60%, #F5F0F5 100%)'
+      }}>
         <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(ellipse 60% 50% at 30% 40%, rgba(42,17,166,0.04) 0%, transparent 100%), radial-gradient(ellipse 40% 40% at 70% 70%, rgba(181,54,197,0.03) 0%, transparent 100%)`
+          backgroundImage: `radial-gradient(ellipse 60% 50% at 20% 30%, rgba(42,17,166,0.06) 0%, transparent 100%), radial-gradient(ellipse 50% 50% at 80% 60%, rgba(181,54,197,0.05) 0%, transparent 100%), radial-gradient(ellipse 40% 40% at 50% 80%, rgba(212,168,83,0.04) 0%, transparent 100%)`
         }} />
         <div className="absolute top-12 left-12 w-32 h-32 border border-primary/5 rounded-full" />
         <div className="absolute bottom-24 right-16 w-48 h-48 border border-secondary/5 rounded-full" />
@@ -73,7 +75,7 @@ export default function Login() {
             alt="SB Connect"
             className="w-72 h-auto object-contain drop-shadow-lg animate-[float_6s_ease-in-out_infinite]"
           />
-          <p className="text-steel/60 text-sm font-mono tracking-tight mt-6 animate-[fade-in_1s_ease-out_0.3s_both]">No Politics Only Business</p>
+          <p className="text-steel/80 text-sm font-mono tracking-tight mt-6 animate-[fade-in_1s_ease-out_0.3s_both]">No Politics Only Business</p>
         </div>
       </div>
       <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8">
