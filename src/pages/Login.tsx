@@ -9,11 +9,10 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
-import { isAdminEmail } from '../lib/admin';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,11 +20,9 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      const target = profile?.role === 'admin' || profile?.role === 'super_admin' || (user.email && isAdminEmail(user.email))
-        ? '/admin' : '/dashboard';
-      navigate(target, { replace: true });
+      navigate('/dashboard', { replace: true });
     }
-  }, [user, profile, navigate]);
+  }, [user, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

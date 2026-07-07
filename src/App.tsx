@@ -17,17 +17,14 @@ import SeedAdmin from './pages/SeedAdmin';
 import { AdminGuard } from './components/AdminGuard';
 
 function RootRedirect() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
-  if (isAdmin) return <Navigate to="/admin" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
 function ProfileRedirect() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (profile?.role === 'admin' || profile?.role === 'super_admin') return <Navigate to="/admin" replace />;
   return <Navigate to={`/profile/${user.uid}`} replace />;
 }
 
