@@ -84,6 +84,7 @@ export interface Deal {
 
 export interface LeaderboardEntry {
   companyName: string;
+  ownerName: string;
   uid: string;
   totalRevenue: number;
   dealCount: number;

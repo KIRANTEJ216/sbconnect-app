@@ -286,19 +286,15 @@ export default function Dashboard() {
                   {leaderboard.slice(0, 10).map((entry, i) => (
                     <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shrink-0 ${
-                          i === 0 ? 'bg-yellow-100 text-yellow-700' :
-                          i === 1 ? 'bg-zinc-100 text-zinc-600' :
-                          i === 2 ? 'bg-orange-100 text-orange-700' :
-                          'bg-canvas text-muted'
-                        }`}>
-                          {i + 1}
+                        <span className="text-base shrink-0">
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
                         </span>
                         <div className="min-w-0">
-                          <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[120px]">
-                            {entry.companyName}
+                          <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[140px]">
+                            {entry.ownerName || entry.companyName}
                           </Link>
-                          <p className="text-[11px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
+                          <p className="text-[10px] text-muted truncate max-w-[140px]">{entry.companyName}</p>
+                          <p className="text-[10px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
                         </div>
                       </div>
                       <span className="text-sm font-semibold text-charcoal shrink-0 ml-2">{formatCurrency(String(entry.totalRevenue))}</span>

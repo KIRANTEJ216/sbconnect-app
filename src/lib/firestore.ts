@@ -226,8 +226,17 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
     entry.dealCount += 1;
     map.set(d.giverUid, entry);
   }
+  const uids = Array.from(map.keys());
+  const ownerMap = new Map<string, string>();
+  const profileSnaps = await Promise.all(uids.map((uid) => getDoc(doc(db, 'profiles', uid))));
+  for (const ps of profileSnaps) {
+    if (ps.exists()) {
+      const data = ps.data();
+      ownerMap.set(ps.id, data.ownerName || '');
+    }
+  }
   return Array.from(map.entries())
-    .map(([uid, e]) => ({ uid, companyName: e.companyName, totalRevenue: e.totalRevenue, dealCount: e.dealCount }))
+    .map(([uid, e]) => ({ uid, companyName: e.companyName, ownerName: ownerMap.get(uid) || '', totalRevenue: e.totalRevenue, dealCount: e.dealCount }))
     .sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
