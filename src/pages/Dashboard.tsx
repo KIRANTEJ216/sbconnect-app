@@ -295,7 +295,10 @@ export default function Dashboard() {
                   View My Profile
                 </Link>
                 <button
-                  onClick={() => setShowDealForm(true)}
+                  onClick={() => {
+                    setShowDealForm(true);
+                    setTimeout(() => document.getElementById('deal-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+                  }}
                   className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal w-full text-left"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -357,7 +360,7 @@ export default function Dashboard() {
       )}
 
       {showDealForm && myProfile && (
-        <TiltCard>
+        <TiltCard id="deal-form">
         <Card>
           <CardContent className="p-4 sm:p-6 lg:p-8">
             <div className="flex items-center justify-between mb-6">
