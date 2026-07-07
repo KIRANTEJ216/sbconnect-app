@@ -1,0 +1,222 @@
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { getRequests, getBusinessProfile, expressInterest, closeRequest, getOrCreateConversation } from '../lib/firestore';
+import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
+import type { Request } from '../types';
+import { REQUEST_CATEGORIES } from '../types';
+import { Card, CardContent } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { useAuth } from '../contexts/AuthContext';
+import { AnimatedPage } from '../components/motion/AnimatedPage';
+import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
+
+export default function Requests() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [pitching, setPitching] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getRequests(selectedCategory || undefined)
+      .then(setRequests)
+      .finally(() => setLoading(false));
+  }, [selectedCategory]);
+
+  const handlePitch = async (req: Request) => {
+    if (!user) return;
+    setPitching(req.id);
+    try {
+      const bp = await getBusinessProfile(user.uid);
+      const companyName = bp?.companyName || user.displayName || 'Unknown';
+      const msg = `Hi, I'm from ${companyName}. I'd love to help with this request. Let's connect!`;
+      await expressInterest(req.id, user.uid, companyName, msg);
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === req.id ? { ...r, interestCount: r.interestCount + 1 } : r,
+        ),
+      );
+    } catch (err) {
+      console.error('Failed to pitch:', err);
+    } finally {
+      setPitching(null);
+    }
+  };
+
+  const handleChat = async (req: Request) => {
+    if (!user) return;
+    const convId = await getOrCreateConversation(user.uid, req.uid);
+    navigate(`/chat/${convId}`);
+  };
+
+  const handleClose = async (reqId: string) => {
+    setClosingId(reqId);
+    try {
+      await closeRequest(reqId);
+      setRequests((prev) =>
+        prev.map((r) => (r.id === reqId ? { ...r, status: 'closed' } : r)),
+      );
+    } catch (err) {
+      console.error('Failed to close:', err);
+    } finally {
+      setClosingId(null);
+    }
+  };
+
+  return (
+    <AnimatedPage>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-charcoal tracking-tight">Requests</h1>
+          <p className="text-steel mt-1.5 gradient-text">Browse business requests and opportunities</p>
+        </div>
+        <Link to="/requests/create">
+          <Button>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Request
+          </Button>
+        </Link>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setSelectedCategory('')}
+          className={`px-4 py-2 text-sm rounded-[0.75rem] border transition-all duration-200 cursor-pointer ${
+            !selectedCategory
+              ? 'bg-primary text-white border-primary font-medium'
+              : 'border-border text-steel hover:border-primary'
+          }`}
+        >
+          All
+        </button>
+        {REQUEST_CATEGORIES.map((c) => (
+          <button
+            key={c}
+            onClick={() => setSelectedCategory(c)}
+            className={`px-4 py-2 text-sm rounded-[0.75rem] border transition-all duration-200 cursor-pointer ${
+              selectedCategory === c
+                ? 'bg-primary text-white border-primary font-medium'
+                : 'border-border text-steel hover:border-primary'
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="skeleton h-24 rounded-[2.5rem]" />
+          ))}
+        </div>
+      ) : requests.length === 0 ? (
+        <Card>
+          <CardContent className="p-14 text-center">
+            <p className="text-muted">No requests yet{selectedCategory ? ` in ${selectedCategory}` : ''}.</p>
+            <Link to="/requests/create" className="text-primary hover:text-primary-hover text-sm mt-3 inline-block transition-colors">
+              Create the first request
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <StaggerList className="space-y-2">
+          {requests.map((req) => {
+            const isOwner = user?.uid === req.uid;
+            return (
+            <StaggerItem key={req.id}>
+            <div
+              onClick={() => navigate(`/requests/${req.id}`)}
+              className={`block transition-all duration-300 cursor-pointer hover:-translate-y-0.5 ${
+                req.status === 'closed' ? 'opacity-60' : ''
+              }`}
+            >
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>
+                        {req.status === 'open' ? 'Open' : 'Closed'}
+                      </Badge>
+                      <Badge variant="accent">{req.category}</Badge>
+                      {req.interestCount > 0 && (
+                        <Badge variant="neutral">{req.interestCount} interest{req.interestCount !== 1 ? 's' : ''}</Badge>
+                      )}
+                      {req.awardedTo && (
+                        <Badge variant="success">Awarded</Badge>
+                      )}
+                    </div>
+                    <h3 className="font-semibold text-charcoal tracking-tight text-sm">{req.title}</h3>
+                    <p className="text-xs text-steel mt-1 line-clamp-1">{req.description}</p>
+                    <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-muted tracking-tight">
+                      <span>{req.companyName}</span>
+                      <span>&middot;</span>
+                      <span>{formatDate(req.createdAt)}</span>
+                      {req.budget && (
+                        <>
+                          <span>&middot;</span>
+                          <span>{formatCurrency(req.budget)}</span>
+                        </>
+                      )}
+                      {req.deadline && (
+                        <>
+                          <span>&middot;</span>
+                          <span>Due {formatDateStr(req.deadline)}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {req.status === 'open' && (
+                    <div className="flex items-center justify-end gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                      {isOwner ? (
+                        <Button
+                          size="xs"
+                          variant="danger"
+                          onClick={() => handleClose(req.id)}
+                          loading={closingId === req.id}
+                        >
+                          Close
+                        </Button>
+                      ) : req.interestedUids?.includes(user?.uid ?? '') ? (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleChat(req)}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                          Chat
+                        </Button>
+                      ) : (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handlePitch(req)}
+                          loading={pitching === req.id}
+                        >
+                          Pitch
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            </StaggerItem>
+            );
+          })}
+        </StaggerList>
+      )}
+    </div>
+    </AnimatedPage>
+  );
+}

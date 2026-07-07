@@ -1,0 +1,14 @@
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+export function AdminGuard({ children }: { children: React.ReactNode }) {
+  const { profile, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (!profile || (profile.role !== 'admin' && profile.role !== 'super_admin')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
