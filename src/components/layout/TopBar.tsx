@@ -4,11 +4,17 @@ import { signOut } from '../../lib/auth';
 import { getTotalBusinessValue } from '../../lib/firestore';
 import { useNavigate } from 'react-router-dom';
 
-function formatTotal(value: number): string {
-  if (value >= 10000000) return `₹ ${(value / 10000000).toFixed(1)}Cr`;
-  if (value >= 100000) return `₹ ${(value / 100000).toFixed(1)}L`;
-  if (value >= 1000) return `₹ ${(value / 1000).toFixed(1)}K`;
-  return `₹ ${value.toLocaleString('en-IN')}`;
+const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+function toWords(n: number): string {
+  if (n === 0) return 'Zero';
+  const under100 = (x: number) => x < 20 ? ones[x] : tens[Math.floor(x / 10)] + (x % 10 ? ' ' + ones[x % 10] : '');
+  if (n < 100) return under100(n);
+  if (n < 1000) return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + under100(n % 100) : '');
+  if (n < 100000) return under100(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + toWords(n % 1000) : '');
+  if (n < 10000000) return under100(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + toWords(n % 100000) : '');
+  return toWords(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + toWords(n % 10000000) : '');
 }
 
 export function TopBar() {
@@ -32,8 +38,8 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-16 bg-surface border-b border-border flex items-center justify-between px-8 sticky top-0 z-40">
-      <div className="flex items-center gap-5">
+    <header className="h-24 bg-surface border-b border-border flex items-center justify-between px-6 sticky top-0 z-40">
+      <div className="flex items-center gap-4">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="md:hidden">
           <line x1="3" y1="6" x2="21" y2="6" />
           <line x1="3" y1="12" x2="21" y2="12" />
@@ -49,35 +55,34 @@ export function TopBar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        <div className="hidden sm:flex items-center gap-2.5 px-4 py-1.5 rounded-[0.75rem] border border-border/60 bg-canvas/50">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <div className="flex flex-col items-center">
+        <div className="flex items-center gap-2.5">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="1" x2="12" y2="23" />
             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-[11px] text-muted font-mono tracking-tight uppercase">Network</span>
-            <span className="text-sm font-semibold text-charcoal tracking-tight">{formatTotal(total)}</span>
-          </div>
+          <span className="text-4xl font-bold text-charcoal tracking-tight">₹ {total.toLocaleString('en-IN')}</span>
         </div>
-        <div className="flex items-center gap-5">
-          {user && (
-            <>
-              <span className="text-sm text-steel hidden sm:inline tracking-tight">
-                {user.displayName || user.email}
-              </span>
-              <div className="w-9 h-9 bg-canvas rounded-xl flex items-center justify-center text-charcoal font-semibold text-sm border border-border">
-                {(user.displayName || user.email || '?').charAt(0).toUpperCase()}
-              </div>
-              <button
-                onClick={handleSignOut}
-                className="text-sm text-muted hover:text-charcoal transition-colors font-medium"
-              >
-                Sign out
-              </button>
-            </>
-          )}
-        </div>
+        <p className="text-xs text-muted font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} — Network Total</p>
+      </div>
+
+      <div className="flex items-center gap-5">
+        {user && (
+          <>
+            <span className="text-sm text-steel hidden sm:inline tracking-tight">
+              {user.displayName || user.email}
+            </span>
+            <div className="w-9 h-9 bg-canvas rounded-xl flex items-center justify-center text-charcoal font-semibold text-sm border border-border">
+              {(user.displayName || user.email || '?').charAt(0).toUpperCase()}
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="text-sm text-muted hover:text-charcoal transition-colors font-medium"
+            >
+              Sign out
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
