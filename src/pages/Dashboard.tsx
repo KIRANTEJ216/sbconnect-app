@@ -158,7 +158,7 @@ export default function Dashboard() {
 
   const statCards: { label: string; value: string; sub?: string; variant: 'accent' | 'success' | 'neutral' }[] = [
     {
-      label: 'Status',
+      label: 'Membership Status',
       value: myProfile?.membershipStatus === 'active'
         ? `Member since ${formatDate(myProfile.createdAt)}`
         : myProfile?.membershipStatus ?? 'Inactive',
