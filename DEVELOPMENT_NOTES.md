@@ -61,6 +61,7 @@
 - **Login Logs:** Recent login activity table with email, name, timestamp
 - **Admins:** List all admins with role badges; add by email; remove (non-super only)
 - Super admin gate for sensitive operations
+- **Request Activity:** Table of all requests with title, posted-by, status, pitched-by (business names resolved from `interestedUids`), awarded-to (resolved from `awardedTo`)
 
 ### MarqueeBar (`MarqueeBar.tsx`)
 - Auto-fetches current-month meetings and displays as marquee items alongside notifications

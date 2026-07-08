@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests } from '../lib/firestore';
 import type { LoginLog } from '../lib/firestore';
-import { formatDate, formatTime } from '../lib/format';
+import { formatDate, formatTime, formatCurrency } from '../lib/format';
 import { isSuperAdmin } from '../lib/admin';
-import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile } from '../types';
+import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request } from '../types';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -126,6 +126,9 @@ export default function Admin() {
   const [logs, setLogs] = useState<LoginLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+
   const [superEmail, setSuperEmail] = useState('');
   const [superSearching, setSuperSearching] = useState(false);
   const [superMsg, setSuperMsg] = useState('');
@@ -141,6 +144,7 @@ export default function Admin() {
     loadMeetings();
     loadNotifs();
     loadLogs();
+    loadRequests();
     if (isSuper) loadAdmins();
   }, [isSuper]);
 
@@ -177,6 +181,13 @@ export default function Admin() {
     try { setLogs(await getLoginLogs()); }
     catch (e) { console.error(e); }
     setLogsLoading(false);
+  }
+
+  async function loadRequests() {
+    setRequestsLoading(true);
+    try { setRequests(await getAllRequests()); }
+    catch (e) { console.error(e); }
+    setRequestsLoading(false);
   }
 
   const handleApprove = async (uid: string) => {
@@ -569,6 +580,72 @@ export default function Admin() {
               </table>
             )}
           </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Request Activity ── */}
+      <CollapsibleSection title={`Request Activity (${requests.length})`} icon="📋" defaultOpen={false}>
+        {requestsLoading ? (
+          <div className="skeleton h-48 rounded-xl" />
+        ) : requests.length === 0 ? (
+          <p className="text-sm text-muted text-center py-8">No requests posted yet.</p>
+        ) : (
+          <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-96 overflow-y-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Request</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Posted By</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Pitched By</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Awarded To</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {requests
+                  .sort((a, b) => b.createdAt - a.createdAt)
+                  .map((req) => {
+                    const profileLookup = (uid: string) => {
+                      const p = profiles.find((bp) => bp.uid === uid);
+                      return p ? `${p.ownerName} ${p.ownerSurname}`.trim() || p.companyName : uid.slice(0, 8) + '…';
+                    };
+                    return (
+                    <tr key={req.id} className="hover:bg-canvas/50 transition-colors">
+                      <td className="px-4 py-3 max-w-[180px]">
+                        <p className="text-xs font-medium text-charcoal truncate">{req.title}</p>
+                        <p className="text-[10px] text-muted font-mono mt-0.5">{req.category}{req.budget ? ` · ${formatCurrency(req.budget)}` : ''}</p>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-steel font-mono">{req.companyName}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>{req.status === 'open' ? 'Open' : 'Closed'}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {(req.interestedUids ?? []).length > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            {(req.interestedUids ?? []).map((uid) => (
+                              <span key={uid} className="text-steel">{profileLookup(uid)}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-medium">
+                        {req.awardedTo ? (
+                          <span className="text-success">{profileLookup(req.awardedTo)}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex justify-end mt-3">
+          <Button size="sm" variant="outline" onClick={loadRequests} loading={requestsLoading}>Refresh</Button>
         </div>
       </CollapsibleSection>
 
