@@ -127,7 +127,7 @@ export default function AdminAccess() {
                       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     </svg>
                   </div>
-                  <h1 className="text-2xl font-bold text-charcoal tracking-tight">Request Admin Access</h1>
+                  <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Request Admin Access</h1>
                   <p className="text-sm text-steel mt-2">
                     Generate a verification code to upgrade your account to admin.
                   </p>

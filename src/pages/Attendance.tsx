@@ -81,7 +81,7 @@ export default function Attendance() {
     <AnimatedPage>
       <div className="max-w-4xl mx-auto space-y-8">
         <div>
-          <h1 className="text-2xl font-bold text-charcoal tracking-tight">Meeting Attendance</h1>
+          <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Meeting Attendance</h1>
           <p className="text-steel mt-1.5">Mark your presence and RSVP for upcoming meetings</p>
         </div>
 
@@ -96,7 +96,7 @@ export default function Attendance() {
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                   </svg>
                 </div>
-                <h2 className="text-xl font-semibold text-charcoal tracking-tight mb-2">Meeting Today</h2>
+                <h2 className="text-fluid-h2 font-semibold text-charcoal tracking-tight mb-2">Meeting Today</h2>
                 <p className="text-sm text-steel mb-6">{activeMeeting.label} — {formatDate(activeMeeting.createdAt)}</p>
                 <Button onClick={handleMarkAttendance} loading={marking}>
                   Mark Attendance

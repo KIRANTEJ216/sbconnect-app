@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { signOut } from '../../lib/auth';
-import { getTotalBusinessValue, getBusinessProfile } from '../../lib/firestore';
+import { useTotalBusinessValue } from '../../hooks/useFirebaseQuery';
 import { useNavigate } from 'react-router-dom';
 
 const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -22,28 +22,15 @@ interface TopBarProps {
 }
 
 export function TopBar({ onMenuToggle }: TopBarProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [total, setTotal] = useState(0);
+  const { data: total = 0 } = useTotalBusinessValue();
   const [now, setNow] = useState(new Date());
-  const [ownerName, setOwnerName] = useState('');
 
   useEffect(() => {
-    getTotalBusinessValue().then(setTotal).catch(() => {});
     const t = setInterval(() => setNow(new Date()), 1000);
-    const unsub = setInterval(() => {
-      getTotalBusinessValue().then(setTotal).catch(() => {});
-    }, 30000);
-    return () => { clearInterval(t); clearInterval(unsub); };
+    return () => clearInterval(t);
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      getBusinessProfile(user.uid).then((bp) => {
-        if (bp?.ownerName) setOwnerName(`${bp.ownerName} ${bp.ownerSurname || ''}`.trim());
-      }).catch(() => {});
-    }
-  }, [user]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -75,35 +62,26 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
         </div>
       </div>
 
-      <div className="flex flex-col items-center leading-tight">
-        <span className="text-4xl font-bold tracking-tight gradient-text">₹ {total.toLocaleString('en-IN')}</span>
-        <span className="text-xs text-muted font-mono tracking-tight mt-1">Total Revenue &middot; FY {fyLabel}</span>
-        <p className="text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
+      <div className="flex flex-col items-center leading-tight min-w-0 px-2">
+        <span className="text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight gradient-text truncate max-w-full">₹ {total.toLocaleString('en-IN')}</span>
+        <span className="text-[10px] sm:text-xs text-muted font-mono tracking-tight mt-0.5 sm:mt-1">Revenue &middot; FY {fyLabel}</span>
+        <p className="hidden sm:block text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center">
         {user && (
-          <>
-            <span className="text-sm font-medium text-charcoal hidden sm:inline tracking-tight flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full shrink-0 ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-muted/40'}`} />
-              {ownerName || user.displayName || user.email}
-            </span>
-            <div className="w-9 h-9 bg-canvas rounded-xl flex items-center justify-center text-charcoal font-semibold text-sm border border-border">
-              {(ownerName || user.displayName || user.email || '?').charAt(0).toUpperCase()}
-            </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-muted hover:text-danger hover:bg-danger-light transition-all duration-200 cursor-pointer"
-              title="Sign out"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-              <span className="text-xs font-medium">Logout</span>
-            </button>
-          </>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-muted hover:text-danger hover:bg-danger-light transition-all duration-200 cursor-pointer"
+            title="Sign out"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span className="text-xs font-medium">Logout</span>
+          </button>
         )}
       </div>
     </header>

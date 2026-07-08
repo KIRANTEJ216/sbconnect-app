@@ -193,7 +193,7 @@ export default function CreateProfile() {
     <AnimatedPage>
     <div className="max-w-5xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-charcoal tracking-tight">Create Your Business Profile</h1>
+        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Create Your Business Profile</h1>
         <p className="text-steel mt-1.5 gradient-text">Connect with the business community</p>
       </div>
 

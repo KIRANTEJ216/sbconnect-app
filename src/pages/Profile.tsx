@@ -355,7 +355,7 @@ export default function Profile() {
     <AnimatedPage>
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-charcoal tracking-tight">Business Profile</h1>
+        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Business Profile</h1>
         <div className="flex gap-2">
           {canEdit && !editing && (
             <Button size="sm" variant="outline" onClick={startEditing}>
@@ -596,7 +596,7 @@ export default function Profile() {
                       <div className="flex items-center gap-3 mb-4">
                         {profile.photoURL ? (
                           <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
-                            <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover" />
+                            <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover aspect-square" />
                           </div>
                         ) : (
                           <div className="w-12 h-12 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold text-lg">
@@ -606,7 +606,7 @@ export default function Profile() {
                         <div className={`w-2.5 h-2.5 rounded-full ${userProfile?.onlineStatus === 'online' ? 'bg-success' : 'bg-zinc-300'}`} />
                       </div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-3xl font-bold text-charcoal tracking-tight">{profile.companyName}</h2>
+                        <h2 className="text-fluid-h1 font-bold text-charcoal tracking-tight">{profile.companyName}</h2>
                         {profile.verified ? (
                           <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified</span>
                         ) : (
@@ -799,7 +799,7 @@ export default function Profile() {
           <Card>
             <CardContent className="p-6">
               <div className="aspect-square rounded-2xl overflow-hidden">
-                <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover" />
+                <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover aspect-square" />
               </div>
             </CardContent>
           </Card>

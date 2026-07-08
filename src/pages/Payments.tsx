@@ -14,7 +14,7 @@ export default function Payments() {
                 <circle cx="12" cy="15" r="1" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-charcoal tracking-tight mb-3">Payments</h1>
+            <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight mb-3">Payments</h1>
             <p className="text-steel text-base mb-4">Razorpay payment integration coming soon.</p>
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-muted-bg rounded-xl text-sm text-muted font-medium">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

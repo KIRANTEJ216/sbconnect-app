@@ -90,7 +90,7 @@ export default function Login() {
           <Card>
             <CardContent className="p-10">
               <div className="text-center mb-10">
-                <h1 className="text-2xl font-bold text-charcoal tracking-tight">Welcome back</h1>
+                <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Welcome back</h1>
                 <p className="text-sm text-steel mt-1.5">Sign in to your account</p>
               </div>
 

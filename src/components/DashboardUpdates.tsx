@@ -1,27 +1,21 @@
-import { useEffect, useState, useCallback } from 'react';
-import { getMeetings, submitRSVP, getUserRSVPs } from '../lib/firestore';
+import { useState, useEffect } from 'react';
+import { submitRSVP } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import type { Meeting } from '../types';
+import { useMeetings, useUserRSVPs } from '../hooks/useFirebaseQuery';
 import { Card, CardContent } from './ui/Card';
 
 export function DashboardUpdates() {
   const { user, profile } = useAuth();
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const { data: meetings = [] } = useMeetings();
+  const { data: myRsvps = [] } = useUserRSVPs(user?.uid);
   const [rsvpMap, setRsvpMap] = useState<Record<string, 'yes' | 'no' | 'maybe'>>({});
   const [rsvpSaving, setRsvpSaving] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const ms = await getMeetings();
-    setMeetings(ms);
-    if (user) {
-      const myRsvps = await getUserRSVPs(user.uid);
-      const map: Record<string, 'yes' | 'no' | 'maybe'> = {};
-      myRsvps.forEach((r) => { map[r.meetingId] = r.response; });
-      setRsvpMap(map);
-    }
-  }, [user]);
-
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const map: Record<string, 'yes' | 'no' | 'maybe'> = {};
+    myRsvps.forEach((r) => { map[r.meetingId] = r.response; });
+    setRsvpMap(map);
+  }, [myRsvps]);
 
   const handleRSVP = async (meetingId: string, response: 'yes' | 'no') => {
     if (!user || !profile) return;
@@ -42,8 +36,6 @@ export function DashboardUpdates() {
     return d.getMonth() === currentMonth && d.getFullYear() === currentYear && d.getTime() > now.getTime();
   }).slice(0, 3);
 
-  if (currentMonthUpcoming.length === 0) return null;
-
   return (
     <Card>
       <div className="stat-accent-top">
@@ -58,7 +50,9 @@ export function DashboardUpdates() {
             Upcoming Meetings
           </h3>
           <div className="space-y-1.5">
-            {currentMonthUpcoming.map((m) => {
+            {currentMonthUpcoming.length === 0 ? (
+              <p className="text-xs text-muted text-center py-4">No upcoming meetings this month.</p>
+            ) : currentMonthUpcoming.map((m) => {
               const current = rsvpMap[m.id];
               return (
               <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-canvas border border-border">

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests } from '../lib/firestore';
 import type { LoginLog } from '../lib/firestore';
+import { useAllRsvpsByMeeting } from '../hooks/useFirebaseQuery';
 import { formatDate, formatTime, formatCurrency } from '../lib/format';
 import { isSuperAdmin } from '../lib/admin';
 import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request } from '../types';
@@ -105,6 +107,13 @@ export default function Admin() {
 
   const [profiles, setProfiles] = useState<BusinessProfile[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
+  const dirTableRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: profiles.length,
+    getScrollElement: () => dirTableRef.current,
+    estimateSize: () => 48,
+    overscan: 10,
+  });
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [newMeetingDate, setNewMeetingDate] = useState('');
@@ -129,8 +138,7 @@ export default function Admin() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
 
-  const [meetingRsvpMap, setMeetingRsvpMap] = useState<Record<string, MeetingRSVP[]>>({});
-  const [rsvpMapLoading, setRsvpMapLoading] = useState(false);
+  const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
 
   const [superEmail, setSuperEmail] = useState('');
   const [superSearching, setSuperSearching] = useState(false);
@@ -148,7 +156,6 @@ export default function Admin() {
     loadNotifs();
     loadLogs();
     loadRequests();
-    loadAllMeetingRsvps();
     if (isSuper) loadAdmins();
   }, [isSuper]);
 
@@ -192,19 +199,6 @@ export default function Admin() {
     try { setRequests(await getAllRequests()); }
     catch (e) { console.error(e); }
     setRequestsLoading(false);
-  }
-
-  async function loadAllMeetingRsvps() {
-    setRsvpMapLoading(true);
-    try {
-      const allMeetings = await getMeetings();
-      const map: Record<string, MeetingRSVP[]> = {};
-      await Promise.all(allMeetings.map(async (m) => {
-        map[m.id] = await getMeetingRSVPs(m.id);
-      }));
-      setMeetingRsvpMap(map);
-    } catch (e) { console.error(e); }
-    setRsvpMapLoading(false);
   }
 
   const handleApprove = async (uid: string) => {
@@ -297,7 +291,7 @@ export default function Admin() {
     <AnimatedPage>
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-charcoal tracking-tight">Admin Panel</h1>
+        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Admin Panel</h1>
         <p className="text-steel mt-1">Manage users, roles, profiles, meetings & notifications</p>
       </div>
 
@@ -518,7 +512,7 @@ export default function Admin() {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export CSV
             </Button>
-            <Button size="sm" variant="outline" onClick={loadAllMeetingRsvps} loading={rsvpMapLoading}>Refresh</Button>
+            <Button size="sm" variant="outline" onClick={() => refetchRsvps()} loading={rsvpMapLoading}>Refresh</Button>
           </div>
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <table className="w-full text-sm min-w-[600px]">
@@ -582,7 +576,7 @@ export default function Admin() {
               Export CSV
             </Button>
           </div>
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div ref={dirTableRef} className="overflow-auto -mx-4 sm:mx-0" style={{ maxHeight: '500px' }}>
             <table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="border-b border-border text-left">
@@ -596,23 +590,26 @@ export default function Admin() {
                   <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {profiles.map((p) => (
-                  <tr key={p.uid} className="hover:bg-canvas/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-charcoal text-xs max-w-[140px] truncate">{p.companyName}</td>
-                    <td className="px-4 py-3 text-steel text-xs">{p.ownerName || '—'}</td>
-                    <td className="px-4 py-3 text-steel text-xs hidden sm:table-cell">{p.ownerSurname || '—'}</td>
-                    <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell">{p.phone}</td>
-                    <td className="px-4 py-3 text-steel text-xs font-mono truncate max-w-[140px] hidden sm:table-cell">{p.contactEmail}</td>
-                    <td className="px-4 py-3 text-steel text-xs max-w-[120px] truncate hidden sm:table-cell">{(p.keywords ?? []).slice(0, 3).join(', ')}{(p.keywords ?? []).length > 3 ? '...' : ''}</td>
-                    <td className="px-4 py-3"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
-                    <td className="px-4 py-3">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${p.uid}`)}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+              <tbody style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const p = profiles[virtualRow.index];
+                  return (
+                    <tr key={p.uid} className="hover:bg-canvas/50 transition-colors divide-x-0" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${virtualRow.size}px`, transform: `translateY(${virtualRow.start}px)`, display: 'table', tableLayout: 'fixed' }}>
+                      <td className="px-4 py-3 font-medium text-charcoal text-xs max-w-[140px] truncate border-b border-border">{p.companyName}</td>
+                      <td className="px-4 py-3 text-steel text-xs border-b border-border">{p.ownerName || '—'}</td>
+                      <td className="px-4 py-3 text-steel text-xs hidden sm:table-cell border-b border-border">{p.ownerSurname || '—'}</td>
+                      <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell border-b border-border">{p.phone}</td>
+                      <td className="px-4 py-3 text-steel text-xs font-mono truncate max-w-[140px] hidden sm:table-cell border-b border-border">{p.contactEmail}</td>
+                      <td className="px-4 py-3 text-steel text-xs max-w-[120px] truncate hidden sm:table-cell border-b border-border">{(p.keywords ?? []).slice(0, 3).join(', ')}{(p.keywords ?? []).length > 3 ? '...' : ''}</td>
+                      <td className="px-4 py-3 border-b border-border"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
+                      <td className="px-4 py-3 border-b border-border">
+                        <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${p.uid}`)}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

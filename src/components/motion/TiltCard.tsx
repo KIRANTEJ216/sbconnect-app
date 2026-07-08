@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { motion, type HTMLMotionProps } from 'framer-motion';
 import type { ReactNode } from 'react';
 
@@ -6,7 +7,7 @@ interface Props extends HTMLMotionProps<'div'> {
   className?: string;
 }
 
-export function TiltCard({ children, className = '', ...props }: Props) {
+export const TiltCard = memo(function TiltCard({ children, className = '', ...props }: Props) {
   return (
     <motion.div
       className={`relative ${className}`}
@@ -31,5 +32,4 @@ export function TiltCard({ children, className = '', ...props }: Props) {
       {children}
     </motion.div>
   );
-}
-TiltCard.displayName = 'TiltCard';
+});

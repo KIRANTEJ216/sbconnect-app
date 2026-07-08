@@ -14,7 +14,7 @@ function NavItem({ to, label, children }: NavItemProps) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator ${
+        `flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator ${
           isActive
             ? 'bg-primary-light text-primary'
             : 'text-steel hover:text-primary hover:bg-primary-light'

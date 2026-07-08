@@ -83,7 +83,7 @@ export default function Requests() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-charcoal tracking-tight">Requests</h1>
+          <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Requests</h1>
           <p className="text-steel mt-1.5 gradient-text">Browse business requests and opportunities</p>
         </div>
         <Link to="/requests/create">
@@ -157,7 +157,7 @@ export default function Requests() {
         <>
           {myReqs.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold text-charcoal tracking-tight mb-3">My Requests</h2>
+              <h2 className="text-fluid-h2 font-semibold text-charcoal tracking-tight mb-3">My Requests</h2>
               <StaggerList className="space-y-2">
                 {myReqs.map((req) => {
                   return (
@@ -227,7 +227,7 @@ export default function Requests() {
 
           {openReqs.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold text-charcoal tracking-tight mb-3">Open Requests</h2>
+              <h2 className="text-fluid-h2 font-semibold text-charcoal tracking-tight mb-3">Open Requests</h2>
               <StaggerList className="space-y-2">
                 {openReqs.map((req) => {
                   return (

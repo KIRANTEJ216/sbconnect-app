@@ -40,7 +40,7 @@ export default function ResetPassword() {
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-charcoal tracking-tight">Reset Password</h1>
+            <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Reset Password</h1>
             <p className="text-sm text-steel mt-1.5">
               {sent ? 'Check your email for the reset link.' : 'Enter your email to receive a reset link.'}
             </p>

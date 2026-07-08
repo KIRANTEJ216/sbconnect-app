@@ -52,7 +52,7 @@ export default function Chat() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-charcoal tracking-tight">Messages</h1>
+          <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Messages</h1>
           <p className="text-steel mt-1.5 gradient-text">
             {unreadTotal > 0
               ? `${unreadTotal} unread message${unreadTotal > 1 ? 's' : ''}`

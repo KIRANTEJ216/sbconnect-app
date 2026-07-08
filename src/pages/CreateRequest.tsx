@@ -53,7 +53,7 @@ export default function CreateRequest() {
     <AnimatedPage>
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-charcoal tracking-tight">Create a Request</h1>
+        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Create a Request</h1>
         <p className="text-steel mt-1.5 gradient-text">Submit a business request or opportunity</p>
       </div>
 

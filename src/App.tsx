@@ -1,24 +1,26 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import ResetPassword from './pages/ResetPassword';
-import Dashboard from './pages/Dashboard';
-import CreateProfile from './pages/CreateProfile';
-import Profile from './pages/Profile';
-import Profiles from './pages/Profiles';
-import Requests from './pages/Requests';
-import CreateRequest from './pages/CreateRequest';
-import RequestDetail from './pages/RequestDetail';
-import Admin from './pages/Admin';
-import AdminAccess from './pages/AdminAccess';
-import Attendance from './pages/Attendance';
-import AttendanceScan from './pages/AttendanceScan';
-import Payments from './pages/Payments';
-import SeedAdmin from './pages/SeedAdmin';
 import { AdminGuard } from './components/AdminGuard';
+
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CreateProfile = lazy(() => import('./pages/CreateProfile'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Profiles = lazy(() => import('./pages/Profiles'));
+const Requests = lazy(() => import('./pages/Requests'));
+const CreateRequest = lazy(() => import('./pages/CreateRequest'));
+const RequestDetail = lazy(() => import('./pages/RequestDetail'));
+const Admin = lazy(() => import('./pages/Admin'));
+const AdminAccess = lazy(() => import('./pages/AdminAccess'));
+const Attendance = lazy(() => import('./pages/Attendance'));
+const AttendanceScan = lazy(() => import('./pages/AttendanceScan'));
+const Payments = lazy(() => import('./pages/Payments'));
+const SeedAdmin = lazy(() => import('./pages/SeedAdmin'));
 
 function RootRedirect() {
   const { user } = useAuth();
@@ -37,6 +39,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ErrorBoundary>
+          <Suspense fallback={null}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -60,6 +63,7 @@ export default function App() {
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
+          </Suspense>
         </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>

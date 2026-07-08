@@ -165,3 +165,35 @@ d1e3042 feat: call-first flow after pitch with phone redirect
 95af2ab chore: add .env.example for Firebase config
 dd8acdc feat: compact request cards, pitch/chat/close buttons, phone field, dashboard restructure
 ```
+
+## Phase 2 — Data Loading Optimization
+- **@tanstack/react-query v5** installed with QueryClientProvider in main.tsx (2min stale time, 1 retry, no refetchOnWindowFocus)
+- Created `src/hooks/useFirebaseQuery.ts` — 11 hooks wrapping Firestore queries: `useProfiles`, `useMeetings`, `useLeaderboardQuery`, `useRequestsQuery`, `useTotalBusinessValue`, `useAttendanceCompliance`, `useUserRSVPs`, `useBusinessProfile`, `useMeetingRSVPs`, `useAllRsvpsByMeeting`, `useUnverifiedProfiles`
+- **Dashboard** — replaced 5 parallel `useEffect` fetches with 4 React Query hooks; deal recording invalidates leaderboard cache
+- **DashboardUpdates** — replaced manual `useEffect` + `useState` with `useMeetings` + `useUserRSVPs`
+- **StrikeWarning** — replaced manual `useEffect` + `useState` with `useAttendanceCompliance`
+- **TopBar** — replaced manual `getTotalBusinessValue` + 30s `setInterval` with `useTotalBusinessValue` (built-in `refetchInterval: 30000`)
+- **Admin** — `loadAllMeetingRsvps` (n+1 pattern) replaced with `useAllRsvpsByMeeting` (single `collectionGroup('rsvps')` query across all meetings)
+- **n+1 fixes:**
+  - `getAttendanceCompliance` — now uses `where('uid', '==', uid) + where('scannedAt', '>=', sixMonthsAgo)` instead of loading all attendance
+  - `getUserRSVPs` — uses `collectionGroup('rsvps')` with `where('uid', '==', uid)` instead of loading all meetings then each subcollection
+  - `getLeaderboard` — profile lookups batched with `where('__name__', 'in', [uids])` (10 per batch) instead of individual `getDoc`
+- **Pagination:** `getAllProfiles(max)`, `getAllRequests(max)`, `getMeetings(max)`, `getAllUsers(max)` — all accept optional `max` parameter with sensible defaults
+
+## Phase 3 — Performance & UX
+- **PWA support** — `vite-plugin-pwa` configured with auto-update service worker, manifest (name, icons, theme_color `#2A11A6`), 40 assets precached
+- **Virtualized Admin table** — Business Directory table uses `@tanstack/react-virtual` with `useVirtualizer` (max-height 500px scroll container, 48px row estimate, 10 overscan)
+- **Fluid typography** — `text-fluid-h1` through `text-fluid-sm` utility classes added to `index.css` using `clamp()` for responsive sizing without breakpoints; applied to Dashboard H1
+- **Dashboard "Your Business"** — renamed section title to "Your Business Profile"
+- **Dashboard pill sizing** — Member Directory and Requests pills now use consistent `text-xs` for both label and number (removed `text-[10px]` / `text-base` mismatch)
+- **Dashboard Upcoming Meetings** — `DashboardUpdates` now always renders (shows "No upcoming meetings this month." instead of returning `null`)
+
+## Phase 3.5 — Final Compliance Push
+- **React.memo** — `Badge`, `Card`, `CardHeader`, `CardContent`, `TiltCard` wrapped with `React.memo` to prevent unnecessary re-renders
+- **Session timeout** — `AuthContext` now uses `onIdTokenChanged` with 24h session check; `useMemo` wraps context value
+- **Self-hosted Inter font** — Google Fonts dependency removed; Inter variable WOFF2 files downloaded to `public/fonts/` with 7 unicode-range `@font-face` blocks in `index.css` using `font-display: swap`
+- **Web-vitals monitoring** — `web-vitals` package installed; `onCLS`, `onFCP`, `onINP`, `onLCP`, `onTTFB` reporters in `main.tsx` (logs in prod, POSTs to `/api/vitals`)
+- **Firestore security rules** — `firestore.rules` created with role-based access for all collections (users, profiles, requests, meetings, attendance, deals, notifications, conversations, loginLogs)
+- **Fluid typography rollout** — `text-fluid-h1` applied to all 15 page `<h1>` headings; `text-fluid-h2` applied to main section headings (Meeting Today, My Requests, Open Requests)
+- **Auto-fit responsive grids** — Business Directory, Directory cards, Dashboard stat cards use `grid-cols-[repeat(auto-fill,minmax(Xpx,1fr))]` for wrapping layouts without breakpoints
+- **Mobile viewport guard** — `body { min-width: 320px }` added to prevent layout collapse on very small screens

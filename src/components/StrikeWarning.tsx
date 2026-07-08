@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { getAttendanceCompliance } from '../lib/firestore';
+import { useAttendanceCompliance } from '../hooks/useFirebaseQuery';
 import { Card, CardContent } from './ui/Card';
 
 interface StrikeWarningProps {
@@ -8,22 +7,9 @@ interface StrikeWarningProps {
 }
 
 export function StrikeWarning({ uid, compact }: StrikeWarningProps) {
-  const [compliance, setCompliance] = useState<{
-    compliant: boolean;
-    attendedCount: number;
-    requiredCount: number;
-    monthsWindow: number;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: compliance, isLoading } = useAttendanceCompliance(uid);
 
-  useEffect(() => {
-    getAttendanceCompliance(uid)
-      .then(setCompliance)
-      .catch(() => setCompliance(null))
-      .finally(() => setLoading(false));
-  }, [uid]);
-
-  if (loading) return null;
+  if (isLoading) return null;
   if (!compliance) return null;
   if (compliance.compliant) return null;
 

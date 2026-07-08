@@ -19,7 +19,7 @@ const variants: Record<string, string> = {
 const sizes: Record<string, string> = {
   xs: 'px-2 py-1 text-xs rounded-[0.5rem]',
   sm: 'px-3 py-1.5 text-sm rounded-[0.625rem]',
-  md: 'px-5 py-2.5 text-sm rounded-[0.75rem]',
+  md: 'px-5 py-3 text-sm rounded-[0.75rem]',
   lg: 'px-7 py-3 text-base rounded-[0.875rem]',
 };
 

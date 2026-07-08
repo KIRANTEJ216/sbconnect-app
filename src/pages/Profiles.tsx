@@ -33,7 +33,7 @@ export default function Profiles() {
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="skeleton h-8 w-48" />
         <div className="skeleton h-12 w-full rounded-[0.75rem]" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} className="skeleton h-40 rounded-[2.5rem]" />
           ))}
@@ -46,7 +46,7 @@ export default function Profiles() {
     <AnimatedPage>
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-charcoal tracking-tight">Business Directory</h1>
+        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Business Directory</h1>
         <p className="text-steel mt-1.5 gradient-text">Discover businesses in the community</p>
       </div>
 
@@ -63,7 +63,7 @@ export default function Profiles() {
           </CardContent>
         </Card>
       ) : (
-        <StaggerList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StaggerList className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {filtered.map((p) => (
             <StaggerItem key={p.uid}>
             <Link to={`/profile/${p.uid}`}>

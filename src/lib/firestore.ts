@@ -1,6 +1,6 @@
 import {
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  collection, query, where, orderBy, limit, increment, arrayUnion,
+  collection, collectionGroup, query, where, orderBy, limit, increment, arrayUnion,
   addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -76,8 +76,9 @@ export async function updateBusinessProfile(uid: string, data: Partial<BusinessP
   await updateDoc(doc(db, 'profiles', uid), { ...data, updatedAt: Date.now() });
 }
 
-export async function getAllProfiles(): Promise<BusinessProfile[]> {
-  const snap = await getDocs(collection(db, 'profiles'));
+export async function getAllProfiles(max = 999): Promise<BusinessProfile[]> {
+  const q = query(collection(db, 'profiles'), limit(max));
+  const snap = await getDocs(q);
   return snap.docs.map((d) => fillDefaults(d.data()));
 }
 
@@ -126,8 +127,9 @@ export async function closeRequest(id: string) {
   await updateDoc(doc(db, 'requests', id), { status: 'closed' });
 }
 
-export async function getAllRequests(): Promise<Request[]> {
-  const snap = await getDocs(collection(db, 'requests'));
+export async function getAllRequests(max = 999): Promise<Request[]> {
+  const q = query(collection(db, 'requests'), orderBy('createdAt', 'desc'), limit(max));
+  const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Request));
 }
 
@@ -253,12 +255,11 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
   }
   const uids = Array.from(map.keys());
   const ownerMap = new Map<string, string>();
-  const profileSnaps = await Promise.all(uids.map((uid) => getDoc(doc(db, 'profiles', uid))));
-  for (const ps of profileSnaps) {
-    if (ps.exists()) {
-      const data = ps.data();
-      ownerMap.set(ps.id, data.ownerName || '');
-    }
+  for (let i = 0; i < uids.length; i += 10) {
+    const batch = uids.slice(i, i + 10);
+    const q = query(collection(db, 'profiles'), where('__name__', 'in', batch));
+    const batchSnap = await getDocs(q);
+    batchSnap.docs.forEach((d) => ownerMap.set(d.id, d.data().ownerName || ''));
   }
   return Array.from(map.entries())
     .map(([uid, e]) => ({ uid, companyName: e.companyName, ownerName: ownerMap.get(uid) || '', totalRevenue: e.totalRevenue, dealCount: e.dealCount }))
@@ -392,8 +393,8 @@ export async function deleteOldMessages(conversationId: string) {
 
 // ─── Admin ───
 
-export async function getAllUsers(): Promise<UserProfile[]> {
-  const snap = await getDocs(collection(db, 'users'));
+export async function getAllUsers(max = 999): Promise<UserProfile[]> {
+  const snap = await getDocs(query(collection(db, 'users'), limit(max)));
   return snap.docs.map((d) => d.data() as UserProfile);
 }
 
@@ -435,8 +436,8 @@ export async function createMeeting(_uid: string, date: string, label: string, l
   return ref.id;
 }
 
-export async function getMeetings(): Promise<Meeting[]> {
-  const snap = await getDocs(query(collection(db, 'meetings'), orderBy('date', 'desc')));
+export async function getMeetings(max = 50): Promise<Meeting[]> {
+  const snap = await getDocs(query(collection(db, 'meetings'), orderBy('date', 'desc'), limit(max)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Meeting));
 }
 
@@ -487,12 +488,13 @@ export async function getAttendanceCompliance(uid: string): Promise<{
   monthsWindow: number;
 }> {
   const sixMonthsAgo = Date.now() - 180 * 24 * 60 * 60 * 1000;
-  const snap = await getDocs(collection(db, 'attendance'));
-  let attendedCount = 0;
-  for (const d of snap.docs) {
-    const a = d.data();
-    if (a.uid === uid && a.scannedAt >= sixMonthsAgo) attendedCount++;
-  }
+  const q = query(
+    collection(db, 'attendance'),
+    where('uid', '==', uid),
+  );
+  const snap = await getDocs(q);
+  const recentRecords = snap.docs.filter((d) => d.data().scannedAt >= sixMonthsAgo);
+  const attendedCount = recentRecords.length;
   const requiredCount = 3;
   return {
     compliant: attendedCount >= requiredCount,
@@ -521,14 +523,13 @@ export async function submitRSVP(meetingId: string, uid: string, displayName: st
 }
 
 export async function getUserRSVPs(uid: string): Promise<MeetingRSVP[]> {
-  const meetingsSnap = await getDocs(collection(db, 'meetings'));
-  const results: MeetingRSVP[] = [];
-  for (const m of meetingsSnap.docs) {
-    const q = query(collection(db, 'meetings', m.id, 'rsvps'), where('uid', '==', uid));
-    const snap = await getDocs(q);
-    snap.docs.forEach((d) => results.push({ id: d.id, ...d.data() } as MeetingRSVP));
-  }
-  return results.sort((a, b) => b.respondedAt - a.respondedAt);
+  const q = query(
+    collectionGroup(db, 'rsvps'),
+    where('uid', '==', uid),
+    orderBy('respondedAt', 'desc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data(), meetingId: d.ref.parent.parent?.id || '' } as MeetingRSVP));
 }
 
 export async function getMeetingRSVPs(meetingId: string): Promise<MeetingRSVP[]> {

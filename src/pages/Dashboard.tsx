@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getBusinessProfile, getAllProfiles, getAllRequests, getUserRequests, getLeaderboard, recordDeal } from '../lib/firestore';
+import { getUserRequests, recordDeal } from '../lib/firestore';
+import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile } from '../hooks/useFirebaseQuery';
 import { formatDate, formatCurrency } from '../lib/format';
-import type { BusinessProfile, LeaderboardEntry } from '../types';
 import confetti from 'canvas-confetti';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -62,14 +63,13 @@ function CollapsibleSection({ title, icon, defaultOpen, children }: { title: str
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
-  const [myProfile, setMyProfile] = useState<BusinessProfile | null>(null);
-  const [totalProfiles, setTotalProfiles] = useState(0);
-  const [openRequests, setOpenRequests] = useState(0);
+  const queryClient = useQueryClient();
+  const { data: myProfile } = useBusinessProfile(user?.uid);
+  const { data: allBusinesses = [] } = useProfiles(200);
+  const { data: allReqs = [] } = useRequestsQuery();
+  const { data: leaderboard = [] } = useLeaderboardQuery();
   const [myRequests, setMyRequests] = useState(0);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [allBusinesses, setAllBusinesses] = useState<BusinessProfile[]>([]);
   const [newRequestsDot, setNewRequestsDot] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [showDealForm, setShowDealForm] = useState(false);
   const [dealReceiver, setDealReceiver] = useState('');
   const [dealOtherName, setDealOtherName] = useState('');
@@ -79,38 +79,19 @@ export default function Dashboard() {
   const [dealMsg, setDealMsg] = useState('');
 
   useEffect(() => {
-    async function load() {
-      if (!user) return;
-      try {
-        const [bp, all, allReqs, myReqs, lb] = await Promise.all([
-          getBusinessProfile(user.uid),
-          getAllProfiles(),
-          getAllRequests(),
-          getUserRequests(user.uid),
-          getLeaderboard(),
-        ]);
-        setMyProfile(bp);
-        setTotalProfiles(all.length);
-        setOpenRequests(allReqs.filter((r) => r.status === 'open').length);
-        setMyRequests(myReqs.length);
-        setLeaderboard(lb);
-        setAllBusinesses(all);
-
-        const latestRequestTime = allReqs
-          .filter((r) => r.uid !== user.uid)
-          .reduce((max, r) => Math.max(max, r.createdAt), 0);
-        setNewRequestsDot(latestRequestTime > (bp?.lastRequestsViewedAt ?? 0));
-      } catch (err) {
-        console.error('Dashboard load error:', err);
-        setMyProfile(null);
-        setTotalProfiles(0);
-        setOpenRequests(0);
-        setMyRequests(0);
-      }
-      setLoading(false);
+    if (!user) return;
+    getUserRequests(user.uid).then((reqs) => {
+      setMyRequests(reqs.length);
+    }).catch(() => setMyRequests(0));
+    if (allReqs.length > 0 && myProfile) {
+      const latestRequestTime = allReqs
+        .filter((r) => r.uid !== user.uid)
+        .reduce((max, r) => Math.max(max, r.createdAt), 0);
+      setNewRequestsDot(latestRequestTime > (myProfile?.lastRequestsViewedAt ?? 0));
     }
-    load();
-  }, [user]);
+  }, [user, allReqs, myProfile]);
+
+  const loading = !myProfile && !allBusinesses.length;
 
   const handleRecordDeal = async () => {
     if (!myProfile || !user) return;
@@ -150,8 +131,7 @@ export default function Dashboard() {
           dealDesc,
         );
       }
-      const lb = await getLeaderboard();
-      setLeaderboard(lb);
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       const receiverName = dealReceiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealReceiver)?.companyName;
       setDealMsg(`🎉 Congratulations! Deal recorded — ₹${dealAmount} given to ${receiverName}`);
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
@@ -179,13 +159,13 @@ export default function Dashboard() {
     },
     {
       label: 'Members Directory',
-      value: String(totalProfiles),
+      value: String(allBusinesses.length),
       variant: 'accent',
       to: '/profiles',
     },
     {
       label: 'Requests',
-      value: `${myRequests} mine · ${openRequests} open`,
+      value: `${myRequests} mine · ${allReqs.filter((r) => r.status === 'open').length} open`,
       variant: 'accent',
       dot: newRequestsDot,
       to: '/requests',
@@ -196,7 +176,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="skeleton h-8 w-48" />
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton h-28 rounded-[2.5rem]" />
           ))}
@@ -210,11 +190,11 @@ export default function Dashboard() {
     <AnimatedPage>
     <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8">
       <div>
-        <h1 className="text-xl sm:text-3xl font-bold text-charcoal tracking-tight">Dashboard</h1>
+        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Dashboard</h1>
         <p className="text-steel mt-1.5">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
         {statCards.map((s, idx) => {
           const inner = (
             <div className={`stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col ${s.to ? 'cursor-pointer' : ''}`}>
@@ -248,15 +228,15 @@ export default function Dashboard() {
                   {s.label === 'Requests' ? (
                     <div className="flex gap-3">
                       <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/15 shadow-sm">
-                        <p className="text-[10px] text-primary font-semibold tracking-tight">My Requests <span className="text-base font-extrabold">: {myRequests}</span></p>
+                        <p className="text-xs text-primary font-semibold tracking-tight">My Requests<span className="font-extrabold ml-0.5">: {myRequests}</span></p>
                       </div>
                       <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200/40 shadow-sm">
-                        <p className="text-[10px] text-amber-700 font-semibold tracking-tight">Open Requests <span className="text-base font-extrabold">: {openRequests}</span></p>
+                        <p className="text-xs text-amber-700 font-semibold tracking-tight">Open Requests<span className="font-extrabold ml-0.5">: {allReqs.filter((r) => r.status === 'open').length}</span></p>
                       </div>
                     </div>
                   ) : s.label === 'Members Directory' ? (
                     <div className="inline-flex px-3 py-1.5 rounded-full bg-gradient-to-br from-success/10 to-success/5 border border-success/15 shadow-sm">
-                      <p className="text-[10px] text-success font-semibold tracking-tight">Members <span className="text-base font-extrabold">: {totalProfiles}</span></p>
+                      <p className="text-xs text-success font-semibold tracking-tight">Members<span className="font-extrabold ml-0.5">: {allBusinesses.length}</span></p>
                     </div>
                   ) : (
                     <Badge variant={s.variant}>{s.value}</Badge>
@@ -351,13 +331,13 @@ export default function Dashboard() {
             </CollapsibleSection>
 
             <CollapsibleSection
-              title="Your Business"
+              title="Your Business Profile"
               icon="🏠"
             >
               <div className="flex items-start gap-4">
                 {myProfile.photoURL ? (
                   <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-border">
-                    <img src={myProfile.photoURL} alt={myProfile.companyName} className="w-full h-full object-cover" />
+                    <img src={myProfile.photoURL} alt={myProfile.companyName} className="w-full h-full object-cover aspect-square" />
                   </div>
                 ) : (
                   <div className="w-14 h-14 rounded-xl bg-primary-light flex items-center justify-center text-primary font-bold text-lg shrink-0">

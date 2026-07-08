@@ -162,7 +162,7 @@ export default function RequestDetail() {
               <Badge variant="success">Deal Awarded</Badge>
             )}
           </div>
-          <h1 className="text-2xl font-bold text-charcoal tracking-tight">{request.title}</h1>
+          <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">{request.title}</h1>
           <p className="text-steel mt-5 leading-relaxed">{request.description}</p>
 
           {(request.budget || request.deadline) && (

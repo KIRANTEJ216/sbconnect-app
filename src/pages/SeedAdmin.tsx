@@ -35,7 +35,7 @@ export default function SeedAdmin() {
   return (
     <AnimatedPage>
     <div className="max-w-md mx-auto text-center py-20">
-      <h1 className="text-xl font-bold text-charcoal tracking-tight">Seed Admin</h1>
+      <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Seed Admin</h1>
       <p className={`mt-4 text-sm ${status === 'error' ? 'text-danger' : status === 'done' ? 'text-success' : 'text-steel'}`}>
         {msg || 'Checking...'}
       </p>

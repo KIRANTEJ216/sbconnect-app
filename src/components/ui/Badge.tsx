@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -14,10 +14,10 @@ const variants: Record<string, string> = {
   neutral: 'bg-muted-bg text-steel border border-border/50',
 };
 
-export function Badge({ children, variant = 'accent', className = '' }: Props) {
+export const Badge = memo(function Badge({ children, variant = 'accent', className = '' }: Props) {
   return (
     <span className={`inline-flex items-center px-3 py-0.5 rounded-full text-xs font-medium tracking-tight ${variants[variant]} ${className}`}>
       {children}
     </span>
   );
-}
+});

@@ -59,7 +59,7 @@ export default function Register() {
                 <circle cx="12" cy="7" r="4" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-charcoal tracking-tight">Create your account</h1>
+            <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Create your account</h1>
             <p className="text-sm text-steel mt-1.5">Join the business community</p>
           </div>
 
