@@ -176,7 +176,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="skeleton h-8 w-48" />
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="skeleton h-28 rounded-[2.5rem]" />
           ))}
@@ -194,7 +194,7 @@ export default function Dashboard() {
         <p className="text-steel mt-1.5">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statCards.map((s, idx) => {
           const inner = (
             <div className={`stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col ${s.to ? 'cursor-pointer' : ''}`}>
@@ -251,10 +251,12 @@ export default function Dashboard() {
               </CardContent>
             </div>
           );
-          return (
-            <TiltCard key={s.label} className="h-full">
-              {s.to ? <Link to={s.to} className="block h-full">{inner}</Link> : inner}
-            </TiltCard>
+          return s.to ? (
+            <Link key={s.label} to={s.to} className="block h-full">
+              <TiltCard className="h-full">{inner}</TiltCard>
+            </Link>
+          ) : (
+            <TiltCard key={s.label} className="h-full">{inner}</TiltCard>
           );
         })}
       </div>
