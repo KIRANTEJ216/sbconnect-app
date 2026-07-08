@@ -23,6 +23,7 @@ export const ROLES = ['user', 'admin', 'super_admin'] as const;
 export interface BusinessProfile {
   uid: string;
   ownerName: string;
+  ownerSurname: string;
   phone: string;
   companyName: string;
   categories: string[];
@@ -38,8 +39,10 @@ export interface BusinessProfile {
   verified: boolean;
   membershipStatus: 'active' | 'inactive' | 'expired';
   membershipExpiry: number;
+  membershipDate: number;
   editCount: number;
   locked: boolean;
+  lastRequestsViewedAt: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -123,6 +126,43 @@ export const REQUEST_CATEGORIES = [
 ] as const;
 
 export const COMPANY_SIZES = ['1-10', '11-50', '51-200', '201-500', '500+'] as const;
+
+export interface Meeting {
+  id: string;
+  date: string;
+  label: string;
+  location: string;
+  qrCodeURL: string;
+  active: boolean;
+  createdAt: number;
+  rsvpEnabled: boolean;
+}
+
+export interface Attendance {
+  id: string;
+  meetingId: string;
+  uid: string;
+  displayName: string;
+  companyName: string;
+  scannedAt: number;
+}
+
+export interface MeetingRSVP {
+  id: string;
+  meetingId: string;
+  uid: string;
+  displayName: string;
+  companyName: string;
+  response: 'yes' | 'no' | 'maybe';
+  respondedAt: number;
+}
+
+export interface AppNotification {
+  id: string;
+  text: string;
+  active: boolean;
+  createdAt: number;
+}
 
 export const INDUSTRIES = [
   'Technology',

@@ -2,12 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { createBusinessProfile } from '../lib/firestore';
+import { createBusinessProfile, updateBusinessProfile } from '../lib/firestore';
 import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
 import { INDUSTRIES, COMPANY_SIZES } from '../types';
+import type { BusinessProfile } from '../types';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { ProfileSuggestions } from '../components/profile/ProfileSuggestions';
 
@@ -24,6 +25,7 @@ export default function CreateProfile() {
 
   const [form, setForm] = useState({
     ownerName: '',
+    ownerSurname: '',
     phone: '',
     companyName: '',
     categories: [] as string[],
@@ -112,7 +114,8 @@ export default function CreateProfile() {
   };
 
   const fields = [
-    { key: 'ownerName', label: 'Owner Name', weight: 10, filled: form.ownerName.trim().length > 0 },
+    { key: 'ownerName', label: 'Name', weight: 5, filled: form.ownerName.trim().length > 0 },
+    { key: 'ownerSurname', label: 'Surname', weight: 5, filled: form.ownerSurname.trim().length > 0 },
     { key: 'phone', label: 'Phone', weight: 10, filled: form.phone.trim().length > 0 },
     { key: 'companyName', label: 'Company Name', weight: 15, filled: form.companyName.trim().length > 0 },
     { key: 'categories', label: 'Categories', weight: 15, filled: form.categories.length > 0 },
@@ -164,15 +167,23 @@ export default function CreateProfile() {
         keywords: form.keywords,
       });
 
-      if (photoURL || catalogURLs.length > 0) {
-        const { updateBusinessProfile } = await import('../lib/firestore');
-        await updateBusinessProfile(user.uid, { photoURL, catalogURLs });
+      const updates: Record<string, unknown> = {};
+      if (photoURL) updates.photoURL = photoURL;
+      if (catalogURLs.length > 0) updates.catalogURLs = catalogURLs;
+      if (form.ownerSurname) updates.ownerSurname = form.ownerSurname;
+      if (Object.keys(updates).length > 0) {
+        await updateBusinessProfile(user.uid, updates as Partial<BusinessProfile>);
       }
 
       navigate('/dashboard');
     } catch (err) {
       console.error('Failed to create profile:', err);
-      setError('Failed to create profile. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      if (msg.includes('storage') || msg.includes('permission') || msg.includes('unauthorized')) {
+        setError('Image upload failed. Check Firebase Storage rules — authenticated uploads must be allowed.');
+      } else {
+        setError('Failed to create profile. ' + msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -204,12 +215,20 @@ export default function CreateProfile() {
           <Card>
             <CardContent className="p-5 sm:p-8 lg:p-10">
               <form onSubmit={handleSubmit} className="space-y-6">
-                <Input
-                  label="Owner / Business Owner Name"
-                  placeholder="e.g. Ravi Sharma"
-                  value={form.ownerName}
-                  onChange={(e) => update('ownerName', e.target.value)}
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Name"
+                    placeholder="e.g. Ravi"
+                    value={form.ownerName}
+                    onChange={(e) => update('ownerName', e.target.value)}
+                  />
+                  <Input
+                    label="Surname"
+                    placeholder="e.g. Sharma"
+                    value={form.ownerSurname}
+                    onChange={(e) => update('ownerSurname', e.target.value)}
+                  />
+                </div>
                 <Input
                   label="Phone Number"
                   type="tel"

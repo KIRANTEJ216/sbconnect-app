@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getRequest, getOrCreateConversation, expressInterest, getInterests, awardDeal } from '../lib/firestore';
+import { getRequest, expressInterest, getInterests, awardDeal } from '../lib/firestore';
 import { getBusinessProfile } from '../lib/firestore';
 import { getUserProfile } from '../lib/auth';
 import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
@@ -108,12 +108,6 @@ export default function RequestDetail() {
     }
   };
 
-  const handleChat = async () => {
-    if (!user || !request) return;
-    const convId = await getOrCreateConversation(user.uid, request.uid);
-    window.location.href = `/chat/${convId}`;
-  };
-
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
@@ -212,12 +206,6 @@ export default function RequestDetail() {
                             Call
                           </a>
                         )}
-                        <Button size="sm" variant="outline" onClick={handleChat}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                          </svg>
-                          Chat
-                        </Button>
                       </>
                     ) : (
                       <>
@@ -232,12 +220,6 @@ export default function RequestDetail() {
                             Call
                           </a>
                         )}
-                        <Button size="sm" variant="outline" onClick={handleChat}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                          </svg>
-                          Chat
-                        </Button>
                         <Button size="sm" variant="outline" onClick={() => setShowInterestForm(true)}>
                           Express Interest
                         </Button>

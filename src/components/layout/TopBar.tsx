@@ -40,7 +40,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   useEffect(() => {
     if (user) {
       getBusinessProfile(user.uid).then((bp) => {
-        if (bp?.ownerName) setOwnerName(bp.ownerName);
+        if (bp?.ownerName) setOwnerName(`${bp.ownerName} ${bp.ownerSurname || ''}`.trim());
       }).catch(() => {});
     }
   }, [user]);

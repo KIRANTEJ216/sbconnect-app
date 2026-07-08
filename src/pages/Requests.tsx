@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getRequests, getBusinessProfile, expressInterest, closeRequest, getOrCreateConversation } from '../lib/firestore';
+import { getAllRequests, getBusinessProfile, updateBusinessProfile, expressInterest, closeRequest } from '../lib/firestore';
 import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
 import type { Request } from '../types';
 import { REQUEST_CATEGORIES } from '../types';
@@ -23,10 +23,17 @@ export default function Requests() {
 
   useEffect(() => {
     setLoading(true);
-    getRequests(selectedCategory || undefined)
+    getAllRequests()
       .then(setRequests)
       .finally(() => setLoading(false));
-  }, [selectedCategory]);
+    if (user) {
+      updateBusinessProfile(user.uid, { lastRequestsViewedAt: Date.now() }).catch(console.error);
+    }
+  }, [user]);
+
+  const filtered = selectedCategory
+    ? requests.filter((r) => r.category === selectedCategory)
+    : requests;
 
   const handlePitch = async (req: Request) => {
     if (!user) return;
@@ -54,12 +61,6 @@ export default function Requests() {
     }
   };
 
-  const handleChat = async (req: Request) => {
-    if (!user) return;
-    const convId = await getOrCreateConversation(user.uid, req.uid);
-    navigate(`/chat/${convId}`);
-  };
-
   const handleClose = async (reqId: string) => {
     setClosingId(reqId);
     try {
@@ -73,6 +74,9 @@ export default function Requests() {
       setClosingId(null);
     }
   };
+
+  const myReqs = filtered.filter((r) => r.uid === user?.uid);
+  const openReqs = filtered.filter((r) => r.uid !== user?.uid && r.status === 'open');
 
   return (
     <AnimatedPage>
@@ -96,6 +100,17 @@ export default function Requests() {
       {error && (
         <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl">{error}</p>
       )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-card bg-surface border border-border shadow-card p-5">
+          <p className="text-sm text-muted font-semibold tracking-tight mb-2">My Requests</p>
+          <p className="text-3xl font-bold text-charcoal tracking-tight">{myReqs.length}</p>
+        </div>
+        <div className="rounded-card bg-surface border border-border shadow-card p-5">
+          <p className="text-sm text-muted font-semibold tracking-tight mb-2">Open Requests</p>
+          <p className="text-3xl font-bold text-charcoal tracking-tight">{openReqs.length}</p>
+        </div>
+      </div>
 
       <div className="flex gap-2 flex-wrap">
         <button
@@ -129,112 +144,167 @@ export default function Requests() {
             <div key={i} className="skeleton h-24 rounded-[2.5rem]" />
           ))}
         </div>
-      ) : requests.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="p-14 text-center">
-            <p className="text-muted">No requests yet{selectedCategory ? ` in ${selectedCategory}` : ''}.</p>
+            <p className="text-muted">No requests found{selectedCategory ? ` in ${selectedCategory}` : ''}.</p>
             <Link to="/requests/create" className="text-primary hover:text-primary-hover text-sm mt-3 inline-block transition-colors">
               Create the first request
             </Link>
           </CardContent>
         </Card>
       ) : (
-        <StaggerList className="space-y-2">
-          {requests.map((req) => {
-            const isOwner = user?.uid === req.uid;
-            return (
-            <StaggerItem key={req.id}>
-            <div
-              onClick={() => navigate(`/requests/${req.id}`)}
-              className={`block transition-all duration-300 cursor-pointer hover:-translate-y-0.5 ${
-                req.status === 'closed' ? 'opacity-60' : ''
-              }`}
-            >
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>
-                        {req.status === 'open' ? 'Open' : 'Closed'}
-                      </Badge>
-                      <Badge variant="accent">{req.category}</Badge>
-                      {req.interestCount > 0 && (
-                        <Badge variant="neutral">{req.interestCount} interest{req.interestCount !== 1 ? 's' : ''}</Badge>
-                      )}
-                      {req.awardedTo && (
-                        <Badge variant="success">Awarded</Badge>
-                      )}
-                    </div>
-                    <h3 className="font-semibold text-charcoal tracking-tight text-sm">{req.title}</h3>
-                    <p className="text-xs text-steel mt-1 line-clamp-1">{req.description}</p>
-                    <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-muted tracking-tight">
-                      <span>{req.companyName}</span>
-                      <span>&middot;</span>
-                      <span>{formatDate(req.createdAt)}</span>
-                      {req.budget && (
-                        <>
-                          <span>&middot;</span>
-                          <span>{formatCurrency(req.budget)}</span>
-                        </>
-                      )}
-                      {req.deadline && (
-                        <>
-                          <span>&middot;</span>
-                          <span>Due {formatDateStr(req.deadline)}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {req.status === 'open' && (
-                    <div className="flex items-center justify-end gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
-                      {isOwner ? (
-                        <Button
-                          size="xs"
-                          variant="danger"
-                          onClick={() => handleClose(req.id)}
-                          loading={closingId === req.id}
-                        >
-                          Close
-                        </Button>
-                      ) : req.interestedUids?.includes(user?.uid ?? '') ? (
-                        <div className="flex items-center gap-1.5">
-                          {req.requesterPhone && (
-                            <a
-                              href={`tel:${req.requesterPhone}`}
-                              className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-[0.5rem] bg-primary text-white hover:bg-primary-hover transition-colors"
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                              </svg>
-                              Call
-                            </a>
-                          )}
-                          <Button size="xs" variant="outline" onClick={() => handleChat(req)}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
-                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                            </svg>
-                            Chat
-                          </Button>
+        <>
+          {myReqs.length > 0 && (
+            <section>
+              <h2 className="text-lg font-semibold text-charcoal tracking-tight mb-3">My Requests</h2>
+              <StaggerList className="space-y-2">
+                {myReqs.map((req) => {
+                  return (
+                  <StaggerItem key={req.id}>
+                  <div
+                    onClick={() => navigate(`/requests/${req.id}`)}
+                    className={`block transition-all duration-300 cursor-pointer hover:-translate-y-0.5 ${
+                      req.status === 'closed' ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>
+                              {req.status === 'open' ? 'Open' : 'Closed'}
+                            </Badge>
+                            <Badge variant="accent">{req.category}</Badge>
+                            {req.interestCount > 0 && (
+                              <Badge variant="neutral">{req.interestCount} interest{req.interestCount !== 1 ? 's' : ''}</Badge>
+                            )}
+                            {req.awardedTo && (
+                              <Badge variant="success">Awarded</Badge>
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-charcoal tracking-tight text-sm">{req.title}</h3>
+                          <p className="text-xs text-steel mt-1 line-clamp-1">{req.description}</p>
+                          <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-muted tracking-tight">
+                            <span>{req.companyName}</span>
+                            <span>&middot;</span>
+                            <span>{formatDate(req.createdAt)}</span>
+                            {req.budget && (
+                              <>
+                                <span>&middot;</span>
+                                <span>{formatCurrency(req.budget)}</span>
+                              </>
+                            )}
+                            {req.deadline && (
+                              <>
+                                <span>&middot;</span>
+                                <span>Due {formatDateStr(req.deadline)}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => handlePitch(req)}
-                          loading={pitching === req.id}
-                        >
-                          Pitch
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-            </StaggerItem>
-            );
-          })}
-        </StaggerList>
+                        {req.status === 'open' && (
+                          <div className="flex items-center justify-end gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              size="xs"
+                              variant="danger"
+                              onClick={() => handleClose(req.id)}
+                              loading={closingId === req.id}
+                            >
+                              Close
+                            </Button>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                  </StaggerItem>
+                  );
+                })}
+              </StaggerList>
+            </section>
+          )}
+
+          {openReqs.length > 0 && (
+            <section>
+              <h2 className="text-lg font-semibold text-charcoal tracking-tight mb-3">Open Requests</h2>
+              <StaggerList className="space-y-2">
+                {openReqs.map((req) => {
+                  return (
+                  <StaggerItem key={req.id}>
+                  <div
+                    onClick={() => navigate(`/requests/${req.id}`)}
+                    className="block transition-all duration-300 cursor-pointer hover:-translate-y-0.5"
+                  >
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <Badge variant="success">Open</Badge>
+                            <Badge variant="accent">{req.category}</Badge>
+                            {req.interestCount > 0 && (
+                              <Badge variant="neutral">{req.interestCount} interest{req.interestCount !== 1 ? 's' : ''}</Badge>
+                            )}
+                            {req.awardedTo && (
+                              <Badge variant="success">Awarded</Badge>
+                            )}
+                          </div>
+                          <h3 className="font-semibold text-charcoal tracking-tight text-sm">{req.title}</h3>
+                          <p className="text-xs text-steel mt-1 line-clamp-1">{req.description}</p>
+                          <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-muted tracking-tight">
+                            <span>{req.companyName}</span>
+                            <span>&middot;</span>
+                            <span>{formatDate(req.createdAt)}</span>
+                            {req.budget && (
+                              <>
+                                <span>&middot;</span>
+                                <span>{formatCurrency(req.budget)}</span>
+                              </>
+                            )}
+                            {req.deadline && (
+                              <>
+                                <span>&middot;</span>
+                                <span>Due {formatDateStr(req.deadline)}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                          {req.interestedUids?.includes(user?.uid ?? '') ? (
+                            <div className="flex items-center gap-1.5">
+                              {req.requesterPhone && (
+                                <a
+                                  href={`tel:${req.requesterPhone}`}
+                                  className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-[0.5rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                  </svg>
+                                  Call
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() => handlePitch(req)}
+                              loading={pitching === req.id}
+                            >
+                              Pitch
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  </StaggerItem>
+                  );
+                })}
+              </StaggerList>
+            </section>
+          )}
+        </>
       )}
     </div>
     </AnimatedPage>

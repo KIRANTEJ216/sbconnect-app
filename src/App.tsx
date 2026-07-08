@@ -13,6 +13,10 @@ import Requests from './pages/Requests';
 import CreateRequest from './pages/CreateRequest';
 import RequestDetail from './pages/RequestDetail';
 import Admin from './pages/Admin';
+import AdminAccess from './pages/AdminAccess';
+import Attendance from './pages/Attendance';
+import AttendanceScan from './pages/AttendanceScan';
+import Payments from './pages/Payments';
 import SeedAdmin from './pages/SeedAdmin';
 import { AdminGuard } from './components/AdminGuard';
 
@@ -46,6 +50,10 @@ export default function App() {
               <Route path="/requests" element={<Requests />} />
               <Route path="/requests/create" element={<CreateRequest />} />
               <Route path="/requests/:id" element={<RequestDetail />} />
+              <Route path="/admin-access" element={<AdminAccess />} />
+              <Route path="/attendance" element={<Attendance />} />
+              <Route path="/attendance/scan" element={<AttendanceScan />} />
+              <Route path="/payments" element={<Payments />} />
               <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
               <Route path="/seed-admin" element={<SeedAdmin />} />
               <Route path="/" element={<RootRedirect />} />

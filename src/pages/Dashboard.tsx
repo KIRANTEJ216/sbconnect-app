@@ -10,13 +10,16 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { TiltCard } from '../components/motion/TiltCard';
+import { StrikeWarning } from '../components/StrikeWarning';
+import { DashboardUpdates } from '../components/DashboardUpdates';
+import { MembershipCountdown } from '../components/MembershipCountdown';
 
 
 function CollapsibleSection({ title, icon, defaultOpen, children }: { title: string; icon?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen ?? true);
   return (
-    <TiltCard>
-      <Card>
+    <TiltCard className="h-full">
+      <Card className="h-full flex flex-col">
         <div className="stat-accent-top">
           <CardHeader>
             <button
@@ -45,8 +48,8 @@ function CollapsibleSection({ title, icon, defaultOpen, children }: { title: str
             </button>
           </CardHeader>
         </div>
-        <div className={`transition-all duration-300 overflow-hidden ${open ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-          <CardContent>
+        <div className={`transition-all duration-300 overflow-hidden flex-1 ${open ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <CardContent className="h-full">
             {children}
           </CardContent>
         </div>
@@ -64,6 +67,7 @@ export default function Dashboard() {
   const [myRequests, setMyRequests] = useState(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [allBusinesses, setAllBusinesses] = useState<BusinessProfile[]>([]);
+  const [newRequestsDot, setNewRequestsDot] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showDealForm, setShowDealForm] = useState(false);
   const [dealReceiver, setDealReceiver] = useState('');
@@ -90,6 +94,11 @@ export default function Dashboard() {
         setMyRequests(myReqs.length);
         setLeaderboard(lb);
         setAllBusinesses(all);
+
+        const latestRequestTime = allReqs
+          .filter((r) => r.uid !== user.uid)
+          .reduce((max, r) => Math.max(max, r.createdAt), 0);
+        setNewRequestsDot(latestRequestTime > (bp?.lastRequestsViewedAt ?? 0));
       } catch (err) {
         console.error('Dashboard load error:', err);
         setMyProfile(null);
@@ -156,24 +165,27 @@ export default function Dashboard() {
     }
   };
 
-  const statCards: { label: string; value: string; sub?: string; variant: 'accent' | 'success' | 'neutral' }[] = [
+  const statCards: { label: string; value: string; sub?: string; variant: 'accent' | 'success' | 'neutral' | 'danger'; dot?: boolean; to?: string }[] = [
     {
       label: 'Membership Status',
       value: myProfile?.membershipStatus === 'active'
         ? `Member since ${formatDate(myProfile.createdAt)}`
-        : myProfile?.membershipStatus ?? 'Inactive',
-      variant: myProfile?.membershipStatus === 'active' ? 'success' : 'neutral',
+        : myProfile?.membershipStatus === 'expired' ? 'EXPIRED' : myProfile?.membershipStatus ?? 'Inactive',
+      variant: myProfile?.membershipStatus === 'active' ? 'success' : myProfile?.membershipStatus === 'expired' ? 'danger' : 'neutral',
       sub: profile?.onlineStatus === 'online' ? 'Online' : 'Offline',
     },
     {
       label: 'Members Directory',
       value: String(totalProfiles),
       variant: 'accent',
+      to: '/profiles',
     },
     {
       label: 'Requests',
       value: `${myRequests} mine · ${openRequests} open`,
       variant: 'accent',
+      dot: newRequestsDot,
+      to: '/requests',
     },
   ];
 
@@ -193,53 +205,76 @@ export default function Dashboard() {
 
   return (
     <AnimatedPage>
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-charcoal tracking-tight">Dashboard</h1>
-        <p className="text-steel mt-1.5">Welcome, {myProfile?.ownerName || user?.displayName || user?.email}</p>
+        <h1 className="text-xl sm:text-3xl font-bold text-charcoal tracking-tight">Dashboard</h1>
+        <p className="text-steel mt-1.5">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {statCards.map((s, idx) => (
-          <TiltCard key={s.label} className="h-full">
-          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col">
-            <CardContent className="p-5 flex-1 flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-muted font-semibold tracking-tight">{s.label}</p>
-                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-                  idx === 0 ? 'bg-primary/8 text-primary' :
-                  idx === 1 ? 'bg-success/8 text-success' :
-                  'bg-warning/8 text-warning'
-                }`}>
-                  {idx === 0 ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
-                    </svg>
-                  ) : idx === 1 ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
+        {statCards.map((s, idx) => {
+          const inner = (
+            <div className={`stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col ${s.to ? 'cursor-pointer' : ''}`}>
+              <CardContent className="p-5 flex-1 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-muted font-semibold tracking-tight flex items-center gap-1.5">
+                    {s.label}
+                    {s.dot && <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />}
+                  </p>
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                    idx === 0 ? 'bg-primary/8 text-primary' :
+                    idx === 1 ? 'bg-success/8 text-success' :
+                    'bg-warning/8 text-warning'
+                  }`}>
+                    {idx === 0 ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
+                      </svg>
+                    ) : idx === 1 ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-auto">
+                  {s.label === 'Requests' ? (
+                    <div className="flex gap-3">
+                      <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/15 shadow-sm">
+                        <p className="text-[9px] text-primary font-semibold tracking-widest uppercase">My Requests</p>
+                        <p className="text-base font-extrabold text-primary text-center leading-tight">{myRequests}</p>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200/40 shadow-sm">
+                        <p className="text-[9px] text-amber-700 font-semibold tracking-widest uppercase">Open Requests</p>
+                        <p className="text-base font-extrabold text-amber-800 text-center leading-tight">{openRequests}</p>
+                      </div>
+                    </div>
                   ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-                    </svg>
+                    <Badge variant={s.variant}>{s.value}</Badge>
                   )}
                 </div>
-              </div>
-              <div className="mt-auto">
-                <Badge variant={s.variant}>{s.value}</Badge>
-              </div>
-              {s.sub && (
-                <p className="mt-2 text-xs text-muted font-medium tracking-tight flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-muted/40'}`} />
-                  {s.sub}
-                </p>
-              )}
-            </CardContent>
-          </div>
-          </TiltCard>
-        ))}
+                {s.sub && (
+                  <p className="mt-2 text-xs text-muted font-medium tracking-tight flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-muted/40'}`} />
+                    {s.sub}
+                  </p>
+                )}
+              </CardContent>
+            </div>
+          );
+          return (
+            <TiltCard key={s.label} className="h-full">
+              {s.to ? <Link to={s.to} className="block h-full">{inner}</Link> : inner}
+            </TiltCard>
+          );
+        })}
       </div>
+
+      {user && <StrikeWarning uid={user.uid} />}
 
       {!myProfile ? (
         <Card>
@@ -314,48 +349,73 @@ export default function Dashboard() {
               title="Your Business"
               icon="🏠"
             >
-              <div className="space-y-2">
-                <p className="font-medium text-charcoal">{myProfile.companyName}</p>
-                <p className="text-sm text-steel font-mono tracking-tight">{(myProfile.categories ?? []).join(', ')} &middot; {myProfile.location}</p>
-                <div>
-                  {myProfile.verified ? (
-                    <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified Business</span>
-                  ) : (
-                    <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending Verification</span>
-                  )}
+              <div className="flex items-start gap-4">
+                {myProfile.photoURL ? (
+                  <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-border">
+                    <img src={myProfile.photoURL} alt={myProfile.companyName} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-14 h-14 rounded-xl bg-primary-light flex items-center justify-center text-primary font-bold text-lg shrink-0">
+                    {myProfile.companyName.charAt(0)}
+                  </div>
+                )}
+                <div className="min-w-0 space-y-1">
+                  <p className="font-semibold text-charcoal tracking-tight">{myProfile.companyName}</p>
+                  <p className="text-sm text-steel">
+                    {`${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() || '—'}
+                  </p>
+                  <p className="text-xs text-muted font-mono tracking-tight">{(myProfile.categories ?? []).join(', ')} &middot; {myProfile.location}</p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    {myProfile.verified ? (
+                      <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified</span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending</span>
+                    )}
+                    <Badge variant={myProfile.membershipStatus === 'active' ? 'success' : myProfile.membershipStatus === 'expired' ? 'danger' : 'neutral'}>
+                      {myProfile.membershipStatus === 'expired' ? 'EXPIRED' : myProfile.membershipStatus.charAt(0).toUpperCase() + myProfile.membershipStatus.slice(1)}
+                    </Badge>
+                  </div>
                 </div>
               </div>
+              {myProfile.membershipExpiry > 0 && (
+                <div className="mt-3">
+                  <MembershipCountdown membershipExpiry={myProfile.membershipExpiry} />
+                </div>
+              )}
             </CollapsibleSection>
           </div>
 
-          <CollapsibleSection
-            title="Leaderboard"
-            icon="🏆"
-          >
-            {leaderboard.length === 0 ? (
-              <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {leaderboard.slice(0, 7).map((entry, i) => (
-                  <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'}`}>
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                      </span>
-                      <div className="min-w-0">
-                        <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[180px]">
-                          {entry.ownerName || entry.companyName}
-                        </Link>
-                        <p className="text-[10px] text-muted truncate max-w-[180px]">{entry.companyName}</p>
-                        <p className="text-[10px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <CollapsibleSection
+              title="Leaderboard"
+              icon="🏆"
+            >
+              {leaderboard.length === 0 ? (
+                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {leaderboard.slice(0, 7).map((entry, i) => (
+                    <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'}`}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                        </span>
+                        <div className="min-w-0">
+                          <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[180px]">
+                            {entry.ownerName || entry.companyName}
+                          </Link>
+                          <p className="text-[10px] text-muted truncate max-w-[180px]">{entry.companyName}</p>
+                          <p className="text-[10px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
+                        </div>
                       </div>
+                      <span className="text-sm font-semibold text-charcoal shrink-0 ml-2">{formatCurrency(String(entry.totalRevenue))}</span>
                     </div>
-                    <span className="text-sm font-semibold text-charcoal shrink-0 ml-2">{formatCurrency(String(entry.totalRevenue))}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CollapsibleSection>
+                  ))}
+                </div>
+              )}
+            </CollapsibleSection>
+            <DashboardUpdates />
+          </div>
         </div>
       )}
 

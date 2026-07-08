@@ -307,6 +307,22 @@ h1, h2, h3, h4, h5, h6 {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.marquee-bounce {
+  position: absolute;
+  top: 0;
+  left: 0;
+  animation: marquee-bounce 40s ease-in-out infinite alternate;
+}
+
+@keyframes marquee-bounce {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(100vw - 100%)); }
+}
+
+.marquee-bounce:hover {
+  animation-play-state: paused;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

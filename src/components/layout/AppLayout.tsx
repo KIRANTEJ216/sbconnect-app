@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { BottomNav } from './BottomNav';
 import { MobileSidebar } from './MobileSidebar';
+import { MarqueeBar } from '../MarqueeBar';
 import { AnimatePresence, motion } from 'framer-motion';
 
 function LoadingSkeleton() {
@@ -50,6 +51,7 @@ export function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         <MobileSidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
         <TopBar onMenuToggle={() => setMobileMenuOpen((v) => !v)} />
+        <MarqueeBar />
         <main className="flex-1 p-3 sm:p-5 lg:p-8 pb-20 lg:pb-4 overflow-y-auto bg-canvas min-h-0">
           <div className="min-h-0">
             <AnimatePresence mode="wait">

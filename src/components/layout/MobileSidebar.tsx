@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePendingVerifications } from '../../hooks/usePendingVerifications';
+import { isAdmin } from '../../lib/admin';
 
 interface MobileSidebarProps {
   open: boolean;
@@ -10,7 +12,8 @@ interface MobileSidebarProps {
 export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
   const { user, profile } = useAuth();
   const location = useLocation();
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+  const isAdminUser = isAdmin(user?.email, profile?.role);
+  const pendingCount = usePendingVerifications();
 
   useEffect(() => {
     onClose();
@@ -68,16 +71,32 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
             </svg>
           </MobileNavItem>
+          <MobileNavItem to="/attendance" label="Attendance" onClick={onClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><polyline points="9 16 11 18 15 14" />
+            </svg>
+          </MobileNavItem>
           <MobileNavItem to="/requests" label="Requests" onClick={onClose}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
             </svg>
           </MobileNavItem>
-          {isAdmin && (
-            <MobileNavItem to="/admin" label="Admin" onClick={onClose}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
+          <MobileNavItem to="/payments" label="Payments" onClick={onClose}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="5" width="22" height="14" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /><circle cx="12" cy="15" r="1" />
+            </svg>
+            <span className="ml-auto text-[10px] font-medium text-muted bg-muted-bg px-1.5 py-0.5 rounded-md">Soon</span>
+          </MobileNavItem>
+          {isAdminUser && (
+            <MobileNavItem to="/admin" label={pendingCount > 0 ? `Admin (${pendingCount})` : 'Admin'} onClick={onClose}>
+              <div className="relative">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-2 h-2 bg-warning rounded-full" />
+                )}
+              </div>
             </MobileNavItem>
           )}
         </nav>

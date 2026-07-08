@@ -1,5 +1,5 @@
 import {
-  doc, setDoc, getDoc, getDocs, updateDoc,
+  doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   collection, query, where, orderBy, limit, increment, arrayUnion,
   addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
@@ -7,11 +7,12 @@ import { db } from './firebase';
 import type {
   BusinessProfile, Request, Conversation, Message,
   Interest, Deal, LeaderboardEntry, UserProfile,
+  Meeting, Attendance, AppNotification, MeetingRSVP,
 } from '../types';
 
 export async function createBusinessProfile(
   uid: string,
-  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'editCount' | 'locked' | 'createdAt' | 'updatedAt'>,
+  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'membershipDate' | 'editCount' | 'locked' | 'lastRequestsViewedAt' | 'createdAt' | 'updatedAt' | 'ownerSurname'>,
 ) {
   const profile: BusinessProfile = {
     ...data,
@@ -20,8 +21,11 @@ export async function createBusinessProfile(
     catalogURLs: [],
     verified: false,
     qrCodeURL: `${window.location.origin}/profile/${uid}`,
+    ownerSurname: '',
+    lastRequestsViewedAt: 0,
+    membershipDate: Date.now(),
     membershipStatus: 'active',
-    membershipExpiry: Date.now() + 365 * 24 * 60 * 60 * 1000,
+    membershipExpiry: Date.now() + 364 * 24 * 60 * 60 * 1000,
     editCount: 0,
     locked: false,
     createdAt: Date.now(),
@@ -38,7 +42,9 @@ const DEFAULTS = {
   qrCodeURL: '',
   verified: false,
   membershipStatus: 'active' as const,
+  membershipDate: 0,
   ownerName: '',
+  ownerSurname: '',
   phone: '',
   categories: [] as string[],
   companySize: '',
@@ -48,6 +54,7 @@ const DEFAULTS = {
   description: '',
   editCount: 0,
   locked: false,
+  lastRequestsViewedAt: 0,
 };
 
 function fillDefaults(data: Record<string, unknown>): BusinessProfile {
@@ -409,6 +416,149 @@ export async function getUnverifiedProfiles(): Promise<BusinessProfile[]> {
   const q = query(collection(db, 'profiles'), where('verified', '==', false));
   const snap = await getDocs(q);
   return snap.docs.map((d) => fillDefaults(d.data()));
+}
+
+// ─── Meetings & Attendance ───
+
+export async function createMeeting(_uid: string, date: string, label: string, location: string = '') {
+  const ref = await addDoc(collection(db, 'meetings'), {
+    date,
+    label,
+    location,
+    qrCodeURL: `${window.location.origin}/attendance/scan?meetingId=PENDING`,
+    active: true,
+    rsvpEnabled: true,
+    createdAt: Date.now(),
+  });
+  const qrCodeURL = `${window.location.origin}/attendance/scan?meetingId=${ref.id}`;
+  await updateDoc(ref, { qrCodeURL });
+  return ref.id;
+}
+
+export async function getMeetings(): Promise<Meeting[]> {
+  const snap = await getDocs(query(collection(db, 'meetings'), orderBy('date', 'desc')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Meeting));
+}
+
+export async function getActiveMeeting(): Promise<Meeting | null> {
+  const q = query(collection(db, 'meetings'), where('active', '==', true), orderBy('createdAt', 'desc'), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as Meeting;
+}
+
+export async function markAttendance(meetingId: string, uid: string, displayName: string, companyName: string) {
+  const existing = query(
+    collection(db, 'attendance'),
+    where('meetingId', '==', meetingId),
+    where('uid', '==', uid),
+  );
+  const snap = await getDocs(existing);
+  if (!snap.empty) return { alreadyMarked: true };
+
+  await addDoc(collection(db, 'attendance'), {
+    meetingId,
+    uid,
+    displayName,
+    companyName,
+    scannedAt: Date.now(),
+  });
+  return { alreadyMarked: false };
+}
+
+export async function getUserAttendance(uid: string): Promise<Attendance[]> {
+  const q = query(collection(db, 'attendance'), where('uid', '==', uid), orderBy('scannedAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Attendance));
+}
+
+export async function getMeetingAttendance(meetingId: string): Promise<Attendance[]> {
+  const q = query(collection(db, 'attendance'), where('meetingId', '==', meetingId), orderBy('scannedAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Attendance));
+}
+
+// ─── Attendance Compliance (3-strike rule) ───
+
+export async function getAttendanceCompliance(uid: string): Promise<{
+  compliant: boolean;
+  attendedCount: number;
+  requiredCount: number;
+  monthsWindow: number;
+}> {
+  const sixMonthsAgo = Date.now() - 180 * 24 * 60 * 60 * 1000;
+  const snap = await getDocs(collection(db, 'attendance'));
+  let attendedCount = 0;
+  for (const d of snap.docs) {
+    const a = d.data();
+    if (a.uid === uid && a.scannedAt >= sixMonthsAgo) attendedCount++;
+  }
+  const requiredCount = 3;
+  return {
+    compliant: attendedCount >= requiredCount,
+    attendedCount,
+    requiredCount,
+    monthsWindow: 6,
+  };
+}
+
+// ─── RSVP ───
+
+export async function submitRSVP(meetingId: string, uid: string, displayName: string, companyName: string, response: 'yes' | 'no' | 'maybe') {
+  const existing = query(
+    collection(db, 'meetings', meetingId, 'rsvps'),
+    where('uid', '==', uid),
+  );
+  const snap = await getDocs(existing);
+  if (!snap.empty) {
+    await updateDoc(doc(db, 'meetings', meetingId, 'rsvps', snap.docs[0].id), { response, respondedAt: Date.now() });
+    return { updated: true };
+  }
+  await addDoc(collection(db, 'meetings', meetingId, 'rsvps'), {
+    meetingId, uid, displayName, companyName, response, respondedAt: Date.now(),
+  });
+  return { updated: false };
+}
+
+export async function getUserRSVPs(uid: string): Promise<MeetingRSVP[]> {
+  const meetingsSnap = await getDocs(collection(db, 'meetings'));
+  const results: MeetingRSVP[] = [];
+  for (const m of meetingsSnap.docs) {
+    const q = query(collection(db, 'meetings', m.id, 'rsvps'), where('uid', '==', uid));
+    const snap = await getDocs(q);
+    snap.docs.forEach((d) => results.push({ id: d.id, ...d.data() } as MeetingRSVP));
+  }
+  return results.sort((a, b) => b.respondedAt - a.respondedAt);
+}
+
+export async function getMeetingRSVPs(meetingId: string): Promise<MeetingRSVP[]> {
+  const snap = await getDocs(collection(db, 'meetings', meetingId, 'rsvps'));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MeetingRSVP));
+}
+
+// ─── Notifications ───
+
+export function subscribeToNotifications(callback: (notifs: AppNotification[]) => void) {
+  const q = query(collection(db, 'notifications'), where('active', '==', true), orderBy('createdAt', 'desc'));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification)));
+  });
+}
+
+export async function addNotification(text: string) {
+  await addDoc(collection(db, 'notifications'), { text, active: true, createdAt: Date.now() });
+}
+
+export async function toggleNotification(id: string, active: boolean) {
+  await updateDoc(doc(db, 'notifications', id), { active });
+}
+
+export async function deleteNotification(id: string) {
+  await deleteDoc(doc(db, 'notifications', id));
+}
+
+export async function deleteMeeting(id: string) {
+  await deleteDoc(doc(db, 'meetings', id));
 }
 
 // ─── Login Logs ───

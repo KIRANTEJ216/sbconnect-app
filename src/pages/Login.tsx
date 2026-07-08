@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { signIn, resolvePhoneToEmail } from '../lib/auth';
 import { auth } from '../lib/firebase';
 import { logLogin } from '../lib/firestore';
@@ -12,17 +12,19 @@ import { AnimatedPage } from '../components/motion/AnimatedPage';
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard', { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, redirectTo]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -42,6 +44,7 @@ export default function Login() {
       await signIn(email, password);
       const u = auth.currentUser;
       if (u) logLogin(u.uid, u.email || email, u.displayName || '').catch(() => {});
+      navigate(redirectTo, { replace: true });
     } catch (err: any) {
       const code = err.code;
       if (code === 'auth/user-not-found') setError('No account found with that email.');

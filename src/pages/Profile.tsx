@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation } from '../lib/firestore';
+import { isAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
 import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { formatDate } from '../lib/format';
@@ -13,6 +14,7 @@ import { Input } from '../components/ui/Input';
 import { useAuth } from '../contexts/AuthContext';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { TiltCard } from '../components/motion/TiltCard';
+import { MembershipCountdown } from '../components/MembershipCountdown';
 
 function QrCode({ value, size, fgColor }: { value: string; size: number; fgColor: string }) {
   const [QRCodeSVG, setQRCodeSVG] = useState<React.ComponentType<{ value: string; size: number; fgColor: string }> | null>(null);
@@ -34,7 +36,7 @@ function QrCode({ value, size, fgColor }: { value: string; size: number; fgColor
 
 export default function Profile() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +52,7 @@ export default function Profile() {
 
   const [form, setForm] = useState({
     ownerName: '',
+    ownerSurname: '',
     phone: '',
     companyName: '',
     categories: [] as string[],
@@ -75,6 +78,13 @@ export default function Profile() {
         getUserProfile(id),
       ]);
       if (bp) {
+        if (bp.membershipDate > 0) {
+          const computedExpiry = bp.membershipDate + 364 * 24 * 60 * 60 * 1000;
+          if (bp.membershipExpiry !== computedExpiry) {
+            bp.membershipExpiry = computedExpiry;
+            updateBusinessProfile(bp.uid, { membershipExpiry: computedExpiry }).catch(console.error);
+          }
+        }
         if (bp.membershipStatus === 'active' && Date.now() > bp.membershipExpiry) {
           bp.membershipStatus = 'expired';
           updateBusinessProfile(bp.uid, { membershipStatus: 'expired' }).catch(console.error);
@@ -97,12 +107,13 @@ export default function Profile() {
   const startEditing = () => {
     if (!profile) return;
     setError('');
-    if (profile.locked) {
+    if (profile.locked && !isAdminViewer) {
       setError('This profile is locked. Maximum 3 edits reached.');
       return;
     }
     setForm({
       ownerName: profile.ownerName || '',
+      ownerSurname: profile.ownerSurname || '',
       phone: profile.phone || '',
       companyName: profile.companyName,
       categories: [...(profile.categories ?? [])],
@@ -201,8 +212,8 @@ export default function Profile() {
     try {
       let photoURL = profile.photoURL || '';
       let catalogURLs = [...(profile.catalogURLs || [])];
-      const newEditCount = (profile.editCount || 0) + 1;
-      const locked = newEditCount >= 3;
+      const newEditCount = isAdminViewer ? (profile.editCount || 0) : (profile.editCount || 0) + 1;
+      const locked = isAdminViewer ? profile.locked : newEditCount >= 3;
 
       if (photoFile) {
         photoURL = await uploadProfilePhoto(user.uid, photoFile);
@@ -213,6 +224,7 @@ export default function Profile() {
 
       await updateBusinessProfile(user.uid, {
         ownerName: form.ownerName,
+        ownerSurname: form.ownerSurname,
         phone: form.phone,
         companyName: form.companyName,
         categories: form.categories,
@@ -231,6 +243,7 @@ export default function Profile() {
       setProfile({
         ...profile,
         ownerName: form.ownerName,
+        ownerSurname: form.ownerSurname,
         phone: form.phone,
         companyName: form.companyName,
         categories: form.categories,
@@ -306,6 +319,8 @@ export default function Profile() {
   };
 
   const isOwnProfile = user?.uid === id;
+  const isAdminViewer = isAdmin(user?.email, authProfile?.role);
+  const canEdit = isOwnProfile || isAdminViewer;
 
   if (loading) {
     return (
@@ -342,7 +357,7 @@ export default function Profile() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-charcoal tracking-tight">Business Profile</h1>
         <div className="flex gap-2">
-          {isOwnProfile && !editing && (
+          {canEdit && !editing && (
             <Button size="sm" variant="outline" onClick={startEditing}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -387,11 +402,18 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <Input
-                  label="Owner Name"
-                  value={form.ownerName}
-                  onChange={(e) => update('ownerName', e.target.value)}
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Name"
+                    value={form.ownerName}
+                    onChange={(e) => update('ownerName', e.target.value)}
+                  />
+                  <Input
+                    label="Surname"
+                    value={form.ownerSurname}
+                    onChange={(e) => update('ownerSurname', e.target.value)}
+                  />
+                </div>
                 <Input
                   label="Phone Number"
                   type="tel"
@@ -591,8 +613,8 @@ export default function Profile() {
                           <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending Verification</span>
                         )}
                       </div>
-                      {profile.ownerName && (
-                        <p className="text-sm text-muted mt-0.5">Owned by {profile.ownerName}</p>
+                      {(profile.ownerName || profile.ownerSurname) && (
+                        <p className="text-sm text-muted mt-0.5">Owned by {profile.ownerName} {profile.ownerSurname}</p>
                       )}
                       <div className="flex flex-wrap items-center gap-2 mt-3">
                         {(profile.categories ?? []).map((cat) => (
@@ -727,7 +749,7 @@ export default function Profile() {
             <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-charcoal tracking-tight">Membership</h3>
-                {isOwnProfile && (
+                {canEdit && (
                   <button onClick={handleEditMembership} className="text-sm text-primary hover:text-primary-hover transition-colors font-medium cursor-pointer">
                     Edit
                   </button>
@@ -736,7 +758,7 @@ export default function Profile() {
               <div className="space-y-3">
                 <div>
                   <Badge variant={profile.membershipStatus === 'active' ? 'success' : profile.membershipStatus === 'expired' ? 'danger' : 'neutral'}>
-                    {profile.membershipStatus === 'active' ? 'Active Member' : profile.membershipStatus.charAt(0).toUpperCase() + profile.membershipStatus.slice(1)}
+                    {profile.membershipStatus === 'active' ? 'Active Member' : profile.membershipStatus === 'expired' ? 'EXPIRED' : profile.membershipStatus.charAt(0).toUpperCase() + profile.membershipStatus.slice(1)}
                   </Badge>
                 </div>
                 {(() => {
@@ -752,13 +774,18 @@ export default function Profile() {
                   return null;
                 })()}
                 <div className="text-sm">
-                  <span className="text-muted font-mono tracking-tight">Active since </span>
-                  <span className="text-charcoal font-medium">{formatDate(profile.createdAt)}</span>
+                  <span className="text-muted font-mono tracking-tight">Member since </span>
+                  <span className="text-charcoal font-medium">{formatDate(profile.membershipDate > 0 ? profile.membershipDate : profile.createdAt)}</span>
                 </div>
                 <div className="text-sm">
                   <span className="text-muted font-mono tracking-tight">Expires </span>
                   <span className="text-charcoal font-medium">{formatDate(profile.membershipExpiry)}</span>
                 </div>
+                {profile.membershipExpiry > 0 && (
+                  <div className="mt-2">
+                    <MembershipCountdown membershipExpiry={profile.membershipExpiry} />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

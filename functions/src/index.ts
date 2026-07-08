@@ -1,4 +1,5 @@
 import * as functions from 'firebase-functions/v2';
+import * as callable from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { Resend } from 'resend';
 
@@ -14,6 +15,94 @@ interface BusinessProfile {
   membershipStatus: string;
   membershipExpiry: number;
 }
+
+function generateCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+export const sendAdminCode = callable.onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const email = request.auth?.token?.email;
+
+  if (!uid || !email) {
+    throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+
+  const code = generateCode();
+  const expiresAt = Date.now() + 5 * 60 * 1000;
+
+  await admin.firestore().collection('adminCodes').doc(uid).set({
+    uid,
+    email,
+    code,
+    expiresAt,
+    used: false,
+    createdAt: Date.now(),
+  });
+
+  if (RESEND_API_KEY) {
+    const resend = new Resend(RESEND_API_KEY);
+    await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: 'SB Connect — Admin Access Code',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Admin Access Request</h2>
+          <p>Your verification code is:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 24px; background: #F5F0E8; border-radius: 12px; margin: 16px 0;">
+            ${code}
+          </div>
+          <p>This code expires in <strong>5 minutes</strong>.</p>
+          <p>Enter this code in the app to complete admin verification.</p>
+          <hr style="margin: 24px 0;" />
+          <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+        </div>
+      `,
+    });
+  }
+
+  return { success: true, message: 'Code sent to your email.' };
+});
+
+export const verifyAdminCode = callable.onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const email = request.auth?.token?.email;
+  const { code } = request.data as { code: string };
+
+  if (!uid || !email) {
+    throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+
+  if (!code || code.length !== 6) {
+    throw new callable.HttpsError('invalid-argument', 'Invalid code.');
+  }
+
+  const doc = await admin.firestore().collection('adminCodes').doc(uid).get();
+
+  if (!doc.exists) {
+    throw new callable.HttpsError('not-found', 'No code found. Request a new one.');
+  }
+
+  const data = doc.data()!;
+
+  if (data.used) {
+    throw new callable.HttpsError('already-exists', 'Code already used.');
+  }
+
+  if (Date.now() > data.expiresAt) {
+    throw new callable.HttpsError('deadline-exceeded', 'Code expired. Request a new one.');
+  }
+
+  if (data.code !== code) {
+    throw new callable.HttpsError('permission-denied', 'Incorrect code.');
+  }
+
+  await admin.firestore().collection('adminCodes').doc(uid).update({ used: true });
+  await admin.firestore().collection('users').doc(uid).update({ role: 'admin' });
+
+  return { success: true, message: 'You are now an admin!' };
+});
 
 export const checkMembershipExpiry = functions.scheduler.onSchedule(
   { schedule: '0 8 * * *', timeZone: 'Asia/Kolkata' },
