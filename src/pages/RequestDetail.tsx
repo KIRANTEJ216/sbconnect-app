@@ -5,6 +5,7 @@ import { getBusinessProfile } from '../lib/firestore';
 import { getUserProfile } from '../lib/auth';
 import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
 import type { Request, UserProfile, Interest } from '../types';
+import confetti from 'canvas-confetti';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -99,7 +100,8 @@ export default function RequestDetail() {
         request.budget || '0',
       );
       setRequest({ ...request, status: 'closed', awardedTo: interest.uid });
-      setSuccess(`Deal awarded to ${interest.companyName}!`);
+      setSuccess(`🎉 Congratulations! Deal awarded to ${interest.companyName}!`);
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
     } catch (err) {
       console.error('Failed to award deal:', err);
       setError('Failed to award deal. Try again.');

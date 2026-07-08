@@ -1,15 +1,37 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { getMeetings } from '../lib/firestore';
+import { useEffect, useState, useCallback } from 'react';
+import { getMeetings, submitRSVP, getUserRSVPs } from '../lib/firestore';
+import { useAuth } from '../contexts/AuthContext';
 import type { Meeting } from '../types';
 import { Card, CardContent } from './ui/Card';
 
 export function DashboardUpdates() {
+  const { user, profile } = useAuth();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [rsvpMap, setRsvpMap] = useState<Record<string, 'yes' | 'no' | 'maybe'>>({});
+  const [rsvpSaving, setRsvpSaving] = useState<string | null>(null);
 
-  useEffect(() => {
-    getMeetings().then(setMeetings).catch(console.error);
-  }, []);
+  const load = useCallback(async () => {
+    const ms = await getMeetings();
+    setMeetings(ms);
+    if (user) {
+      const myRsvps = await getUserRSVPs(user.uid);
+      const map: Record<string, 'yes' | 'no' | 'maybe'> = {};
+      myRsvps.forEach((r) => { map[r.meetingId] = r.response; });
+      setRsvpMap(map);
+    }
+  }, [user]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleRSVP = async (meetingId: string, response: 'yes' | 'no') => {
+    if (!user || !profile) return;
+    setRsvpSaving(meetingId);
+    try {
+      await submitRSVP(meetingId, user.uid, profile.displayName || user.email || 'Unknown', profile.displayName || '', response);
+      setRsvpMap((prev) => ({ ...prev, [meetingId]: response }));
+    } catch (e) { console.error('RSVP failed', e); }
+    setRsvpSaving(null);
+  };
 
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -36,17 +58,42 @@ export function DashboardUpdates() {
             Upcoming Meetings
           </h3>
           <div className="space-y-1.5">
-            {currentMonthUpcoming.map((m) => (
+            {currentMonthUpcoming.map((m) => {
+              const current = rsvpMap[m.id];
+              return (
               <div key={m.id} className="flex items-center justify-between p-2 rounded-lg bg-canvas border border-border">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-charcoal truncate">{m.label}</p>
                   <p className="text-[10px] text-muted font-mono">{new Date(m.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
                 </div>
-                <Link to="/attendance" className="text-[10px] text-primary font-medium hover:underline shrink-0 ml-2">
-                  RSVP
-                </Link>
+                <div className="flex items-center gap-1 shrink-0 ml-2">
+                  {current ? (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      current === 'yes' ? 'bg-success-light text-success' : 'bg-danger-light text-danger'
+                    }`}>
+                      {current === 'yes' ? 'Going' : 'Not Going'}
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleRSVP(m.id, 'yes')}
+                        disabled={rsvpSaving === m.id}
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-success-light text-success hover:bg-success border border-success/20 transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => handleRSVP(m.id, 'no')}
+                        disabled={rsvpSaving === m.id}
+                        className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-danger-light text-danger hover:bg-danger/10 border border-danger/20 transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        No
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            ))}
+            )})}
           </div>
         </CardContent>
       </div>

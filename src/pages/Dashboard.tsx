@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getBusinessProfile, getAllProfiles, getAllRequests, getUserRequests, getLeaderboard, recordDeal } from '../lib/firestore';
 import { formatDate, formatCurrency } from '../lib/format';
 import type { BusinessProfile, LeaderboardEntry } from '../types';
+import confetti from 'canvas-confetti';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -151,7 +152,9 @@ export default function Dashboard() {
       }
       const lb = await getLeaderboard();
       setLeaderboard(lb);
-      setDealMsg(`✅ Deal recorded! ₹${dealAmount} given to ${dealReceiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealReceiver)?.companyName}`);
+      const receiverName = dealReceiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealReceiver)?.companyName;
+      setDealMsg(`🎉 Congratulations! Deal recorded — ₹${dealAmount} given to ${receiverName}`);
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       setDealReceiver('');
       setDealOtherName('');
       setDealAmount('');
@@ -245,13 +248,15 @@ export default function Dashboard() {
                   {s.label === 'Requests' ? (
                     <div className="flex gap-3">
                       <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/15 shadow-sm">
-                        <p className="text-[9px] text-primary font-semibold tracking-widest uppercase">My Requests</p>
-                        <p className="text-base font-extrabold text-primary text-center leading-tight">{myRequests}</p>
+                        <p className="text-[10px] text-primary font-semibold tracking-tight">My Requests <span className="text-base font-extrabold">: {myRequests}</span></p>
                       </div>
                       <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200/40 shadow-sm">
-                        <p className="text-[9px] text-amber-700 font-semibold tracking-widest uppercase">Open Requests</p>
-                        <p className="text-base font-extrabold text-amber-800 text-center leading-tight">{openRequests}</p>
+                        <p className="text-[10px] text-amber-700 font-semibold tracking-tight">Open Requests <span className="text-base font-extrabold">: {openRequests}</span></p>
                       </div>
+                    </div>
+                  ) : s.label === 'Members Directory' ? (
+                    <div className="inline-flex px-3 py-1.5 rounded-full bg-gradient-to-br from-success/10 to-success/5 border border-success/15 shadow-sm">
+                      <p className="text-[10px] text-success font-semibold tracking-tight">Members <span className="text-base font-extrabold">: {totalProfiles}</span></p>
                     </div>
                   ) : (
                     <Badge variant={s.variant}>{s.value}</Badge>

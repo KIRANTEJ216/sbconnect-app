@@ -129,6 +129,9 @@ export default function Admin() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
 
+  const [meetingRsvpMap, setMeetingRsvpMap] = useState<Record<string, MeetingRSVP[]>>({});
+  const [rsvpMapLoading, setRsvpMapLoading] = useState(false);
+
   const [superEmail, setSuperEmail] = useState('');
   const [superSearching, setSuperSearching] = useState(false);
   const [superMsg, setSuperMsg] = useState('');
@@ -145,6 +148,7 @@ export default function Admin() {
     loadNotifs();
     loadLogs();
     loadRequests();
+    loadAllMeetingRsvps();
     if (isSuper) loadAdmins();
   }, [isSuper]);
 
@@ -188,6 +192,19 @@ export default function Admin() {
     try { setRequests(await getAllRequests()); }
     catch (e) { console.error(e); }
     setRequestsLoading(false);
+  }
+
+  async function loadAllMeetingRsvps() {
+    setRsvpMapLoading(true);
+    try {
+      const allMeetings = await getMeetings();
+      const map: Record<string, MeetingRSVP[]> = {};
+      await Promise.all(allMeetings.map(async (m) => {
+        map[m.id] = await getMeetingRSVPs(m.id);
+      }));
+      setMeetingRsvpMap(map);
+    } catch (e) { console.error(e); }
+    setRsvpMapLoading(false);
   }
 
   const handleApprove = async (uid: string) => {
@@ -405,40 +422,146 @@ export default function Admin() {
                   <p className="text-[11px] text-muted text-center mt-2 font-mono">{selectedMeetingData.label}</p>
                 </div>
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {meetingAttendance.length > 0 && (
-                <div className="bg-canvas rounded-xl p-3">
-                  <p className="text-xs font-medium text-muted font-mono mb-2">Attendance ({meetingAttendance.length})</p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {meetingAttendance.map((a) => (
+              <div className="bg-canvas rounded-xl p-3">
+                <p className="text-xs font-medium text-muted font-mono mb-2">Attendance ({meetingAttendance.length})</p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {meetingAttendance.length === 0 ? (
+                    <p className="text-xs text-muted text-center py-4">No attendance recorded yet.</p>
+                  ) : (
+                    meetingAttendance.map((a) => (
                       <div key={a.id} className="flex justify-between text-xs text-charcoal py-1">
                         <span className="truncate">{a.displayName}</span>
                         <span className="text-muted font-mono shrink-0 ml-2">{formatDate(a.scannedAt)}</span>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  )}
                 </div>
-              )}
-              {meetingRsvps.length > 0 && (
-                <div className="bg-canvas rounded-xl p-3">
-                  <p className="text-xs font-medium text-muted font-mono mb-2">RSVPs — Yes: {meetingRsvps.filter((r) => r.response === 'yes').length} · No: {meetingRsvps.filter((r) => r.response === 'no').length} · Maybe: {meetingRsvps.filter((r) => r.response === 'maybe').length}</p>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {meetingRsvps.map((r) => (
+              </div>
+              <div className="bg-canvas rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted font-mono">
+                    RSVPs — <span className="text-success">Yes: {meetingRsvps.filter((r) => r.response === 'yes').length}</span> · <span className="text-danger">No: {meetingRsvps.filter((r) => r.response === 'no').length}</span> · <span className="text-accent">Maybe: {meetingRsvps.filter((r) => r.response === 'maybe').length}</span>
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const headers = ['Name', 'Company', 'Response', 'Responded At'];
+                    const rows = meetingRsvps.map((r) => [
+                      r.displayName,
+                      r.companyName || '',
+                      r.response,
+                      formatDate(r.respondedAt),
+                    ]);
+                    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `rsvp-${selectedMeetingData?.label.replace(/\s+/g, '-') || 'meeting'}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    CSV
+                  </Button>
+                </div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {meetingRsvps.length === 0 ? (
+                    <p className="text-xs text-muted text-center py-4">No RSVPs yet.</p>
+                  ) : (
+                    meetingRsvps.map((r) => (
                       <div key={r.id} className="flex items-center justify-between text-xs text-charcoal py-1">
                         <span className="truncate">{r.displayName}</span>
                         <Badge variant={r.response === 'yes' ? 'success' : r.response === 'no' ? 'neutral' : 'accent'}>{r.response}</Badge>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  )}
                 </div>
-              )}
-              {meetingAttendance.length === 0 && meetingRsvps.length === 0 && (
-                <p className="text-xs text-muted text-center py-2 sm:col-span-2">No data for this meeting yet.</p>
-              )}
+              </div>
                 </div>
               </div>
             </div>
           )}
         </div>
+      </CollapsibleSection>
+
+      {/* ── Meeting Attendance ── */}
+      <CollapsibleSection title={`Meeting Attendance (${meetings.length})`} icon="✅" defaultOpen={false}>
+        {rsvpMapLoading ? (
+          <div className="skeleton h-48 rounded-xl" />
+        ) : meetings.length === 0 ? (
+          <p className="text-sm text-muted text-center py-8">No meetings created yet.</p>
+        ) : (
+          <>
+          <div className="flex justify-end gap-2 mb-3">
+            <Button size="sm" variant="outline" onClick={() => {
+              const sorted = [...meetings].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              const headers = ['Meeting', 'Date', 'Confirmed Count', 'Confirmed Names'];
+              const rows: string[][] = [];
+              sorted.forEach((m) => {
+                const rsvps = meetingRsvpMap[m.id] || [];
+                const yesRsvps = rsvps.filter((r) => r.response === 'yes');
+                rows.push([
+                  m.label,
+                  new Date(m.date).toLocaleDateString('en-IN'),
+                  String(yesRsvps.length),
+                  yesRsvps.map((r) => r.displayName).join('; '),
+                ]);
+              });
+              const csv = [headers, ...rows].map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = 'meeting-attendance.csv';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </Button>
+            <Button size="sm" variant="outline" onClick={loadAllMeetingRsvps} loading={rsvpMapLoading}>Refresh</Button>
+          </div>
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b border-border text-left">
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Meeting</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Date</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Confirmed</th>
+                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Attendees</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {meetings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((m) => {
+                  const rsvps = meetingRsvpMap[m.id] || [];
+                  const yesRsvps = rsvps.filter((r) => r.response === 'yes');
+                  return (
+                    <tr key={m.id} className="hover:bg-canvas/50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-charcoal text-xs">{m.label}</td>
+                      <td className="px-4 py-3 text-steel text-xs font-mono">{new Date(m.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-base font-bold text-success">{yesRsvps.length}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {yesRsvps.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {yesRsvps.map((r) => (
+                              <span key={r.id} className="px-2 py-0.5 rounded-full bg-success-light text-success border border-success/20 text-[11px] font-medium">
+                                {r.displayName}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          </>
+        )}
       </CollapsibleSection>
 
       {/* ── Business Directory ── */}
