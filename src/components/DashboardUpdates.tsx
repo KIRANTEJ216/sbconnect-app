@@ -6,12 +6,13 @@ import { Card, CardContent } from './ui/Card';
 
 export function DashboardUpdates() {
   const { user, profile } = useAuth();
+  const { data: myRsvps } = useUserRSVPs(user?.uid);
   const { data: meetings = [] } = useMeetings();
-  const { data: myRsvps = [] } = useUserRSVPs(user?.uid);
   const [rsvpMap, setRsvpMap] = useState<Record<string, 'yes' | 'no' | 'maybe'>>({});
   const [rsvpSaving, setRsvpSaving] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!myRsvps) return;
     const map: Record<string, 'yes' | 'no' | 'maybe'> = {};
     myRsvps.forEach((r) => { map[r.meetingId] = r.response; });
     setRsvpMap(map);
