@@ -6,7 +6,7 @@ import { getUserRequests, recordDeal } from '../lib/firestore';
 import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile } from '../hooks/useFirebaseQuery';
 import { formatDate, formatCurrency } from '../lib/format';
 import confetti from 'canvas-confetti';
-import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -17,48 +17,6 @@ import { DashboardUpdates } from '../components/DashboardUpdates';
 import { MembershipCountdown } from '../components/MembershipCountdown';
 
 
-function CollapsibleSection({ title, icon, defaultOpen, children }: { title: string; icon?: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen ?? true);
-  return (
-    <TiltCard className="h-full">
-      <Card className="h-full flex flex-col">
-        <div className="stat-accent-top">
-          <CardHeader>
-            <button
-              onClick={() => setOpen((v) => !v)}
-              className="flex items-center justify-between w-full text-left cursor-pointer group"
-            >
-              <div className="flex items-center gap-2.5">
-                {icon && <span className="text-lg shrink-0">{icon}</span>}
-                <h3 className="font-semibold text-charcoal tracking-tight">{title}</h3>
-              </div>
-              <div className={`w-6 h-6 rounded-lg bg-muted-bg flex items-center justify-center transition-colors duration-200 group-hover:bg-primary-light ${open ? 'bg-primary-light' : ''}`}>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`text-muted transition-transform duration-200 ${open ? 'rotate-180 text-primary' : ''}`}
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </div>
-            </button>
-          </CardHeader>
-        </div>
-        <div className={`transition-all duration-300 overflow-hidden flex-1 ${open ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-          <CardContent className="h-full">
-            {children}
-          </CardContent>
-        </div>
-      </Card>
-    </TiltCard>
-  );
-}
 
 
 export default function Dashboard() {
@@ -188,10 +146,10 @@ export default function Dashboard() {
 
   return (
     <AnimatedPage>
-    <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8">
+    <div className="max-w-6xl mx-auto space-y-3">
       <div>
         <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Dashboard</h1>
-        <p className="text-steel mt-1.5">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
+        <p className="text-steel text-sm">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -268,143 +226,109 @@ export default function Dashboard() {
 
       {!myProfile ? (
         <Card>
-          <CardContent className="p-14 text-center">
-            <div className="w-16 h-16 bg-primary-light rounded-2xl flex items-center justify-center mx-auto mb-5">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <CardContent className="p-10 text-center">
+            <div className="w-14 h-14 bg-primary-light rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="8.5" cy="7" r="4" />
                 <line x1="20" y1="8" x2="20" y2="14" />
                 <line x1="23" y1="11" x2="17" y2="11" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-charcoal tracking-tight mb-2">Create Your Business Profile</h2>
-            <p className="text-sm text-steel mb-8 max-w-md mx-auto">
-              Set up your business profile to connect with other businesses in the community.
-            </p>
+            <h2 className="text-lg font-semibold text-charcoal tracking-tight mb-1">Create Your Business Profile</h2>
+            <p className="text-sm text-steel mb-6 max-w-md mx-auto">Set up your business profile to connect with the community.</p>
             <Link
               to="/create-profile"
-              className="inline-flex items-center px-6 py-2.5 bg-primary text-white rounded-[0.75rem] hover:bg-primary-hover text-sm font-medium transition-all duration-200 active:scale-[0.97]"
+              className="inline-flex items-center px-5 py-2 bg-primary text-white rounded-[0.75rem] hover:bg-primary-hover text-sm font-medium transition-all active:scale-[0.97]"
             >
               Get Started
             </Link>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <CollapsibleSection
-              title="Quick Actions"
-              icon="⚡"
-            >
-              <div className="space-y-3">
-                <Link
-                  to="/requests/create"
-                  className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="12" y1="18" x2="12" y2="12" />
-                    <line x1="9" y1="15" x2="15" y2="15" />
-                  </svg>
-                  Create a Request
-                </Link>
-                <Link
-                  to={`/profile/${user?.uid}`}
-                  className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  View My Profile
-                </Link>
-                <button
-                  onClick={() => {
-                    setShowDealForm(true);
-                    setTimeout(() => document.getElementById('deal-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-                  }}
-                  className="flex items-center gap-3 px-4 py-3 bg-canvas rounded-xl hover:bg-primary-light transition-colors text-sm font-medium text-charcoal w-full text-left"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="1" x2="12" y2="23" />
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  Record Business Given
-                </button>
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="Your Business Profile"
-              icon="🏠"
-            >
-              <div className="flex items-start gap-4">
-                {myProfile.photoURL ? (
-                  <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-border">
-                    <img src={myProfile.photoURL} alt={myProfile.companyName} className="w-full h-full object-cover aspect-square" />
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 rounded-xl bg-primary-light flex items-center justify-center text-primary font-bold text-lg shrink-0">
-                    {myProfile.companyName.charAt(0)}
-                  </div>
-                )}
-                <div className="min-w-0 space-y-1">
-                  <p className="font-semibold text-charcoal tracking-tight">{myProfile.companyName}</p>
-                  <p className="text-sm text-steel">
-                    {`${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() || '—'}
-                  </p>
-                  <p className="text-xs text-muted font-mono tracking-tight">{(myProfile.categories ?? []).join(', ')} &middot; {myProfile.location}</p>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    {myProfile.verified ? (
-                      <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified</span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending</span>
-                    )}
-                    <Badge variant={myProfile.membershipStatus === 'active' ? 'success' : myProfile.membershipStatus === 'expired' ? 'danger' : 'neutral'}>
-                      {myProfile.membershipStatus === 'expired' ? 'EXPIRED' : myProfile.membershipStatus.charAt(0).toUpperCase() + myProfile.membershipStatus.slice(1)}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              {myProfile.membershipExpiry > 0 && (
-                <div className="mt-3">
-                  <MembershipCountdown membershipExpiry={myProfile.membershipExpiry} />
-                </div>
-              )}
-            </CollapsibleSection>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {/* Quick Actions */}
+          <div className="rounded-card bg-surface border border-border shadow-card p-3">
+            <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Quick Actions</h3>
+            <div className="space-y-1.5">
+              <Link to="/requests/create" className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+                Create a Request
+              </Link>
+              <Link to={`/profile/${user?.uid}`} className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                </svg>
+                View My Profile
+              </Link>
+              <button onClick={() => { setShowDealForm(true); setTimeout(() => document.getElementById('deal-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }}
+                className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal w-full text-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                Record Business Given
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <CollapsibleSection
-              title="Leaderboard"
-              icon="🏆"
-            >
-              {leaderboard.length === 0 ? (
-                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+          {/* Business Profile */}
+          <div className="rounded-card bg-surface border border-border shadow-card p-3">
+            <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Your Business Profile</h3>
+            <div className="flex items-start gap-3">
+              {myProfile.photoURL ? (
+                <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-border">
+                  <img src={myProfile.photoURL} alt={myProfile.companyName} className="w-full h-full object-cover aspect-square" />
+                </div>
               ) : (
-                <div className="divide-y divide-border">
-                  {leaderboard.slice(0, 7).map((entry, i) => (
-                    <div key={entry.uid} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'}`}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                        </span>
-                        <div className="min-w-0">
-                          <Link to={`/profile/${entry.uid}`} className="text-sm font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[180px]">
-                            {entry.ownerName || entry.companyName}
-                          </Link>
-                          <p className="text-[10px] text-muted truncate max-w-[180px]">{entry.companyName}</p>
-                          <p className="text-[10px] text-muted font-mono tracking-tight">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-semibold text-charcoal shrink-0 ml-2">{formatCurrency(String(entry.totalRevenue))}</span>
-                    </div>
-                  ))}
+                <div className="w-10 h-10 rounded-lg bg-primary-light flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                  {myProfile.companyName.charAt(0)}
                 </div>
               )}
-            </CollapsibleSection>
-            <DashboardUpdates />
+              <div className="min-w-0 space-y-0.5">
+                <p className="font-semibold text-charcoal tracking-tight text-sm leading-tight">{myProfile.companyName}</p>
+                <p className="text-xs text-steel leading-tight">{`${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() || '—'}</p>
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  {myProfile.verified ? (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-success-light text-success border border-success/20">Verified</span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-warning-light text-warning border border-warning/20">Pending</span>
+                  )}
+                  <Badge variant={myProfile.membershipStatus === 'active' ? 'success' : myProfile.membershipStatus === 'expired' ? 'danger' : 'neutral'}>
+                    {myProfile.membershipStatus === 'expired' ? 'EXPIRED' : myProfile.membershipStatus.charAt(0).toUpperCase() + myProfile.membershipStatus.slice(1)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            {myProfile.membershipExpiry > 0 && (
+              <div className="mt-2"><MembershipCountdown membershipExpiry={myProfile.membershipExpiry} /></div>
+            )}
+          </div>
+
+          {/* Upcoming Meetings */}
+          <DashboardUpdates />
+
+          {/* Leaderboard - spans full width */}
+          <div className="lg:col-span-3 rounded-card bg-surface border border-border shadow-card p-3">
+            <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Leaderboard</h3>
+            {leaderboard.length === 0 ? (
+              <p className="text-xs text-muted text-center py-4">No deals recorded yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-x-6 gap-y-1">
+                {leaderboard.slice(0, 5).map((entry, i) => (
+                  <div key={entry.uid} className="flex items-center gap-2 py-1">
+                    <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'} text-xs`}>
+                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                    </span>
+                    <Link to={`/profile/${entry.uid}`} className="text-xs font-medium text-charcoal hover:text-primary transition-colors truncate max-w-[120px]">
+                      {entry.ownerName || entry.companyName}
+                    </Link>
+                    <span className="text-xs font-semibold text-charcoal">{formatCurrency(String(entry.totalRevenue))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
