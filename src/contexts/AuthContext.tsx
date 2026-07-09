@@ -1,13 +1,11 @@
-import { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { onAuthStateChanged, onIdTokenChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { AppUser, UserProfile } from '../types';
-import { userToAppUser, setUserOnline, signOut } from '../lib/auth';
+import { userToAppUser, setUserOnline } from '../lib/auth';
 import { isAdminEmail, isSuperAdminEmail } from '../lib/admin';
-
-const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 interface AuthState {
   user: AppUser | null;
@@ -21,17 +19,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, profile: null, loading: true });
 
   useEffect(() => {
-    const unsubToken = onIdTokenChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const token = await firebaseUser.getIdTokenResult();
-        const authTime = new Date(token.issuedAtTime).getTime();
-        if (Date.now() - authTime > SESSION_TIMEOUT_MS) {
-          await signOut();
-          return;
-        }
-      }
-    });
-
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser: User | null) => {
       if (firebaseUser) {
         const appUser = userToAppUser(firebaseUser);
@@ -61,13 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => { unsubAuth(); unsubToken(); };
+    return () => unsubAuth();
   }, []);
 
-  const value = useMemo(() => state, [state]);
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={state}>
       {children}
     </AuthContext.Provider>
   );

@@ -14,9 +14,9 @@ export function BottomNav() {
         <NavLink
           to="/dashboard"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium transition-all duration-200 ${
-               isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
-             }`
+            `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all duration-200 ${
+              isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
+            }`
           }
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -30,9 +30,9 @@ export function BottomNav() {
         <NavLink
           to="/profiles"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium transition-all duration-200 ${
-               isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
-             }`
+            `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all duration-200 ${
+              isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
+            }`
           }
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -46,9 +46,9 @@ export function BottomNav() {
         <NavLink
           to="/requests"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium transition-all duration-200 ${
-               isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
-             }`
+            `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all duration-200 ${
+              isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
+            }`
           }
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -63,9 +63,9 @@ export function BottomNav() {
         <NavLink
           to="/attendance"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium transition-all duration-200 ${
-               isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
-             }`
+            `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all duration-200 ${
+              isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
+            }`
           }
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -76,9 +76,9 @@ export function BottomNav() {
         <NavLink
           to="/my-profile"
           className={({ isActive }) =>
-            `flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium transition-all duration-200 ${
-               isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
-             }`
+            `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] font-medium transition-all duration-200 ${
+              isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
+            }`
           }
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
