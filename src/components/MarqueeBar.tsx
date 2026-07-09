@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { subscribeToNotifications, getMeetings } from '../lib/firestore';
+import { subscribeToNotifications, subscribeToMeetings } from '../lib/firestore';
 import type { AppNotification, Meeting } from '../types';
 
 export function MarqueeBar() {
@@ -14,7 +14,8 @@ export function MarqueeBar() {
   }, []);
 
   useEffect(() => {
-    getMeetings().then(setMeetings).catch(console.error);
+    const unsub = subscribeToMeetings(setMeetings);
+    return unsub;
   }, []);
 
   const now = new Date();

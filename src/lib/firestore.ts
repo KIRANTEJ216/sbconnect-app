@@ -568,6 +568,15 @@ export async function deleteMeeting(id: string) {
   await deleteDoc(doc(db, 'meetings', id));
 }
 
+export function subscribeToMeetings(callback: (meetings: Meeting[]) => void) {
+  const q = query(collection(db, 'meetings'), orderBy('date', 'desc'));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Meeting)));
+  }, (error) => {
+    console.error('Meetings snapshot error:', error);
+  });
+}
+
 // ─── Login Logs ───
 
 export interface LoginLog {
