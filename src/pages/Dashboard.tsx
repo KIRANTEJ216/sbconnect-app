@@ -327,7 +327,7 @@ export default function Dashboard() {
                           <p className="text-[10px] text-muted truncate max-w-[140px] leading-tight">{entry.companyName}</p>
                         </div>
                       </div>
-                      <div className="text-right shrink-0 ml-2">
+                      <div className="text-center sm:text-right shrink-0 ml-2">
                         <p className="text-xs font-semibold text-charcoal">{formatCurrency(String(entry.totalRevenue))}</p>
                         <p className="text-[10px] text-muted font-mono">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
                       </div>

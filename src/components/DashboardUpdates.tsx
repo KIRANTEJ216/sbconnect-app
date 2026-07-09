@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { submitRSVP, getBusinessProfile } from '../lib/firestore';
+import { submitRSVP } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { useMeetings, useUserRSVPs } from '../hooks/useFirebaseQuery';
 import { Card, CardContent } from './ui/Card';
@@ -7,7 +7,7 @@ import { Card, CardContent } from './ui/Card';
 export function DashboardUpdates() {
   const { user, profile } = useAuth();
   const { data: meetings = [] } = useMeetings();
-  const { data: myRsvps = [], refetch: refetchRsvps } = useUserRSVPs(user?.uid);
+  const { data: myRsvps = [] } = useUserRSVPs(user?.uid);
   const [rsvpMap, setRsvpMap] = useState<Record<string, 'yes' | 'no' | 'maybe'>>({});
   const [rsvpSaving, setRsvpSaving] = useState<string | null>(null);
 
@@ -18,14 +18,11 @@ export function DashboardUpdates() {
   }, [myRsvps]);
 
   const handleRSVP = async (meetingId: string, response: 'yes' | 'no') => {
-    if (!user) return;
+    if (!user || !profile) return;
     setRsvpSaving(meetingId);
     try {
-      const bp = profile ? await getBusinessProfile(user.uid).catch(() => null) : null;
-      const companyName = bp?.companyName || profile?.displayName || user.displayName || user.email || '';
-      await submitRSVP(meetingId, user.uid, user.displayName || user.email || 'Unknown', companyName, response);
+      await submitRSVP(meetingId, user.uid, profile.displayName || user.email || 'Unknown', profile.displayName || '', response);
       setRsvpMap((prev) => ({ ...prev, [meetingId]: response }));
-      refetchRsvps();
     } catch (e) { console.error('RSVP failed', e); }
     setRsvpSaving(null);
   };

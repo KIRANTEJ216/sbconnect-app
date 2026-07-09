@@ -204,3 +204,6 @@ dd8acdc feat: compact request cards, pitch/chat/close buttons, phone field, dash
 - **RSVP fix** — `DashboardUpdates` uses `user.displayName` instead of `profile.displayName` (could be null); refetches RSVP query after submission; fetches business profile for company name
 - **Admin RSVP visibility** — Admin Meeting Attendance section already showed RSVP counts via `useAllRsvpsByMeeting` (collectionGroup across all meetings)
 - **Compact Dashboard** — Removed local CollapsibleSection; single-page 2-column grid layout (Quick Actions + Business Profile top row; Leaderboard stacked list + Upcoming Meetings side by side bottom row)
+- **Revert DashboardUpdates** — Restored RSVP handler to original version (requires `profile`, no `getBusinessProfile` call, no `refetchRsvps`) to fix meeting functionality
+- **Logout icon only** — Removed "Logout" text label from TopBar, kept only the logout icon
+- **Total revenue alignment** — Changed from `text-right` to `text-center sm:text-right` for mobile responsive
