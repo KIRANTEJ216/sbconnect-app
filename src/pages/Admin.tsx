@@ -454,6 +454,24 @@ export default function Admin() {
 
           {selectedMeeting && selectedMeetingData && (
             <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-primary-light/40 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-primary">{meetingRsvps.filter((r) => r.response === 'yes').length} / {profiles.length}</p>
+                  <p className="text-[11px] text-steel font-medium mt-0.5">Confirmed / Total Members</p>
+                </div>
+                <div className="bg-success-light/30 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-success">{meetingAttendance.length}</p>
+                  <p className="text-[11px] text-steel font-medium mt-0.5">Attendance Marked</p>
+                </div>
+                <div className="bg-canvas rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-charcoal">{meetingRsvps.length}</p>
+                  <p className="text-[11px] text-steel font-medium mt-0.5">Total RSVPs</p>
+                </div>
+                <div className="bg-danger-light/30 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-danger">{meetingRsvps.filter((r) => r.response === 'no').length}</p>
+                  <p className="text-[11px] text-steel font-medium mt-0.5">Not Going</p>
+                </div>
+              </div>
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="bg-surface border border-border rounded-xl p-4 flex flex-col items-center shrink-0">
                   <p className="text-xs font-medium text-muted font-mono mb-2 text-center">Scan to mark attendance</p>
@@ -578,7 +596,7 @@ export default function Admin() {
                       <td className="px-4 py-3 font-medium text-charcoal text-xs">{m.label}</td>
                       <td className="px-4 py-3 text-steel text-xs font-mono">{new Date(m.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</td>
                       <td className="px-4 py-3">
-                        <span className="text-base font-bold text-success">{yesRsvps.length}</span>
+                        <span className="text-base font-bold text-success">{yesRsvps.length} / {profiles.length}</span>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {yesRsvps.length > 0 ? (

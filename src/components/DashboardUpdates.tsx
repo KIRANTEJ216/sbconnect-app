@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { submitRSVP } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { useMeetings, useUserRSVPs } from '../hooks/useFirebaseQuery';
+import { useMeetings, useUserRSVPs, useBusinessProfile } from '../hooks/useFirebaseQuery';
 import { Card, CardContent } from './ui/Card';
 
 export function DashboardUpdates() {
   const { user, profile } = useAuth();
   const { data: myRsvps } = useUserRSVPs(user?.uid);
   const { data: meetings = [] } = useMeetings();
+  const { data: businessProfile } = useBusinessProfile(user?.uid);
   const [rsvpMap, setRsvpMap] = useState<Record<string, 'yes' | 'no' | 'maybe'>>({});
   const [rsvpSaving, setRsvpSaving] = useState<string | null>(null);
 
@@ -22,7 +23,7 @@ export function DashboardUpdates() {
     if (!user || !profile) return;
     setRsvpSaving(meetingId);
     try {
-      await submitRSVP(meetingId, user.uid, profile.displayName || user.email || 'Unknown', profile.displayName || '', response);
+      await submitRSVP(meetingId, user.uid, profile.displayName || user.email || 'Unknown', businessProfile?.companyName || '', response);
       setRsvpMap((prev) => ({ ...prev, [meetingId]: response }));
     } catch (e) { console.error('RSVP failed', e); }
     setRsvpSaving(null);
