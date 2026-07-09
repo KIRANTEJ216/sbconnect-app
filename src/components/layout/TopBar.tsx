@@ -63,7 +63,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
         </div>
       </div>
 
-      <div className="flex flex-col items-center leading-tight min-w-0 px-2">
+      <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center leading-tight px-2">
         <span className="text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight gradient-text truncate max-w-full">₹ {total.toLocaleString('en-IN')}</span>
         <span className="text-[10px] sm:text-xs text-muted font-mono tracking-tight mt-0.5 sm:mt-1">Revenue &middot; FY {fyLabel}</span>
         <p className="hidden sm:block text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
