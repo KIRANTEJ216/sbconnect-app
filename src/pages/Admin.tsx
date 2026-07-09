@@ -1,6 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest } from '../lib/firestore';
 import type { LoginLog } from '../lib/firestore';
@@ -107,13 +106,6 @@ export default function Admin() {
 
   const [profiles, setProfiles] = useState<BusinessProfile[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
-  const dirTableRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: profiles.length,
-    getScrollElement: () => dirTableRef.current,
-    estimateSize: () => 48,
-    overscan: 10,
-  });
 
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [newMeetingDate, setNewMeetingDate] = useState('');
@@ -587,7 +579,7 @@ export default function Admin() {
               Export CSV
             </Button>
           </div>
-          <div ref={dirTableRef} className="overflow-auto -mx-4 sm:mx-0" style={{ maxHeight: '500px' }}>
+          <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-80 overflow-y-auto">
             <table className="w-full text-sm min-w-[500px]">
               <thead>
                 <tr className="border-b border-border text-left">
@@ -601,26 +593,23 @@ export default function Admin() {
                   <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Actions</th>
                 </tr>
               </thead>
-              <tbody style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const p = profiles[virtualRow.index];
-                  return (
-                    <tr key={p.uid} className="hover:bg-canvas/50 transition-colors divide-x-0" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: `${virtualRow.size}px`, transform: `translateY(${virtualRow.start}px)`, display: 'table', tableLayout: 'fixed' }}>
-                      <td className="px-4 py-3 font-medium text-charcoal text-xs max-w-[140px] truncate border-b border-border">{p.companyName}</td>
-                      <td className="px-4 py-3 text-steel text-xs border-b border-border">{p.ownerName || '—'}</td>
-                      <td className="px-4 py-3 text-steel text-xs hidden sm:table-cell border-b border-border">{p.ownerSurname || '—'}</td>
-                      <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell border-b border-border">{p.phone}</td>
-                      <td className="px-4 py-3 text-steel text-xs font-mono truncate max-w-[140px] hidden sm:table-cell border-b border-border">{p.contactEmail}</td>
-                      <td className="px-4 py-3 text-steel text-xs max-w-[120px] truncate hidden sm:table-cell border-b border-border">{(p.keywords ?? []).slice(0, 3).join(', ')}{(p.keywords ?? []).length > 3 ? '...' : ''}</td>
-                      <td className="px-4 py-3 border-b border-border"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
-                      <td className="px-4 py-3 border-b border-border">
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${p.uid}`)}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-border">
+                {profiles.map((p) => (
+                  <tr key={p.uid} className="hover:bg-canvas/50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-charcoal text-xs max-w-[140px] truncate">{p.companyName}</td>
+                    <td className="px-4 py-3 text-steel text-xs">{p.ownerName || '—'}</td>
+                    <td className="px-4 py-3 text-steel text-xs hidden sm:table-cell">{p.ownerSurname || '—'}</td>
+                    <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell">{p.phone}</td>
+                    <td className="px-4 py-3 text-steel text-xs font-mono truncate max-w-[140px] hidden sm:table-cell">{p.contactEmail}</td>
+                    <td className="px-4 py-3 text-steel text-xs max-w-[120px] truncate hidden sm:table-cell">{(p.keywords ?? []).slice(0, 3).join(', ')}{(p.keywords ?? []).length > 3 ? '..' : ''}</td>
+                    <td className="px-4 py-3"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
+                    <td className="px-4 py-3">
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${p.uid}`)}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
