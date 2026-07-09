@@ -16,17 +16,15 @@ function NavItem({ to, label, expanded, children }: NavItemProps) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator ${
+        `flex items-center rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator ${
           isActive
             ? 'bg-primary-light text-primary'
             : 'text-steel hover:text-primary hover:bg-primary-light'
-        } ${expanded ? '' : 'justify-center px-0'}`
+        } ${expanded ? 'gap-3.5 px-4 py-2.5' : 'justify-center px-3 py-2.5'}`
       }
     >
       {children}
-      <span className={`transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-        {label}
-      </span>
+      {expanded && label}
     </NavLink>
   );
 }
@@ -50,10 +48,12 @@ export function Sidebar() {
             alt="SB Connect"
             className={`w-auto object-contain shrink-0 ${expanded ? 'h-9' : 'h-8'}`}
           />
-          <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            <h2 className="text-base font-semibold text-charcoal tracking-tight leading-tight whitespace-nowrap">SB Connect</h2>
-            <p className="text-xs text-muted font-mono tracking-tight leading-tight mt-0.5 whitespace-nowrap">Business Network</p>
-          </div>
+          {expanded && (
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-charcoal tracking-tight leading-tight whitespace-nowrap">SB Connect</h2>
+              <p className="text-xs text-muted font-mono tracking-tight leading-tight mt-0.5 whitespace-nowrap">Business Network</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -125,12 +125,14 @@ export function Sidebar() {
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center text-white font-semibold text-xs shadow-sm shrink-0">
             {(user?.displayName || user?.email || '?').charAt(0).toUpperCase()}
           </div>
-          <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            <p className="text-sm font-medium text-charcoal tracking-tight truncate whitespace-nowrap">
-              {user?.displayName || user?.email}
-            </p>
-            <p className="text-xs text-muted font-mono truncate whitespace-nowrap">{user?.email}</p>
-          </div>
+          {expanded && (
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-charcoal tracking-tight truncate whitespace-nowrap">
+                {user?.displayName || user?.email}
+              </p>
+              <p className="text-xs text-muted font-mono truncate whitespace-nowrap">{user?.email}</p>
+            </div>
+          )}
         </div>
       </div>
     </aside>
