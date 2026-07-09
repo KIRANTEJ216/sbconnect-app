@@ -18,11 +18,6 @@ const queryClient = new QueryClient({
 function reportWebVitals(metric: { name: string; value: number; rating: string }) {
   if (import.meta.env.PROD) {
     console.log(`[Web Vitals] ${metric.name}: ${metric.value} (${metric.rating})`);
-    fetch('/api/vitals', {
-      method: 'POST',
-      body: JSON.stringify(metric),
-      headers: { 'Content-Type': 'application/json' },
-    }).catch(() => {});
   }
 }
 
