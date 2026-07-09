@@ -70,8 +70,8 @@ export function AppLayout() {
             </a>
           </p>
         </footer>
+        </div>
         <BottomNav />
       </div>
-    </div>
   );
 }

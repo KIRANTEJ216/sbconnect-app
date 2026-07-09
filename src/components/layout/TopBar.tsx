@@ -52,7 +52,6 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <img src="/sbconnect-logo.png" alt="SB Connect" className="h-7 w-auto object-contain shrink-0" />
         <div className="hidden sm:block leading-tight">
           <p className="text-sm text-muted font-mono tracking-tight leading-tight">
             {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
