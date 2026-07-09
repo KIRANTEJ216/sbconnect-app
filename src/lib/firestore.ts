@@ -547,6 +547,8 @@ export function subscribeToNotifications(callback: (notifs: AppNotification[]) =
   const q = query(collection(db, 'notifications'), where('active', '==', true), orderBy('createdAt', 'desc'));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification)));
+  }, (error) => {
+    console.error('Notifications snapshot error:', error);
   });
 }
 
