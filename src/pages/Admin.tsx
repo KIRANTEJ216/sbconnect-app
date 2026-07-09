@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal } from '../lib/firestore';
 import type { LoginLog } from '../lib/firestore';
 import { useAllRsvpsByMeeting } from '../hooks/useFirebaseQuery';
 import { formatDate, formatTime, formatCurrency } from '../lib/format';
@@ -130,6 +130,11 @@ export default function Admin() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
+  const [closingRequestId, setClosingRequestId] = useState<string | null>(null);
+  const [awardingRequest, setAwardingRequest] = useState<Request | null>(null);
+  const [awardAmount, setAwardAmount] = useState('');
+  const [awardingTo, setAwardingTo] = useState('');
+  const [awardingLoading, setAwardingLoading] = useState(false);
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
 
@@ -202,6 +207,43 @@ export default function Admin() {
       setRequests((prev) => prev.filter((r) => r.id !== reqId));
     } catch (e) { console.error(e); }
     setDeletingRequestId(null);
+  };
+
+  const handleCloseRequest = async (reqId: string) => {
+    if (!confirm('Close this request without awarding?')) return;
+    setClosingRequestId(reqId);
+    try {
+      await closeRequest(reqId);
+      setRequests((prev) => prev.map((r) => r.id === reqId ? { ...r, status: 'closed' } : r));
+    } catch (e) { console.error(e); }
+    setClosingRequestId(null);
+  };
+
+  const openAwardModal = (req: Request) => {
+    setAwardingRequest(req);
+    setAwardAmount('');
+    setAwardingTo('');
+  };
+
+  const confirmAward = async () => {
+    if (!awardingRequest || !awardingTo) return;
+    setAwardingLoading(true);
+    try {
+      const giverProfile = profiles.find((p) => p.uid === awardingRequest.uid);
+      const receiverProfile = profiles.find((p) => p.uid === awardingTo);
+      await awardDeal(
+        awardingRequest.id,
+        awardingRequest.title,
+        awardingRequest.uid,
+        giverProfile?.companyName || awardingRequest.companyName,
+        awardingTo,
+        receiverProfile?.companyName || awardingTo.slice(0, 8),
+        awardAmount,
+      );
+      setRequests((prev) => prev.map((r) => r.id === awardingRequest.id ? { ...r, status: 'closed', awardedTo: awardingTo } : r));
+      setAwardingRequest(null);
+    } catch (e) { console.error(e); }
+    setAwardingLoading(false);
   };
 
   const handleApprove = async (uid: string) => {
@@ -762,9 +804,27 @@ export default function Admin() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Button size="xs" variant="outline" onClick={() => handleDeleteRequest(req.id)} loading={deletingRequestId === req.id}>
-                        Delete
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        {!req.awardedTo && req.status === 'open' && (
+                          <>
+                            <Button size="xs" variant="primary" onClick={() => openAwardModal(req)}>
+                              Deal Closed
+                            </Button>
+                            <Button size="xs" variant="outline" onClick={() => handleCloseRequest(req.id)} loading={closingRequestId === req.id}>
+                              Close
+                            </Button>
+                            <Button size="xs" variant="outline" onClick={() => handleDeleteRequest(req.id)} loading={deletingRequestId === req.id}>
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                        {req.awardedTo && (
+                          <Badge variant="success">Deal Closed</Badge>
+                        )}
+                        {!req.awardedTo && req.status === 'closed' && (
+                          <Badge variant="neutral">Closed</Badge>
+                        )}
+                      </div>
                     </td>
                     </tr>
                   );
@@ -777,6 +837,40 @@ export default function Admin() {
           <Button size="sm" variant="outline" onClick={loadRequests} loading={requestsLoading}>Refresh</Button>
         </div>
       </CollapsibleSection>
+
+      {/* ── Award Deal Modal ── */}
+      {awardingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAwardingRequest(null)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-charcoal mb-1">Close Deal</h3>
+            <p className="text-xs text-muted mb-4">{awardingRequest.title}</p>
+            {(awardingRequest.interestedUids ?? []).length === 0 ? (
+              <p className="text-sm text-muted mb-4">No one has pitched for this request yet.</p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-charcoal mb-1">Award to</label>
+                  <select value={awardingTo} onChange={(e) => setAwardingTo(e.target.value)} className="w-full rounded-xl border border-border px-3 py-2 text-sm bg-white">
+                    <option value="">Select a business…</option>
+                    {(awardingRequest.interestedUids ?? []).map((uid) => {
+                      const p = profiles.find((bp) => bp.uid === uid);
+                      return <option key={uid} value={uid}>{p ? `${p.companyName} (${p.ownerName} ${p.ownerSurname || ''})` : uid.slice(0, 8)}</option>;
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-charcoal mb-1">Deal amount</label>
+                  <input type="text" value={awardAmount} onChange={(e) => setAwardAmount(e.target.value)} placeholder="₹ 0" className="w-full rounded-xl border border-border px-3 py-2 text-sm" />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setAwardingRequest(null)}>Cancel</Button>
+                  <Button variant="primary" className="flex-1" onClick={confirmAward} loading={awardingLoading} disabled={!awardingTo}>Confirm Deal</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Add Admin (super only) ── */}
       {isSuper && (
