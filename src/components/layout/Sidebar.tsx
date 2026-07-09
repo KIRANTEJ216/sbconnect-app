@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePendingVerifications } from '../../hooks/usePendingVerifications';
 import { isAdmin } from '../../lib/admin';
@@ -12,20 +12,21 @@ interface NavItemProps {
 }
 
 function NavItem({ to, label, expanded, children }: NavItemProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isActive = location.pathname === to;
   return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `flex items-center rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator ${
-          isActive
-            ? 'bg-primary-light text-primary'
-            : 'text-steel hover:text-primary hover:bg-primary-light'
-        } ${expanded ? 'gap-3.5 px-4 py-2.5' : 'justify-center px-3 py-2.5'}`
-      }
+    <button
+      onClick={() => navigate(to)}
+      className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator cursor-pointer ${
+        isActive
+          ? 'bg-primary-light text-primary'
+          : 'text-steel hover:text-primary hover:bg-primary-light'
+      } ${expanded ? 'gap-3.5 px-4 py-2.5' : 'justify-center px-3 py-2.5'}`}
     >
       {children}
       {expanded && label}
-    </NavLink>
+    </button>
   );
 }
 
