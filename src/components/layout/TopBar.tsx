@@ -44,21 +44,29 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
 
   return (
     <header className="h-24 shrink-0 bg-surface-warm/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
-      <div className="flex items-center gap-3">
-        <button onClick={onMenuToggle} className="md:hidden p-1.5 -ml-1.5 rounded-xl hover:bg-primary-light/50 transition-colors cursor-pointer" aria-label="Toggle menu">
+      <div className="flex items-center gap-3 min-w-0">
+        <button onClick={onMenuToggle} className="md:hidden p-1.5 -ml-1.5 rounded-xl hover:bg-primary-light/50 transition-colors cursor-pointer shrink-0" aria-label="Toggle menu">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <div className="hidden sm:block">
-          <p className="text-sm text-muted font-mono tracking-tight leading-tight">
-            {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
-          <p className="text-sm font-semibold tracking-tight leading-tight mt-[1px] text-primary">
-            {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-          </p>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <img src="/sbconnect-logo.png" alt="SB Connect" className="h-7 w-auto object-contain shrink-0" />
+          <div className="min-w-0 leading-tight">
+            <p className="text-sm font-semibold text-charcoal tracking-tight leading-tight truncate">SB Connect</p>
+            <p className="text-[10px] text-muted font-mono tracking-tight leading-tight truncate">Business Network</p>
+          </div>
+          <div className="h-5 w-px bg-border mx-1 hidden sm:block" />
+          <div className="hidden sm:block leading-tight">
+            <p className="text-sm text-muted font-mono tracking-tight leading-tight">
+              {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+            <p className="text-sm font-semibold tracking-tight leading-tight mt-[1px] text-primary">
+              {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+            </p>
+          </div>
         </div>
       </div>
 
