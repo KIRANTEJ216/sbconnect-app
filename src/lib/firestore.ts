@@ -4,10 +4,22 @@ import {
   addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { getAuth } from 'firebase/auth';
+
+async function requireAdmin(): Promise<string> {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const snap = await getDoc(doc(db, 'users', user.uid));
+  const profile = snap.data();
+  const role = profile?.role;
+  if (role !== 'admin' && role !== 'super_admin') throw new Error('Admin access required');
+  return user.uid;
+}
 import type {
   BusinessProfile, Request, Conversation, Message,
   Interest, Deal, LeaderboardEntry, UserProfile,
-  Meeting, Attendance, AppNotification, MeetingRSVP,
+  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport,
 } from '../types';
 
 export async function createBusinessProfile(
@@ -124,10 +136,12 @@ export async function getRequest(id: string): Promise<Request | null> {
 }
 
 export async function closeRequest(id: string) {
+  await requireAdmin();
   await updateDoc(doc(db, 'requests', id), { status: 'closed' });
 }
 
 export async function deleteRequest(id: string) {
+  await requireAdmin();
   await deleteDoc(doc(db, 'requests', id));
 }
 
@@ -186,6 +200,7 @@ export async function awardDeal(
   receiverCompanyName: string,
   amount: string,
 ) {
+  await requireAdmin();
   const dealRef = await addDoc(collection(db, 'deals'), {
     requestId,
     requestTitle,
@@ -196,10 +211,7 @@ export async function awardDeal(
     amount,
     createdAt: Date.now(),
   });
-  await updateDoc(doc(db, 'requests', requestId), {
-    status: 'closed',
-    awardedTo: receiverUid,
-  });
+  await updateDoc(doc(db, 'requests', requestId), { status: 'closed', awardedTo: receiverUid });
   return dealRef.id;
 }
 
@@ -403,6 +415,7 @@ export async function getAllUsers(max = 999): Promise<UserProfile[]> {
 }
 
 export async function setUserRole(uid: string, role: 'user' | 'admin' | 'super_admin') {
+  await requireAdmin();
   await updateDoc(doc(db, 'users', uid), { role });
 }
 
@@ -414,6 +427,7 @@ export async function getUserByEmail(email: string): Promise<UserProfile | null>
 }
 
 export async function verifyBusinessProfile(uid: string) {
+  await requireAdmin();
   await updateDoc(doc(db, 'profiles', uid), { verified: true });
 }
 
@@ -426,6 +440,7 @@ export async function getUnverifiedProfiles(): Promise<BusinessProfile[]> {
 // ─── Meetings & Attendance ───
 
 export async function createMeeting(_uid: string, date: string, label: string, location: string = '') {
+  await requireAdmin();
   const ref = await addDoc(collection(db, 'meetings'), {
     date,
     label,
@@ -552,7 +567,44 @@ export function subscribeToNotifications(callback: (notifs: AppNotification[]) =
   });
 }
 
+// ─── Issue Reports ───
+
+export async function reportIssue(data: {
+  uid: string;
+  userEmail: string;
+  userDisplayName: string;
+  companyName: string;
+  page: string;
+  subject: string;
+  description: string;
+}) {
+  await addDoc(collection(db, 'issueReports'), {
+    ...data,
+    status: 'open',
+    adminNote: '',
+    createdAt: Date.now(),
+  });
+}
+
+export async function getIssueReports(): Promise<IssueReport[]> {
+  await requireAdmin();
+  const q = query(collection(db, 'issueReports'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as IssueReport));
+}
+
+export async function resolveIssueReport(id: string, adminNote: string) {
+  await requireAdmin();
+  await updateDoc(doc(db, 'issueReports', id), { status: 'resolved', adminNote });
+}
+
+export async function deleteIssueReport(id: string) {
+  await requireAdmin();
+  await deleteDoc(doc(db, 'issueReports', id));
+}
+
 export async function addNotification(text: string) {
+  await requireAdmin();
   await addDoc(collection(db, 'notifications'), { text, active: true, createdAt: Date.now() });
 }
 
@@ -561,10 +613,12 @@ export async function toggleNotification(id: string, active: boolean) {
 }
 
 export async function deleteNotification(id: string) {
+  await requireAdmin();
   await deleteDoc(doc(db, 'notifications', id));
 }
 
 export async function deleteMeeting(id: string) {
+  await requireAdmin();
   await deleteDoc(doc(db, 'meetings', id));
 }
 

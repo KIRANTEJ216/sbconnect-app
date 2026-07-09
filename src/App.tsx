@@ -1,7 +1,9 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { trackError } from './lib/errorTracker';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ResetPassword from './pages/ResetPassword';
@@ -63,11 +65,31 @@ function AppRoutes() {
   );
 }
 
+function GlobalErrorHandler({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      trackError('window.onerror', event.error || event.message);
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      trackError('unhandledRejection', event.reason);
+    };
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onRejection);
+    };
+  }, []);
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <GlobalErrorHandler>
+          <AppRoutes />
+        </GlobalErrorHandler>
       </AuthProvider>
     </BrowserRouter>
   );

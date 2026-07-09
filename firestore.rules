@@ -58,6 +58,14 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
     }
 
+    // Issue Reports: any authenticated can create; admins can read/resolve/delete
+    match /issueReports/{id} {
+      allow read: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
+      allow delete: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
+    }
+
     // Notifications: authenticated can read; admins can write
     match /notifications/{id} {
       allow read: if request.auth != null;

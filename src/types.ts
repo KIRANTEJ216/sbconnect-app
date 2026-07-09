@@ -164,6 +164,20 @@ export interface AppNotification {
   createdAt: number;
 }
 
+export interface IssueReport {
+  id: string;
+  uid: string;
+  userEmail: string;
+  userDisplayName: string;
+  companyName: string;
+  page: string;
+  subject: string;
+  description: string;
+  status: 'open' | 'resolved';
+  adminNote: string;
+  createdAt: number;
+}
+
 export const INDUSTRIES = [
   'Technology',
   'Finance',

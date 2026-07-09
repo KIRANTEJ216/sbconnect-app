@@ -7,6 +7,10 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 
+function isValidDocId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]{10,}$/.test(id);
+}
+
 export default function AttendanceScan() {
   const { user, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
@@ -20,7 +24,8 @@ export default function AttendanceScan() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      const url = meetingId ? `/login?redirect=/attendance/scan?meetingId=${meetingId}` : '/login';
+      const safeId = meetingId && isValidDocId(meetingId) ? meetingId : '';
+      const url = safeId ? `/login?redirect=/attendance/scan?meetingId=${encodeURIComponent(safeId)}` : '/login';
       navigate(url, { replace: true });
       return;
     }

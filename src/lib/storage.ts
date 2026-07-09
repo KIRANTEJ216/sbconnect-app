@@ -3,6 +3,10 @@ import {
 } from 'firebase/storage';
 import { storage } from './firebase';
 
+function isFirebaseStorageURL(url: string): boolean {
+  return url.startsWith('https://firebasestorage.googleapis.com');
+}
+
 export async function uploadProfilePhoto(uid: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop();
   const storageRef = ref(storage, `profiles/${uid}/photo.${ext}`);
@@ -22,12 +26,18 @@ export async function uploadCatalogFiles(uid: string, files: File[]): Promise<st
   return urls;
 }
 
-export async function deleteProfilePhoto(uid: string) {
-  const storageRef = ref(storage, `profiles/${uid}/photo`);
-  await deleteObject(storageRef).catch(() => {});
+export async function deleteStorageFile(url: string): Promise<void> {
+  if (!url || !isFirebaseStorageURL(url)) return;
+  try {
+    const storageRef = ref(storage, url);
+    await deleteObject(storageRef);
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('object-not-found')) return;
+    throw e;
+  }
 }
 
-export async function deleteProfileCatalog(uid: string) {
-  const storageRef = ref(storage, `profiles/${uid}/catalog`);
-  await deleteObject(storageRef).catch(() => {});
+export async function replaceProfilePhoto(uid: string, file: File, currentPhotoURL: string): Promise<string> {
+  if (currentPhotoURL) await deleteStorageFile(currentPhotoURL);
+  return uploadProfilePhoto(uid, file);
 }

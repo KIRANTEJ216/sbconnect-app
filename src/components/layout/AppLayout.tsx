@@ -6,6 +6,7 @@ import { TopBar } from './TopBar';
 import { BottomNav } from './BottomNav';
 import { MobileSidebar } from './MobileSidebar';
 import { MarqueeBar } from '../MarqueeBar';
+import ReportIssue from '../ReportIssue';
 
 function LoadingSkeleton() {
   return (
@@ -65,6 +66,7 @@ export function AppLayout() {
           </p>
         </footer>
         <BottomNav />
+        <ReportIssue />
       </div>
     </div>
   );

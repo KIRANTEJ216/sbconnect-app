@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation } from '../lib/firestore';
 import { isAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
-import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
+import { replaceProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { formatDate } from '../lib/format';
 import type { BusinessProfile, UserProfile } from '../types';
 import { INDUSTRIES, COMPANY_SIZES } from '../types';
@@ -216,7 +216,7 @@ export default function Profile() {
       const locked = isAdminViewer ? profile.locked : newEditCount >= 3;
 
       if (photoFile) {
-        photoURL = await uploadProfilePhoto(user.uid, photoFile);
+        photoURL = await replaceProfilePhoto(user.uid, photoFile, profile.photoURL || '');
       }
       if (catalogFiles.length > 0) {
         catalogURLs = await uploadCatalogFiles(user.uid, catalogFiles);
