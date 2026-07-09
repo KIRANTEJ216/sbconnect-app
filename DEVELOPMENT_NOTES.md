@@ -197,3 +197,10 @@ dd8acdc feat: compact request cards, pitch/chat/close buttons, phone field, dash
 - **Fluid typography rollout** — `text-fluid-h1` applied to all 15 page `<h1>` headings; `text-fluid-h2` applied to main section headings (Meeting Today, My Requests, Open Requests)
 - **Auto-fit responsive grids** — Business Directory, Directory cards, Dashboard stat cards use `grid-cols-[repeat(auto-fill,minmax(Xpx,1fr))]` for wrapping layouts without breakpoints
 - **Mobile viewport guard** — `body { min-width: 320px }` added to prevent layout collapse on very small screens
+
+## Phase 4 — Dashboard UX & Request Management
+- **Deal Closed pill** — Dashboard Requests stat card now shows a green "Deal Closed" count pill alongside My Requests and Open
+- **Delete requests** — `deleteRequest()` added to firestore.ts; Delete button on My Requests (owner) and Open Requests (admin); Delete column in Admin Request Activity table
+- **RSVP fix** — `DashboardUpdates` uses `user.displayName` instead of `profile.displayName` (could be null); refetches RSVP query after submission; fetches business profile for company name
+- **Admin RSVP visibility** — Admin Meeting Attendance section already showed RSVP counts via `useAllRsvpsByMeeting` (collectionGroup across all meetings)
+- **Compact Dashboard** — Removed local CollapsibleSection; single-page 2-column grid layout (Quick Actions + Business Profile top row; Leaderboard stacked list + Upcoming Meetings side by side bottom row)

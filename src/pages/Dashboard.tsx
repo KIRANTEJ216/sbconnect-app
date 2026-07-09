@@ -246,7 +246,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Quick Actions */}
           <div className="rounded-card bg-surface border border-border shadow-card p-3">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Quick Actions</h3>
@@ -306,29 +306,37 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Upcoming Meetings */}
-          <DashboardUpdates />
-
-          {/* Leaderboard - spans full width */}
-          <div className="lg:col-span-3 rounded-card bg-surface border border-border shadow-card p-3">
-            <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Leaderboard</h3>
-            {leaderboard.length === 0 ? (
-              <p className="text-xs text-muted text-center py-4">No deals recorded yet.</p>
-            ) : (
-              <div className="flex flex-wrap gap-x-6 gap-y-1">
-                {leaderboard.slice(0, 5).map((entry, i) => (
-                  <div key={entry.uid} className="flex items-center gap-2 py-1">
-                    <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'} text-xs`}>
-                      {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                    </span>
-                    <Link to={`/profile/${entry.uid}`} className="text-xs font-medium text-charcoal hover:text-primary transition-colors truncate max-w-[120px]">
-                      {entry.ownerName || entry.companyName}
-                    </Link>
-                    <span className="text-xs font-semibold text-charcoal">{formatCurrency(String(entry.totalRevenue))}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Leaderboard + Upcoming Meetings */}
+          <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="rounded-card bg-surface border border-border shadow-card p-3">
+              <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Leaderboard</h3>
+              {leaderboard.length === 0 ? (
+                <p className="text-xs text-muted text-center py-4">No deals recorded yet.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {leaderboard.slice(0, 7).map((entry, i) => (
+                    <div key={entry.uid} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'} text-xs`}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
+                        </span>
+                        <div className="min-w-0">
+                          <Link to={`/profile/${entry.uid}`} className="text-xs font-medium text-charcoal hover:text-primary transition-colors truncate block max-w-[140px] leading-tight">
+                            {entry.ownerName || entry.companyName}
+                          </Link>
+                          <p className="text-[10px] text-muted truncate max-w-[140px] leading-tight">{entry.companyName}</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <p className="text-xs font-semibold text-charcoal">{formatCurrency(String(entry.totalRevenue))}</p>
+                        <p className="text-[10px] text-muted font-mono">{entry.dealCount} deal{entry.dealCount !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DashboardUpdates />
           </div>
         </div>
       )}
