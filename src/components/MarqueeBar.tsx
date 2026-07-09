@@ -41,7 +41,7 @@ export function MarqueeBar() {
   return (
     <div className="bg-primary/5 border-b border-primary/10 overflow-hidden py-2">
       <div className="relative w-full h-6">
-        <div className="marquee-bounce whitespace-nowrap text-sm text-primary font-medium">
+        <div className="marquee-bounce whitespace-nowrap text-xs text-primary font-medium">
           {single}
         </div>
       </div>
