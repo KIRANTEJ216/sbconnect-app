@@ -18,7 +18,7 @@ function NavItem({ to, label, expanded, children }: NavItemProps) {
   return (
     <button
       onClick={() => navigate(to)}
-      className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator cursor-pointer ${
+      className={`flex items-center rounded-xl text-sm font-medium nav-active-indicator cursor-pointer ${
         isActive
           ? 'bg-primary-light text-primary'
           : 'text-steel hover:text-primary hover:bg-primary-light'
@@ -38,7 +38,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className={`bg-surface-warm border-r border-border h-full flex flex-col transition-all duration-300 ease-out ${expanded ? 'w-64' : 'w-20'}`}
+      className={`bg-surface-warm border-r border-border h-full flex flex-col ${expanded ? 'w-64' : 'w-20'}`}
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
     >

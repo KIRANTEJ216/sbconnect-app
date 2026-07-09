@@ -10,7 +10,7 @@ function NavBtn({ to, label, children }: { to: string; label: string; children: 
   return (
     <button
       onClick={() => navigate(to)}
-      className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-[10px] font-medium transition-all duration-200 cursor-pointer ${
+      className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-[10px] font-medium cursor-pointer ${
         isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
       }`}
     >

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -36,7 +36,6 @@ function LoadingSkeleton() {
 
 export function AppLayout() {
   const { user, loading } = useAuth();
-  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   if (loading) return <LoadingSkeleton />;
@@ -52,7 +51,7 @@ export function AppLayout() {
         <TopBar onMenuToggle={() => setMobileMenuOpen((v) => !v)} />
         <MarqueeBar />
         <main className="flex-1 p-3 sm:p-5 lg:p-8 pb-20 lg:pb-4 overflow-y-auto bg-canvas min-h-0">
-          <div key={location.pathname} className="min-h-0">
+          <div className="min-h-0">
             <Outlet />
           </div>
         </main>

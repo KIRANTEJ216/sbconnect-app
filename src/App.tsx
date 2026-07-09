@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -32,35 +32,42 @@ function ProfileRedirect() {
   return <Navigate to={`/profile/${user.uid}`} replace />;
 }
 
+function AppRoutes() {
+  const location = useLocation();
+  return (
+    <ErrorBoundary key={location.pathname}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route element={<AppLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/create-profile" element={<CreateProfile />} />
+          <Route path="/profile/:id" element={<Profile />} />
+          <Route path="/profiles" element={<Profiles />} />
+          <Route path="/my-profile" element={<ProfileRedirect />} />
+          <Route path="/requests" element={<Requests />} />
+          <Route path="/requests/create" element={<CreateRequest />} />
+          <Route path="/requests/:id" element={<RequestDetail />} />
+          <Route path="/admin-access" element={<AdminAccess />} />
+          <Route path="/attendance" element={<Attendance />} />
+          <Route path="/attendance/scan" element={<AttendanceScan />} />
+          <Route path="/payments" element={<Payments />} />
+          <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
+          <Route path="/seed-admin" element={<SeedAdmin />} />
+          <Route path="/" element={<RootRedirect />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ErrorBoundary>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/create-profile" element={<CreateProfile />} />
-              <Route path="/profile/:id" element={<Profile />} />
-              <Route path="/profiles" element={<Profiles />} />
-              <Route path="/my-profile" element={<ProfileRedirect />} />
-              <Route path="/requests" element={<Requests />} />
-              <Route path="/requests/create" element={<CreateRequest />} />
-              <Route path="/requests/:id" element={<RequestDetail />} />
-              <Route path="/admin-access" element={<AdminAccess />} />
-              <Route path="/attendance" element={<Attendance />} />
-              <Route path="/attendance/scan" element={<AttendanceScan />} />
-              <Route path="/payments" element={<Payments />} />
-              <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
-              <Route path="/seed-admin" element={<SeedAdmin />} />
-              <Route path="/" element={<RootRedirect />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </ErrorBoundary>
+        <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
   );

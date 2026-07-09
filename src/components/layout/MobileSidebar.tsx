@@ -43,7 +43,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         </div>
       )}
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 w-72 bg-surface-warm shadow-2xl transform transition-transform duration-300 ease-out lg:hidden ${
+        className={`fixed top-0 left-0 bottom-0 z-50 w-72 bg-surface-warm shadow-2xl lg:hidden ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -62,37 +62,37 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
         </div>
 
         <nav className="px-3 py-4 space-y-1">
-          <button onClick={() => handleNav('/dashboard')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+          <button onClick={() => handleNav('/dashboard')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
             </svg>
             Dashboard
           </button>
-          <button onClick={() => handleNav('/profiles')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+          <button onClick={() => handleNav('/profiles')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             Directory
           </button>
-          <button onClick={() => handleNav('/my-profile')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+          <button onClick={() => handleNav('/my-profile')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
             </svg>
             My Profile
           </button>
-          <button onClick={() => handleNav('/attendance')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+          <button onClick={() => handleNav('/attendance')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /><polyline points="9 16 11 18 15 14" />
             </svg>
             Attendance
           </button>
-          <button onClick={() => handleNav('/requests')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+          <button onClick={() => handleNav('/requests')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
             </svg>
             Requests
           </button>
-          <button onClick={() => handleNav('/payments')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+          <button onClick={() => handleNav('/payments')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <rect x="1" y="5" width="22" height="14" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /><circle cx="12" cy="15" r="1" />
             </svg>
@@ -100,7 +100,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
             <span className="ml-auto text-[10px] font-medium text-muted bg-muted-bg px-1.5 py-0.5 rounded-md">Soon</span>
           </button>
           {isAdminUser && (
-            <button onClick={() => handleNav('/admin')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
+            <button onClick={() => handleNav('/admin')} className="flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium nav-active-indicator text-steel hover:text-primary hover:bg-primary-light cursor-pointer w-full">
               <div className="relative">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
