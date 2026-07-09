@@ -226,12 +226,15 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-auto">
                   {s.label === 'Requests' ? (
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-2">
                       <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/15 shadow-sm">
                         <p className="text-xs text-primary font-semibold tracking-tight">My Requests<span className="font-extrabold ml-0.5">: {myRequests}</span></p>
                       </div>
                       <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200/40 shadow-sm">
-                        <p className="text-xs text-amber-700 font-semibold tracking-tight">Open Requests<span className="font-extrabold ml-0.5">: {allReqs.filter((r) => r.status === 'open').length}</span></p>
+                        <p className="text-xs text-amber-700 font-semibold tracking-tight">Open<span className="font-extrabold ml-0.5">: {allReqs.filter((r) => r.status === 'open').length}</span></p>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-full bg-gradient-to-br from-success/10 to-success/5 border border-success/15 shadow-sm">
+                        <p className="text-xs text-success font-semibold tracking-tight">Deal Closed<span className="font-extrabold ml-0.5">: {allReqs.filter((r) => r.awardedTo).length}</span></p>
                       </div>
                     </div>
                   ) : s.label === 'Members Directory' ? (

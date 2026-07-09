@@ -127,6 +127,10 @@ export async function closeRequest(id: string) {
   await updateDoc(doc(db, 'requests', id), { status: 'closed' });
 }
 
+export async function deleteRequest(id: string) {
+  await deleteDoc(doc(db, 'requests', id));
+}
+
 export async function getAllRequests(max = 999): Promise<Request[]> {
   const q = query(collection(db, 'requests'), orderBy('createdAt', 'desc'), limit(max));
   const snap = await getDocs(q);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getAllRequests, getBusinessProfile, updateBusinessProfile, expressInterest, closeRequest } from '../lib/firestore';
+import { getAllRequests, getBusinessProfile, updateBusinessProfile, expressInterest, closeRequest, deleteRequest } from '../lib/firestore';
 import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
 import type { Request } from '../types';
 import { REQUEST_CATEGORIES } from '../types';
@@ -8,17 +8,19 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
+import { isAdmin } from '../lib/admin';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
 
 export default function Requests() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [closingId, setClosingId] = useState<string | null>(null);
   const [pitching, setPitching] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -75,8 +77,22 @@ export default function Requests() {
     }
   };
 
+  const handleDelete = async (reqId: string) => {
+    if (!confirm('Delete this request permanently?')) return;
+    setDeletingId(reqId);
+    try {
+      await deleteRequest(reqId);
+      setRequests((prev) => prev.filter((r) => r.id !== reqId));
+    } catch (err) {
+      console.error('Failed to delete:', err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const myReqs = filtered.filter((r) => r.uid === user?.uid);
   const openReqs = filtered.filter((r) => r.uid !== user?.uid && r.status === 'open');
+  const isAdminUser = isAdmin(user?.email, profile?.role);
 
   return (
     <AnimatedPage>
@@ -213,6 +229,26 @@ export default function Requests() {
                             >
                               Close
                             </Button>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() => handleDelete(req.id)}
+                              loading={deletingId === req.id}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        )}
+                        {(req.status === 'closed' || isAdminUser) && (
+                          <div className="flex items-center justify-end gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() => handleDelete(req.id)}
+                              loading={deletingId === req.id}
+                            >
+                              Delete
+                            </Button>
                           </div>
                         )}
                       </CardContent>
@@ -283,16 +319,23 @@ export default function Requests() {
                                   Call
                                 </a>
                               )}
+                              {isAdminUser && (
+                                <Button size="xs" variant="outline" onClick={() => handleDelete(req.id)} loading={deletingId === req.id}>
+                                  Delete
+                                </Button>
+                              )}
                             </div>
                           ) : (
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              onClick={() => handlePitch(req)}
-                              loading={pitching === req.id}
-                            >
-                              Pitch
-                            </Button>
+                            <>
+                              <Button size="xs" variant="outline" onClick={() => handlePitch(req)} loading={pitching === req.id}>
+                                Pitch
+                              </Button>
+                              {isAdminUser && (
+                                <Button size="xs" variant="outline" onClick={() => handleDelete(req.id)} loading={deletingId === req.id}>
+                                  Delete
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
                       </CardContent>

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest } from '../lib/firestore';
 import type { LoginLog } from '../lib/firestore';
 import { useAllRsvpsByMeeting } from '../hooks/useFirebaseQuery';
 import { formatDate, formatTime, formatCurrency } from '../lib/format';
@@ -137,6 +137,7 @@ export default function Admin() {
 
   const [requests, setRequests] = useState<Request[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
+  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
 
@@ -200,6 +201,16 @@ export default function Admin() {
     catch (e) { console.error(e); }
     setRequestsLoading(false);
   }
+
+  const handleDeleteRequest = async (reqId: string) => {
+    if (!confirm('Delete this request permanently?')) return;
+    setDeletingRequestId(reqId);
+    try {
+      await deleteRequest(reqId);
+      setRequests((prev) => prev.filter((r) => r.id !== reqId));
+    } catch (e) { console.error(e); }
+    setDeletingRequestId(null);
+  };
 
   const handleApprove = async (uid: string) => {
     setApproving(uid);
@@ -712,15 +723,16 @@ export default function Admin() {
         ) : (
           <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-96 overflow-y-auto">
             <table className="w-full text-sm min-w-[600px]">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Request</th>
-                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Posted By</th>
-                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
-                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Pitched By</th>
-                  <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Awarded To</th>
-                </tr>
-              </thead>
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Request</th>
+                    <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Posted By</th>
+                    <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
+                    <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Pitched By</th>
+                    <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Awarded To</th>
+                    <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs"></th>
+                  </tr>
+                </thead>
               <tbody className="divide-y divide-border">
                 {requests
                   .sort((a, b) => b.createdAt - a.createdAt)
@@ -736,27 +748,35 @@ export default function Admin() {
                         <p className="text-[10px] text-muted font-mono mt-0.5">{req.category}{req.budget ? ` · ${formatCurrency(req.budget)}` : ''}</p>
                       </td>
                       <td className="px-4 py-3 text-xs text-steel font-mono">{req.companyName}</td>
-                      <td className="px-4 py-3">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
                         <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>{req.status === 'open' ? 'Open' : 'Closed'}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        {(req.interestedUids ?? []).length > 0 ? (
-                          <div className="flex flex-col gap-0.5">
-                            {(req.interestedUids ?? []).map((uid) => (
-                              <span key={uid} className="text-steel">{profileLookup(uid)}</span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-xs font-medium">
-                        {req.awardedTo ? (
-                          <span className="text-success">{profileLookup(req.awardedTo)}</span>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
+                        {req.awardedTo && <Badge variant="success">Deal Closed</Badge>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs">
+                      {(req.interestedUids ?? []).length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {(req.interestedUids ?? []).map((uid) => (
+                            <span key={uid} className="text-steel">{profileLookup(uid)}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs font-medium">
+                      {req.awardedTo ? (
+                        <span className="text-success">{profileLookup(req.awardedTo)}</span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button size="xs" variant="outline" onClick={() => handleDeleteRequest(req.id)} loading={deletingRequestId === req.id}>
+                        Delete
+                      </Button>
+                    </td>
                     </tr>
                   );
                 })}
