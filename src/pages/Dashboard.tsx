@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserRequests, recordDeal, getMyNotifications, markNotificationRead } from '../lib/firestore';
+import { getUserRequests, recordDeal, getMyNotifications } from '../lib/firestore';
 import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile } from '../hooks/useFirebaseQuery';
 import type { UserNotification } from '../types';
 import { formatDate, formatCurrency } from '../lib/format';
@@ -37,15 +37,12 @@ export default function Dashboard() {
   const [dealSaving, setDealSaving] = useState(false);
   const [dealMsg, setDealMsg] = useState('');
   const [myNotifications, setMyNotifications] = useState<UserNotification[]>([]);
-  const [notifLoading, setNotifLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
-    setNotifLoading(true);
     getMyNotifications()
       .then(setMyNotifications)
-      .catch(() => {})
-      .finally(() => setNotifLoading(false));
+      .catch(() => {});
   }, [user]);
 
   useEffect(() => {
@@ -118,6 +115,9 @@ export default function Dashboard() {
     }
   };
 
+  const unreadNotifs = myNotifications.filter((n) => !n.read);
+  const latestIssue = unreadNotifs.length > 0 ? unreadNotifs[0].message.replace(/^Your report "(.+?)".*/, '$1') : '';
+
   const statCards: { label: string; value: string; sub?: string; variant: 'accent' | 'success' | 'neutral' | 'danger'; dot?: boolean; to?: string }[] = [
     {
       label: 'Membership Status',
@@ -139,6 +139,13 @@ export default function Dashboard() {
       variant: 'accent',
       dot: newRequestsDot,
       to: '/requests',
+    },
+    {
+      label: 'Notifications',
+      value: unreadNotifs.length > 0 ? `${unreadNotifs.length} unread` : 'All clear',
+      variant: unreadNotifs.length > 0 ? 'danger' : 'neutral' as const,
+      dot: unreadNotifs.length > 0,
+      sub: latestIssue,
     },
   ];
 
@@ -164,8 +171,8 @@ export default function Dashboard() {
         <p className="text-steel text-sm">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {statCards.map((s, idx) => {
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        {statCards.map((s) => {
           const inner = (
             <div className={`stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col ${s.to ? 'cursor-pointer' : ''}`}>
               <CardContent className="p-5 flex-1 flex flex-col">
@@ -175,17 +182,22 @@ export default function Dashboard() {
                     {s.dot && <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />}
                   </p>
                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
-                    idx === 0 ? 'bg-primary/8 text-primary' :
-                    idx === 1 ? 'bg-success/8 text-success' :
+                    s.label === 'Membership Status' ? 'bg-primary/8 text-primary' :
+                    s.label === 'Members Directory' ? 'bg-success/8 text-success' :
+                    s.label === 'Notifications' && unreadNotifs.length > 0 ? 'bg-danger/8 text-danger' :
                     'bg-warning/8 text-warning'
                   }`}>
-                    {idx === 0 ? (
+                    {s.label === 'Membership Status' ? (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
                       </svg>
-                    ) : idx === 1 ? (
+                    ) : s.label === 'Members Directory' ? (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    ) : s.label === 'Notifications' ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
                       </svg>
                     ) : (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -217,8 +229,12 @@ export default function Dashboard() {
                 </div>
                 {s.sub && (
                   <p className="mt-2 text-xs text-muted font-medium tracking-tight flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-muted/40'}`} />
-                    {s.sub}
+                    {s.label !== 'Notifications' && <span className={`w-1.5 h-1.5 rounded-full ${profile?.onlineStatus === 'online' ? 'bg-green-500' : 'bg-muted/40'}`} />}
+                    {s.label === 'Notifications' && unreadNotifs.length > 0 ? (
+                      <span className="truncate max-w-full" title={s.sub}>{s.sub}</span>
+                    ) : (
+                      s.sub
+                    )}
                   </p>
                 )}
               </CardContent>
@@ -352,61 +368,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      <div className="rounded-card bg-surface border border-border shadow-card p-3">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-charcoal tracking-tight text-xs">Notifications</h3>
-          {myNotifications.filter((n) => !n.read).length > 0 && (
-            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-danger text-white">
-              {myNotifications.filter((n) => !n.read).length} new
-            </span>
-          )}
-        </div>
-        {notifLoading ? (
-          <div className="space-y-2 py-2">
-            <div className="skeleton h-10 rounded-lg" />
-            <div className="skeleton h-10 rounded-lg" />
-          </div>
-        ) : myNotifications.length === 0 ? (
-          <p className="text-xs text-muted text-center py-4">No notifications yet.</p>
-        ) : (
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {myNotifications.map((n) => (
-              <div key={n.id} className={`flex items-start gap-2 px-3 py-2 rounded-lg transition-colors ${n.read ? 'bg-transparent' : 'bg-primary-light/40'}`}>
-                <div className="shrink-0 mt-0.5">
-                  {n.type === 'issue_resolved' ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-charcoal">{n.title}</p>
-                  <p className="text-[10px] text-steel leading-tight mt-0.5">{n.message}</p>
-                  <p className="text-[9px] text-muted mt-0.5">{new Date(n.createdAt).toLocaleString('en-IN')}</p>
-                </div>
-                {!n.read && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        await markNotificationRead(n.id);
-                        setMyNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x));
-                      } catch {}
-                    }}
-                    className="shrink-0 text-[10px] text-primary hover:text-primary-hover font-medium transition-colors cursor-pointer"
-                  >
-                    Mark read
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
 
       {showDealForm && myProfile && (
         <TiltCard id="deal-form">
