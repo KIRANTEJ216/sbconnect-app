@@ -122,6 +122,27 @@ Major robustness, security, and admin-control improvements across the applicatio
 
 ---
 
+## Improvements
+
+### Meeting Attendance Table — Flat Per-RSVP Format
+- **What**: Replaced the per-meeting summary table (showing attendee names as inline badges) with a flat table where each RSVP record gets its own row
+- **Columns**: Meeting, Date, Member, Company, Response (Going/Not Going/Maybe), Responded At
+- **CSV export** updated to include all columns in the flat format
+- **Added**: Footer showing total RSVP count across all meetings
+- **Why**: Easier to scan, filter, and export — each member's attendance is a single row
+
+### Webhook / Google Sheets Sync System
+- **What**: New webhook export system in the Reports tab
+- **Firestore functions** (`firestore.ts`):
+  - `saveWebhookUrl(url)` — saves webhook URL to `config/webhook` doc
+  - `getWebhookUrl()` — reads saved webhook URL
+  - `triggerWebhookExport()` — reads ALL collections (users, profiles, meetings, requests, deals, attendance, notifications, loginLogs, issueReports) and POSTs as JSON to the webhook URL
+- **Admin UI**: URL input with Save button + Sync Now button with status feedback
+- **Use case**: Connect to Google Apps Script, Zapier, n8n, or Make to write data to Google Sheets as a local backup
+- **Firestore rules**: Added `config` collection rule (admin read/write only)
+
+---
+
 ## Known Issues / What's Not Working
 
 1. **Firestore security rules vs custom claims**: Security rules check `request.auth.token.role`, but the app never sets Firebase Auth custom claims — only writes to Firestore `users/{uid}.role`. The `requireAdmin()` client-side guard works, but Firestore-level enforcement is broken for admin-restricted collections.
@@ -139,11 +160,12 @@ Major robustness, security, and admin-control improvements across the applicatio
 ---
 
 ## Stats
-- **22 files changed**, 2978 insertions, 562 deletions (after RSVP fix)
+- **24 files changed**, ~3040 insertions, ~570 deletions
 - **New files**: 8 (auditReport, healthCheck, errorTracker, rateLimit, ReportIssue, future features roadmap, remotion-demo-prompt, output/pdf/)
-- **Modified files**: 10 (Admin.tsx, firestore.ts, useFirebaseQuery.ts, storage.ts, App.tsx, AppLayout.tsx, AttendanceScan.tsx, Profile.tsx, types.ts, firestore.rules, storage.rules)
-- **New admin features**: 6 (Audit Report, Health Dashboard, Error Tracker, Issue Reports, Storage Fixes, Tab Navigation)
+- **Modified files**: 12 (Admin.tsx, firestore.ts, useFirebaseQuery.ts, storage.ts, App.tsx, AppLayout.tsx, AttendanceScan.tsx, Profile.tsx, types.ts, firestore.rules, storage.rules, changelog)
+- **New admin features**: 7 (Audit Report, Health Dashboard, Error Tracker, Issue Reports, Storage Fixes, Tab Navigation, Webhook Sync)
 - **Bugs fixed**: 1 (RSVP not updating in admin panel — missing collectionGroup index)
+- **UI improvements**: 1 (Meeting Attendance table — flat per-RSVP rows)
 
 ---
 

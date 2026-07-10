@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, saveWebhookUrl, getWebhookUrl, triggerWebhookExport } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
@@ -129,6 +129,11 @@ export default function Admin() {
   const [trackedErrors, setTrackedErrors] = useState(loadErrors());
   const [activeTab, setActiveTab] = useState('members');
 
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookStatus, setWebhookStatus] = useState('');
+  const [webhookSaving, setWebhookSaving] = useState(false);
+  const [webhookSyncing, setWebhookSyncing] = useState(false);
+
   const isSuper = isSuperAdmin(user?.email, profile?.role);
 
   useEffect(() => {
@@ -139,6 +144,7 @@ export default function Admin() {
     loadLogs();
     loadRequests();
     loadIssueReports();
+    loadWebhookUrl();
     if (isSuper) loadAdmins();
   }, [isSuper]);
 
@@ -320,6 +326,35 @@ export default function Admin() {
       loadAdmins();
     } catch (err) { console.error(err); setSuperMsg('Failed to find user.'); }
     finally { setSuperSearching(false); }
+  };
+
+  async function loadWebhookUrl() {
+    try { setWebhookUrl(await getWebhookUrl()); }
+    catch (e) { console.error(e); }
+  }
+
+  const handleSaveWebhook = async () => {
+    setWebhookSaving(true);
+    setWebhookStatus('');
+    try {
+      await saveWebhookUrl(webhookUrl.trim());
+      setWebhookStatus('Webhook URL saved.');
+    } catch (e) {
+      setWebhookStatus('Failed to save: ' + (e instanceof Error ? e.message : e));
+    }
+    setWebhookSaving(false);
+  };
+
+  const handleSyncNow = async () => {
+    setWebhookSyncing(true);
+    setWebhookStatus('');
+    try {
+      const res = await triggerWebhookExport();
+      setWebhookStatus(res.ok ? '✓ ' + res.message : '✗ ' + res.message);
+    } catch (e) {
+      setWebhookStatus('Sync failed: ' + (e instanceof Error ? e.message : e));
+    }
+    setWebhookSyncing(false);
   };
 
   const tabs = [
@@ -680,25 +715,28 @@ export default function Admin() {
                 <>
                 <div className="flex justify-end gap-2 mb-3">
                   <Button size="sm" variant="outline" onClick={() => {
-                    const sorted = [...meetings].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                    const headers = ['Meeting', 'Date', 'Confirmed Count', 'Confirmed Names'];
-                    const rows: string[][] = [];
-                    sorted.forEach((m) => {
-                      const rsvps = meetingRsvpMap[m.id] || [];
-                      const yesRsvps = rsvps.filter((r) => r.response === 'yes');
-                      rows.push([
-                        m.label,
-                        new Date(m.date).toLocaleDateString('en-IN'),
-                        String(yesRsvps.length),
-                        yesRsvps.map((r) => r.displayName).join('; '),
-                      ]);
+                    const allRows: { meeting: string; date: string; member: string; company: string; response: string; respondedAt: string }[] = [];
+                    Object.entries(meetingRsvpMap).forEach(([meetingId, rsvps]) => {
+                      const m = meetings.find((x) => x.id === meetingId);
+                      rsvps.forEach((r) => {
+                        allRows.push({
+                          meeting: m?.label || meetingId,
+                          date: m ? new Date(m.date).toLocaleDateString('en-IN') : '',
+                          member: r.displayName,
+                          company: r.companyName || '',
+                          response: r.response,
+                          respondedAt: new Date(r.respondedAt).toLocaleString('en-IN'),
+                        });
+                      });
                     });
-                    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+                    allRows.sort((a, b) => new Date(b.respondedAt).getTime() - new Date(a.respondedAt).getTime());
+                    const headers = ['Meeting', 'Date', 'Member', 'Company', 'Response', 'Responded At'];
+                    const csv = [headers, ...allRows.map((r) => Object.values(r).map((c) => `"${c.replace(/"/g, '""')}"`))].map((r) => r.join(',')).join('\n');
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'meeting-attendance.csv';
+                    a.download = 'meeting-attendance-detailed.csv';
                     a.click();
                     URL.revokeObjectURL(url);
                   }}>
@@ -707,46 +745,51 @@ export default function Admin() {
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => refetchRsvps()} loading={rsvpMapLoading}>Refresh</Button>
                 </div>
-                <div className="overflow-x-auto -mx-4 sm:mx-0">
-                  <table className="w-full text-sm min-w-[600px]">
+                <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-[600px] overflow-y-auto">
+                  <table className="w-full text-sm min-w-[650px]">
                     <thead>
                       <tr className="border-b border-border text-left">
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Meeting</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Date</th>
-                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Confirmed</th>
-                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Attendees</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Member</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Company</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Response</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Responded At</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {meetings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((m) => {
                         const rsvps = meetingRsvpMap[m.id] || [];
-                        const yesRsvps = rsvps.filter((r) => r.response === 'yes');
-                        return (
-                          <tr key={m.id} className="hover:bg-canvas/50 transition-colors">
-                            <td className="px-4 py-3 font-medium text-charcoal text-xs">{m.label}</td>
-                            <td className="px-4 py-3 text-steel text-xs font-mono">{new Date(m.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                        if (rsvps.length === 0) {
+                          return (
+                            <tr key={m.id} className="hover:bg-canvas/50 transition-colors">
+                              <td className="px-4 py-3 font-medium text-charcoal text-xs" colSpan={6}>
+                                <span className="text-muted italic">{m.label} — No RSVPs yet</span>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return rsvps.map((r) => (
+                          <tr key={r.id} className="hover:bg-canvas/50 transition-colors">
+                            <td className="px-4 py-3 font-medium text-charcoal text-xs whitespace-nowrap">{m.label}</td>
+                            <td className="px-4 py-3 text-steel text-xs font-mono whitespace-nowrap">{new Date(m.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+                            <td className="px-4 py-3 text-xs text-charcoal">{r.displayName}</td>
+                            <td className="px-4 py-3 text-xs text-steel">{r.companyName || '—'}</td>
                             <td className="px-4 py-3">
-                              <span className="text-base font-bold text-success">{yesRsvps.length} / {profiles.length}</span>
+                              <Badge variant={r.response === 'yes' ? 'success' : r.response === 'no' ? 'neutral' : 'accent'}>
+                                {r.response === 'yes' ? 'Going' : r.response === 'no' ? 'Not Going' : 'Maybe'}
+                              </Badge>
                             </td>
-                            <td className="px-4 py-3 text-xs">
-                              {yesRsvps.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {yesRsvps.map((r) => (
-                                    <span key={r.id} className="px-2 py-0.5 rounded-full bg-success-light text-success border border-success/20 text-[11px] font-medium">
-                                      {r.displayName}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-muted">—</span>
-                              )}
-                            </td>
+                            <td className="px-4 py-3 text-xs text-muted font-mono whitespace-nowrap">{new Date(r.respondedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                           </tr>
-                        );
+                        ));
                       })}
                     </tbody>
                   </table>
                 </div>
+                <p className="text-[10px] text-muted text-right mt-2">
+                  {Object.values(meetingRsvpMap).reduce((sum, r) => sum + r.length, 0)} total RSVPs across all meetings
+                </p>
                 </>
               )}
             </CardContent>
@@ -1163,6 +1206,42 @@ export default function Admin() {
                       Last checked: {new Date(healthReport.generatedAt).toLocaleString('en-IN')}
                     </p>
                   </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Webhook / Google Sheets Sync */}
+          <Card>
+            <div className="stat-accent-top">
+              <CardHeader>
+                <h3 className="font-semibold text-charcoal tracking-tight">🔗 Webhook / Google Sheets Sync</h3>
+              </CardHeader>
+            </div>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-steel">
+                  Configure a webhook URL (e.g. Google Apps Script, Zapier, n8n, Make) to receive all app data as JSON. 
+                  Click <strong>Sync Now</strong> to send users, profiles, meetings, requests, deals, attendance, 
+                  notifications, login logs, and issue reports to the webhook.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                  <div className="flex-1 w-full">
+                    <Input
+                      label="Webhook URL"
+                      type="url"
+                      value={webhookUrl}
+                      onChange={(e) => setWebhookUrl(e.target.value)}
+                      placeholder="https://script.google.com/macros/s/..."
+                    />
+                  </div>
+                  <Button onClick={handleSaveWebhook} loading={webhookSaving} variant="outline" className="w-full sm:w-auto">Save URL</Button>
+                  <Button onClick={handleSyncNow} loading={webhookSyncing} className="w-full sm:w-auto">Sync Now</Button>
+                </div>
+                {webhookStatus && (
+                  <p className={`text-sm ${webhookStatus.startsWith('✓') ? 'text-success' : webhookStatus.startsWith('✗') || webhookStatus.includes('Failed') ? 'text-danger' : 'text-charcoal'}`}>
+                    {webhookStatus}
+                  </p>
                 )}
               </div>
             </CardContent>

@@ -651,3 +651,67 @@ export async function getLoginLogs(limitCount = 50): Promise<LoginLog[]> {
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as LoginLog));
 }
+
+// ─── Webhook / Google Sheets Sync ───
+
+export async function saveWebhookUrl(url: string) {
+  await requireAdmin();
+  await setDoc(doc(db, 'config', 'webhook'), { url, updatedAt: Date.now() }, { merge: true });
+}
+
+export async function getWebhookUrl(): Promise<string> {
+  const snap = await getDoc(doc(db, 'config', 'webhook'));
+  return snap.exists() ? (snap.data().url || '') : '';
+}
+
+export async function triggerWebhookExport(): Promise<{ ok: boolean; message: string }> {
+  const uid = await requireAdmin();
+
+  const webhookSnap = await getDoc(doc(db, 'config', 'webhook'));
+  if (!webhookSnap.exists() || !webhookSnap.data().url) {
+    return { ok: false, message: 'No webhook URL configured. Save a URL first.' };
+  }
+  const webhookUrl = webhookSnap.data().url;
+
+  try {
+    const [usersSnap, profilesSnap, meetingsSnap, requestsSnap, dealsSnap, attendanceSnap, notifsSnap, logsSnap, issueSnap] = await Promise.all([
+      getDocs(collection(db, 'users')),
+      getDocs(collection(db, 'profiles')),
+      getDocs(collection(db, 'meetings')),
+      getDocs(collection(db, 'requests')),
+      getDocs(collection(db, 'deals')),
+      getDocs(collection(db, 'attendance')),
+      getDocs(collection(db, 'notifications')),
+      getDocs(collection(db, 'loginLogs')),
+      getDocs(collection(db, 'issueReports')),
+    ]);
+
+    const payload = {
+      exportedAt: Date.now(),
+      exportedBy: uid,
+      users: usersSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      profiles: profilesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      meetings: meetingsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      requests: requestsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      deals: dealsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      attendance: attendanceSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      notifications: notifsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      loginLogs: logsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      issueReports: issueSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    };
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      return { ok: false, message: `Webhook responded with status ${res.status}: ${await res.text().catch(() => '')}` };
+    }
+
+    return { ok: true, message: `Exported ${payload.users.length} users, ${payload.profiles.length} profiles, ${payload.meetings.length} meetings, ${payload.requests.length} requests, ${payload.deals.length} deals, ${payload.attendance.length} attendance records, ${payload.notifications.length} notifications, ${payload.loginLogs.length} login logs, ${payload.issueReports.length} issue reports.` };
+  } catch (e) {
+    return { ok: false, message: 'Webhook request failed: ' + (e instanceof Error ? e.message : e) };
+  }
+}
