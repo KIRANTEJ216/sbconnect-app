@@ -164,6 +164,17 @@ export interface AppNotification {
   createdAt: number;
 }
 
+export interface UserNotification {
+  id: string;
+  uid: string;
+  type: 'issue_resolved' | 'admin_message';
+  title: string;
+  message: string;
+  relatedId: string;
+  read: boolean;
+  createdAt: number;
+}
+
 export interface IssueReport {
   id: string;
   uid: string;

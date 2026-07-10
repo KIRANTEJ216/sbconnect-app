@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, saveWebhookUrl, getWebhookUrl, triggerWebhookExport } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
@@ -903,6 +903,7 @@ export default function Admin() {
                                 setResolvingId(r.id);
                                 try {
                                   await resolveIssueReport(r.id, note);
+                                  await sendUserNotification(r.uid, 'issue_resolved', 'Issue Resolved', note ? `Your report "${r.subject}" was resolved. Admin note: ${note}` : `Your report "${r.subject}" was resolved.`, r.id);
                                   setIssueReports((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'resolved', adminNote: note } : x));
                                 } catch { /* error tracked */ }
                                 setResolvingId(null);

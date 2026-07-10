@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserRequests, recordDeal } from '../lib/firestore';
+import { getUserRequests, recordDeal, getMyNotifications, markNotificationRead } from '../lib/firestore';
 import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile } from '../hooks/useFirebaseQuery';
+import type { UserNotification } from '../types';
 import { formatDate, formatCurrency } from '../lib/format';
 import confetti from 'canvas-confetti';
 import { Card, CardContent } from '../components/ui/Card';
@@ -35,6 +36,17 @@ export default function Dashboard() {
   const [dealDesc, setDealDesc] = useState('');
   const [dealSaving, setDealSaving] = useState(false);
   const [dealMsg, setDealMsg] = useState('');
+  const [myNotifications, setMyNotifications] = useState<UserNotification[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    setNotifLoading(true);
+    getMyNotifications()
+      .then(setMyNotifications)
+      .catch(() => {})
+      .finally(() => setNotifLoading(false));
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -340,6 +352,61 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <div className="rounded-card bg-surface border border-border shadow-card p-3">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-charcoal tracking-tight text-xs">Notifications</h3>
+          {myNotifications.filter((n) => !n.read).length > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-danger text-white">
+              {myNotifications.filter((n) => !n.read).length} new
+            </span>
+          )}
+        </div>
+        {notifLoading ? (
+          <div className="space-y-2 py-2">
+            <div className="skeleton h-10 rounded-lg" />
+            <div className="skeleton h-10 rounded-lg" />
+          </div>
+        ) : myNotifications.length === 0 ? (
+          <p className="text-xs text-muted text-center py-4">No notifications yet.</p>
+        ) : (
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {myNotifications.map((n) => (
+              <div key={n.id} className={`flex items-start gap-2 px-3 py-2 rounded-lg transition-colors ${n.read ? 'bg-transparent' : 'bg-primary-light/40'}`}>
+                <div className="shrink-0 mt-0.5">
+                  {n.type === 'issue_resolved' ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-charcoal">{n.title}</p>
+                  <p className="text-[10px] text-steel leading-tight mt-0.5">{n.message}</p>
+                  <p className="text-[9px] text-muted mt-0.5">{new Date(n.createdAt).toLocaleString('en-IN')}</p>
+                </div>
+                {!n.read && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await markNotificationRead(n.id);
+                        setMyNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x));
+                      } catch {}
+                    }}
+                    className="shrink-0 text-[10px] text-primary hover:text-primary-hover font-medium transition-colors cursor-pointer"
+                  >
+                    Mark read
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {showDealForm && myProfile && (
         <TiltCard id="deal-form">

@@ -94,6 +94,14 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
     }
 
+    // User Notifications: owner can read/mark-as-read; admins can write
+    match /userNotifications/{id} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
+      allow update: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow delete: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];
+    }
+
     // Config: admins can read/write (used for webhook URL, app settings)
     match /config/{key} {
       allow read: if request.auth != null && request.auth.token.role in ['admin', 'super_admin'];

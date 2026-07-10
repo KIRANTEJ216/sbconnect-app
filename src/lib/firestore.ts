@@ -19,7 +19,7 @@ async function requireAdmin(): Promise<string> {
 import type {
   BusinessProfile, Request, Conversation, Message,
   Interest, Deal, LeaderboardEntry, UserProfile,
-  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport,
+  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport, UserNotification,
 } from '../types';
 
 export async function createBusinessProfile(
@@ -714,4 +714,25 @@ export async function triggerWebhookExport(): Promise<{ ok: boolean; message: st
   } catch (e) {
     return { ok: false, message: 'Webhook request failed: ' + (e instanceof Error ? e.message : e) };
   }
+}
+
+// ─── User Notifications ───
+
+export async function sendUserNotification(uid: string, type: UserNotification['type'], title: string, message: string, relatedId: string) {
+  await addDoc(collection(db, 'userNotifications'), {
+    uid, type, title, message, relatedId, read: false, createdAt: Date.now(),
+  });
+}
+
+export async function getMyNotifications(): Promise<UserNotification[]> {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const q = query(collection(db, 'userNotifications'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as UserNotification));
+}
+
+export async function markNotificationRead(id: string) {
+  await updateDoc(doc(db, 'userNotifications', id), { read: true });
 }
