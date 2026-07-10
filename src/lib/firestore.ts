@@ -1,6 +1,6 @@
 import {
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  collection, collectionGroup, query, where, orderBy, limit, increment, arrayUnion,
+  collection, query, where, orderBy, limit, increment, arrayUnion,
   addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -542,13 +542,9 @@ export async function submitRSVP(meetingId: string, uid: string, displayName: st
 }
 
 export async function getUserRSVPs(uid: string): Promise<MeetingRSVP[]> {
-  const q = query(
-    collectionGroup(db, 'rsvps'),
-    where('uid', '==', uid),
-    orderBy('respondedAt', 'desc'),
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data(), meetingId: d.ref.parent.parent?.id || '' } as MeetingRSVP));
+  const meetings = await getMeetings();
+  const results = await Promise.all(meetings.map((m) => getMeetingRSVPs(m.id)));
+  return results.flat().filter((r) => r.uid === uid).sort((a, b) => b.respondedAt - a.respondedAt);
 }
 
 export async function getMeetingRSVPs(meetingId: string): Promise<MeetingRSVP[]> {

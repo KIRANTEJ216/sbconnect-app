@@ -112,6 +112,16 @@ Major robustness, security, and admin-control improvements across the applicatio
 
 ---
 
+## Bug Fixes
+
+### RSVP Not Updating in Admin's Meeting Attendance Table
+- **Root cause**: `useAllRsvpsByMeeting` (admin) and `getUserRSVPs` (user dashboard) used `collectionGroup(db, 'rsvps')` queries that required composite indexes never defined in `firestore.indexes.json`. The queries silently failed, so the admin's Meeting Attendance table always showed 0/empty and user's existing RSVPs didn't persist on page refresh.
+- **Fix**: Replaced both `collectionGroup` queries with per-meeting reads using `getMeetingRSVPs(m.id)` (direct subcollection path — no index needed).
+- **Files**: `src/hooks/useFirebaseQuery.ts`, `src/lib/firestore.ts`
+- **Additional**: Set `staleTime: 0` + `refetchInterval: 15s` on `useAllRsvpsByMeeting` so admin sees RSVP updates in near-real-time.
+
+---
+
 ## Known Issues / What's Not Working
 
 1. **Firestore security rules vs custom claims**: Security rules check `request.auth.token.role`, but the app never sets Firebase Auth custom claims — only writes to Firestore `users/{uid}.role`. The `requireAdmin()` client-side guard works, but Firestore-level enforcement is broken for admin-restricted collections.
@@ -129,11 +139,12 @@ Major robustness, security, and admin-control improvements across the applicatio
 ---
 
 ## Stats
-- **20 files changed**, 2969 insertions, 556 deletions
+- **22 files changed**, 2978 insertions, 562 deletions (after RSVP fix)
 - **New files**: 8 (auditReport, healthCheck, errorTracker, rateLimit, ReportIssue, future features roadmap, remotion-demo-prompt, output/pdf/)
-- **Modified files**: 8 (Admin.tsx, firestore.ts, storage.ts, App.tsx, AppLayout.tsx, AttendanceScan.tsx, Profile.tsx, types.ts, firestore.rules, storage.rules)
+- **Modified files**: 10 (Admin.tsx, firestore.ts, useFirebaseQuery.ts, storage.ts, App.tsx, AppLayout.tsx, AttendanceScan.tsx, Profile.tsx, types.ts, firestore.rules, storage.rules)
 - **New admin features**: 6 (Audit Report, Health Dashboard, Error Tracker, Issue Reports, Storage Fixes, Tab Navigation)
+- **Bugs fixed**: 1 (RSVP not updating in admin panel — missing collectionGroup index)
 
 ---
 
-*Generated: 2026-07-09*
+*Updated: 2026-07-09*

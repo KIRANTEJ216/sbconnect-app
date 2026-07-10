@@ -1,9 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  collectionGroup, getDocs, query as fbQuery, orderBy,
-} from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import {
   getAllProfiles, getMeetings, getLeaderboard,
   getAllRequests, getTotalBusinessValue,
   getAttendanceCompliance, getUserRSVPs, getBusinessProfile,
@@ -92,16 +88,14 @@ export function useAllRsvpsByMeeting() {
   return useQuery({
     queryKey: ['allRsvpsByMeeting'],
     queryFn: async () => {
-      const snap = await getDocs(fbQuery(collectionGroup(db, 'rsvps'), orderBy('respondedAt', 'desc')));
-      const map: Record<string, MeetingRSVP[]> = {};
-      for (const d of snap.docs) {
-        const meetingId = d.ref.parent.parent?.id || '';
-        if (!map[meetingId]) map[meetingId] = [];
-        map[meetingId].push({ id: d.id, ...d.data(), meetingId } as MeetingRSVP);
-      }
-      return map;
+      const allMeetings = await getMeetings();
+      const entries = await Promise.all(
+        allMeetings.map((m) => getMeetingRSVPs(m.id).then((rsvps) => [m.id, rsvps] as const))
+      );
+      return Object.fromEntries(entries) as Record<string, MeetingRSVP[]>;
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
+    refetchInterval: 15_000,
   });
 }
 
