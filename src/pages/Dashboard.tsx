@@ -323,13 +323,19 @@ export default function Dashboard() {
                   ) : (
                     <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-warning-light text-warning border border-warning/20">Pending</span>
                   )}
-                  <Badge variant={myProfile.membershipStatus === 'active' ? 'success' : myProfile.membershipStatus === 'expired' ? 'danger' : 'neutral'}>
-                    {myProfile.membershipStatus === 'expired' ? 'EXPIRED' : myProfile.membershipStatus.charAt(0).toUpperCase() + myProfile.membershipStatus.slice(1)}
-                  </Badge>
+                  {myProfile.membershipStatus !== 'expired' && (
+                    <Badge variant={myProfile.membershipStatus === 'active' ? 'success' : 'neutral'}>
+                      {myProfile.membershipStatus.charAt(0).toUpperCase() + myProfile.membershipStatus.slice(1)}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
-            {myProfile.membershipExpiry > 0 && (
+            {myProfile.membershipExpiry > 0 && myProfile.membershipStatus === 'expired' ? (
+              <div className="mt-2 px-3 py-2 rounded-lg bg-danger-light/50 border border-danger/20">
+                <p className="text-xs font-medium text-danger">Expired Membership — {Math.floor((Date.now() - myProfile.membershipExpiry) / 86400000)} days ago</p>
+              </div>
+            ) : myProfile.membershipExpiry > 0 && (
               <div className="mt-2"><MembershipCountdown membershipExpiry={myProfile.membershipExpiry} /></div>
             )}
           </div>
