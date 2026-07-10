@@ -253,19 +253,27 @@ export default function Dashboard() {
       {myNotifications.filter((n) => !n.read).length > 0 && (
         <div className="rounded-card bg-surface border border-border shadow-card p-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-charcoal tracking-tight text-xs">Issue Resolved</h3>
+            <h3 className="font-semibold text-charcoal tracking-tight text-xs">Notifications</h3>
           </div>
           <div className="space-y-2">
             {myNotifications.filter((n) => !n.read).map((n) => (
-              <div key={n.id} className="flex items-start gap-3 px-3 py-2.5 rounded-lg bg-success-light/20 border border-success/15">
+              <div key={n.id} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${n.type === 'issue_resolved' ? 'bg-success-light/20 border-success/15' : 'bg-primary-light/20 border-primary/15'}`}>
                 <div className="shrink-0 mt-0.5">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
+                  {n.type === 'issue_resolved' ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-success text-white">Resolved</span>
+                    <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full text-white ${n.type === 'issue_resolved' ? 'bg-success' : 'bg-primary'}`}>
+                      {n.type === 'issue_resolved' ? 'Resolved' : 'New Pitch'}
+                    </span>
                     <span className="text-xs font-medium text-charcoal">{n.title}</span>
                   </div>
                   <p className="text-[11px] text-steel mt-1">{n.message}</p>

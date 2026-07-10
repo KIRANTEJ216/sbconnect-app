@@ -168,6 +168,8 @@ export async function expressInterest(requestId: string, uid: string, companyNam
     if ((data.interestedUids ?? []).includes(uid)) {
       throw new Error('You have already pitched for this request');
     }
+    const requestOwnerUid = data.uid;
+    const requestTitle = data.title || '';
     tx.update(reqRef, {
       interestCount: increment(1),
       interestedUids: arrayUnion(uid),
@@ -181,9 +183,10 @@ export async function expressInterest(requestId: string, uid: string, companyNam
       message,
       createdAt: Date.now(),
     });
-    return ref.id;
+    return { refId: ref.id, requestOwnerUid, requestTitle };
   });
-  return result;
+  sendUserNotification(result.requestOwnerUid, 'admin_message', 'New Pitch', `${companyName} pitched for "${result.requestTitle}": ${message}`, requestId).catch(() => {});
+  return result.refId;
 }
 
 export async function getInterests(requestId: string): Promise<Interest[]> {
