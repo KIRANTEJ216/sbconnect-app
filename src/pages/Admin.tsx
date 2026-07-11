@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
@@ -75,6 +75,9 @@ export default function Admin() {
   const [pending, setPending] = useState<BusinessProfile[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
+  const [paidDialogUid, setPaidDialogUid] = useState<string | null>(null);
+  const [paidDateValue, setPaidDateValue] = useState('');
+  const [paidSaving, setPaidSaving] = useState(false);
 
   const [profiles, setProfiles] = useState<BusinessProfile[]>([]);
   const [profilesLoading, setProfilesLoading] = useState(true);
@@ -252,6 +255,22 @@ export default function Admin() {
       setPending((prev) => prev.filter((p) => p.uid !== uid));
     } catch (e) { console.error(e); }
     setApproving(null);
+  };
+
+  const handlePaidSubmit = async () => {
+    if (!paidDialogUid || !paidDateValue) return;
+    setPaidSaving(true);
+    try {
+      await updateMembershipDates(paidDialogUid, new Date(paidDateValue).getTime());
+      setProfiles((prev) => prev.map((p) =>
+        p.uid === paidDialogUid
+          ? { ...p, paidDate: new Date(paidDateValue).getTime(), membershipDate: new Date(paidDateValue).getTime(), membershipExpiry: new Date(paidDateValue).getTime() + 364 * 86400000, membershipStatus: 'active' as const, dripSentDays: [] }
+          : p
+      ));
+      setPaidDialogUid(null);
+      setPaidDateValue('');
+    } catch (e) { console.error(e); }
+    setPaidSaving(false);
   };
 
   const handleCreateMeeting = async () => {
@@ -502,9 +521,16 @@ export default function Admin() {
                           <td className="px-4 py-3 text-steel text-xs max-w-[120px] truncate hidden sm:table-cell">{(p.keywords ?? []).slice(0, 3).join(', ')}{(p.keywords ?? []).length > 3 ? '..' : ''}</td>
                           <td className="px-4 py-3"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
                           <td className="px-4 py-3">
+                            <div className="flex gap-1.5">
                             <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${p.uid}`)}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </Button>
+                            {canWrite && !p.paidDate && (
+                              <Button size="sm" variant="primary" onClick={() => { setPaidDialogUid(p.uid); setPaidDateValue(new Date().toISOString().split('T')[0]); }}>
+                                Set Paid
+                              </Button>
+                            )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -577,6 +603,20 @@ export default function Admin() {
               )}
             </CardContent>
           </Card>
+
+          {paidDialogUid && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setPaidDialogUid(null)}>
+              <div className="bg-surface border border-border rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+                <h3 className="font-semibold text-charcoal tracking-tight mb-1">Set Payment Date</h3>
+                <p className="text-xs text-steel mb-4">Membership will be active for 364 days from this date.</p>
+                <Input label="Date Paid" type="date" value={paidDateValue} onChange={(e) => setPaidDateValue(e.target.value)} />
+                <div className="flex gap-2 mt-4">
+                  <Button variant="outline" className="flex-1" onClick={() => setPaidDialogUid(null)}>Cancel</Button>
+                  <Button className="flex-1" onClick={handlePaidSubmit} loading={paidSaving} disabled={!paidDateValue}>Confirm</Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

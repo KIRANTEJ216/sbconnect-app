@@ -24,7 +24,7 @@ import type {
 
 export async function createBusinessProfile(
   uid: string,
-  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'membershipDate' | 'editCount' | 'locked' | 'lastRequestsViewedAt' | 'createdAt' | 'updatedAt' | 'ownerSurname'>,
+  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'membershipDate' | 'paidDate' | 'dripSentDays' | 'editCount' | 'locked' | 'lastRequestsViewedAt' | 'createdAt' | 'updatedAt' | 'ownerSurname'>,
 ) {
   const profile: BusinessProfile = {
     ...data,
@@ -35,9 +35,11 @@ export async function createBusinessProfile(
     qrCodeURL: `${window.location.origin}/profile/${uid}`,
     ownerSurname: '',
     lastRequestsViewedAt: 0,
-    membershipDate: Date.now(),
-    membershipStatus: 'active',
-    membershipExpiry: Date.now() + 364 * 24 * 60 * 60 * 1000,
+    membershipDate: 0,
+    membershipStatus: 'inactive',
+    membershipExpiry: 0,
+    paidDate: 0,
+    dripSentDays: [],
     editCount: 0,
     locked: false,
     createdAt: Date.now(),
@@ -53,8 +55,10 @@ const DEFAULTS = {
     catalogURLs: [],
   qrCodeURL: '',
   verified: false,
-  membershipStatus: 'active' as const,
+  membershipStatus: 'inactive' as const,
   membershipDate: 0,
+  paidDate: 0,
+  dripSentDays: [] as number[],
   ownerName: '',
   ownerSurname: '',
   phone: '',
@@ -86,6 +90,19 @@ export async function getBusinessProfile(uid: string): Promise<BusinessProfile |
 
 export async function updateBusinessProfile(uid: string, data: Partial<BusinessProfile>) {
   await updateDoc(doc(db, 'profiles', uid), { ...data, updatedAt: Date.now() });
+}
+
+export async function updateMembershipDates(uid: string, paidDate: number) {
+  await requireSuperAdmin();
+  const expiry = paidDate + 364 * 24 * 60 * 60 * 1000;
+  await updateDoc(doc(db, 'profiles', uid), {
+    paidDate,
+    membershipDate: paidDate,
+    membershipStatus: 'active',
+    membershipExpiry: expiry,
+    dripSentDays: [],
+    updatedAt: Date.now(),
+  });
 }
 
 export async function getAllProfiles(max = 999): Promise<BusinessProfile[]> {

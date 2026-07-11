@@ -40,6 +40,8 @@ export interface BusinessProfile {
   membershipStatus: 'active' | 'inactive' | 'expired';
   membershipExpiry: number;
   membershipDate: number;
+  paidDate: number;
+  dripSentDays: number[];
   editCount: number;
   locked: boolean;
   lastRequestsViewedAt: number;

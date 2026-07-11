@@ -67,8 +67,8 @@ export default function Profile() {
   const [keywordInput, setKeywordInput] = useState('');
 
   const [editingMembership, setEditingMembership] = useState(false);
-  const [membershipStatus, setMembershipStatus] = useState<'active' | 'inactive' | 'expired'>('active');
-  const [membershipExpiry, setMembershipExpiry] = useState('');
+  const [membershipStatus, setMembershipStatus] = useState<'active' | 'inactive' | 'expired'>('inactive');
+  const [editPaidDate, setEditPaidDate] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -272,7 +272,7 @@ export default function Profile() {
 
   const handleEditMembership = () => {
     setMembershipStatus(profile!.membershipStatus);
-    setMembershipExpiry(new Date(profile!.membershipExpiry).toISOString().split('T')[0]);
+    setEditPaidDate(profile!.paidDate > 0 ? new Date(profile!.paidDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
     setEditingMembership(true);
   };
 
@@ -281,12 +281,15 @@ export default function Profile() {
     if (!user || !profile) return;
     setSaving(true);
     try {
-      const expiryTimestamp = new Date(membershipExpiry).getTime();
+      const paidTimestamp = new Date(editPaidDate).getTime();
+      const expiryTimestamp = paidTimestamp + 364 * 24 * 60 * 60 * 1000;
       await updateBusinessProfile(user.uid, {
         membershipStatus,
+        paidDate: paidTimestamp,
+        membershipDate: paidTimestamp,
         membershipExpiry: expiryTimestamp,
       });
-      setProfile({ ...profile, membershipStatus, membershipExpiry: expiryTimestamp });
+      setProfile({ ...profile, membershipStatus, paidDate: paidTimestamp, membershipDate: paidTimestamp, membershipExpiry: expiryTimestamp });
       setEditingMembership(false);
     } catch (err) {
       console.error('Failed to update membership:', err);
@@ -738,7 +741,10 @@ export default function Profile() {
                     <option value="expired">Expired</option>
                   </select>
                 </div>
-                <Input label="Expiry Date" type="date" value={membershipExpiry} onChange={(e) => setMembershipExpiry(e.target.value)} />
+                <Input label="Date Paid" type="date" value={editPaidDate} onChange={(e) => setEditPaidDate(e.target.value)} />
+                {editPaidDate && (
+                  <p className="text-[11px] text-steel">Expires: {new Date(new Date(editPaidDate).getTime() + 364 * 86400000).toLocaleDateString('en-IN')}</p>
+                )}
                 <Button onClick={handleSaveMembership} loading={saving} className="w-full">Save</Button>
               </div>
             </CardContent>
