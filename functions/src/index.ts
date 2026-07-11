@@ -1,6 +1,6 @@
 import * as functions from 'firebase-functions/v2';
 import * as callable from 'firebase-functions/v2/https';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { beforeUserCreated } from 'firebase-functions/v2/identity';
 import * as admin from 'firebase-admin';
 import { Resend } from 'resend';
@@ -85,6 +85,47 @@ interface BusinessProfile {
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
+
+async function sendEmail(resend: Resend, to: string, subject: string, html: string) {
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject,
+    html,
+  });
+}
+
+export const sendWelcomeEmail = callable.onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+
+  const profileDoc = await admin.firestore().collection('profiles').doc(uid).get();
+  if (!profileDoc.exists) {
+    throw new callable.HttpsError('not-found', 'Profile not found.');
+  }
+
+  const profile = profileDoc.data() as BusinessProfile;
+  if (!profile.paidDate || profile.paidDate <= 0) {
+    throw new callable.HttpsError('failed-precondition', 'Membership not activated yet.');
+  }
+
+  if (!RESEND_API_KEY) {
+    throw new callable.HttpsError('internal', 'Email service not configured.');
+  }
+
+  const resend = new Resend(RESEND_API_KEY);
+  const expiry = profile.paidDate + 364 * 24 * 60 * 60 * 1000;
+
+  try {
+    await sendEmail(resend, profile.contactEmail, 'Welcome to SB Connect!', dripWelcomeBody(profile.companyName, profile.paidDate, expiry));
+    return { success: true, message: 'Welcome email sent.' };
+  } catch (err) {
+    functions.logger.error('Failed to send welcome email:', err);
+    throw new callable.HttpsError('internal', 'Failed to send welcome email.');
+  }
+});
 
 export const sendAdminCode = callable.onCall(async (request) => {
   const uid = request.auth?.uid;
@@ -198,6 +239,34 @@ export const syncUserRole = onDocumentWritten('users/{uid}', async (event) => {
   functions.logger.info(`Synced role "${role}" for user ${uid}`);
 });
 
+export const onMembershipActivated = onDocumentWritten('profiles/{uid}', async (event) => {
+  const change = event.data;
+  if (!change) return;
+
+  const before = change.before.data() as BusinessProfile | undefined;
+  const after = change.after.data() as BusinessProfile | undefined;
+  if (!after) return;
+
+  // Check if paidDate was newly set (was 0 or undefined, now has a value)
+  const beforePaid = before?.paidDate ?? 0;
+  const afterPaid = after.paidDate ?? 0;
+  if (beforePaid > 0 && afterPaid > 0) return; // Already had paidDate, not a new activation
+  if (afterPaid === 0) return; // Still no paidDate
+
+  const profile = after as BusinessProfile;
+  if (!profile.contactEmail || !RESEND_API_KEY) return;
+
+  const resend = new Resend(RESEND_API_KEY);
+  const expiry = afterPaid + 364 * 24 * 60 * 60 * 1000;
+
+  try {
+    await sendEmail(resend, profile.contactEmail, 'Welcome to SB Connect!', dripWelcomeBody(profile.companyName, afterPaid, expiry));
+    functions.logger.info(`Welcome email sent to ${profile.contactEmail}`);
+  } catch (err) {
+    functions.logger.error('Failed to send welcome email:', err);
+  }
+});
+
 export const checkMembershipExpiry = functions.scheduler.onSchedule(
   { schedule: '0 8 * * *', timeZone: 'Asia/Kolkata' },
   async () => {
@@ -218,48 +287,36 @@ export const checkMembershipExpiry = functions.scheduler.onSchedule(
       if (!profile.contactEmail) continue;
 
       const daysUntilExpiry = Math.floor((profile.membershipExpiry - now) / (1000 * 60 * 60 * 24));
+      const dripSent = Array.isArray(profile.dripSentDays) ? profile.dripSentDays : [];
 
       try {
-        if (profile.membershipStatus === 'active' && daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
-          await resend.emails.send({
-            from: FROM_EMAIL,
-            to: profile.contactEmail,
-            subject: `SB Connect — Membership Expiring in ${daysUntilExpiry} Days`,
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Membership Renewal Reminder</h2>
-                <p>Dear ${profile.companyName},</p>
-                <p>Your SB Connect membership will expire in <strong>${daysUntilExpiry} days</strong>.</p>
-                <p>Please renew your membership to continue enjoying network benefits.</p>
-                <p>Log in to your dashboard to renew.</p>
-                <hr style="margin: 24px 0;" />
-                <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
-              </div>
-            `,
-          });
-          results.push(`Reminder sent to ${profile.contactEmail} (${daysUntilExpiry} days remaining)`);
+        // Welcome email should be sent via onMembershipActivated trigger, not here
+
+        // Drip reminders
+        for (const threshold of DRIP_THRESHOLDS) {
+          if (daysUntilExpiry === threshold && !dripSent.includes(threshold)) {
+            const subject = DRIP_SUBJECTS[threshold] || `SB Connect — Membership Update`;
+            const html = dripBody(profile.companyName, daysUntilExpiry, profile.paidDate);
+            
+            await sendEmail(resend, profile.contactEmail, subject, html);
+            
+            // Update dripSentDays
+            await admin.firestore().collection('profiles').doc(doc.id).update({
+              dripSentDays: [...dripSent, threshold],
+            });
+            
+            results.push(`Drip ${threshold}d sent to ${profile.contactEmail}`);
+            break; // Only send one drip per day
+          }
         }
 
+        // Expired
         if (daysUntilExpiry <= 0 && profile.membershipStatus === 'active') {
           await admin.firestore().collection('profiles').doc(doc.id).update({
             membershipStatus: 'expired',
           });
 
-          await resend.emails.send({
-            from: FROM_EMAIL,
-            to: profile.contactEmail,
-            subject: 'SB Connect — Membership Expired',
-            html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Membership Expired</h2>
-                <p>Dear ${profile.companyName},</p>
-                <p>Your SB Connect membership has expired.</p>
-                <p>Renew now to reactivate your profile and continue connecting with the network.</p>
-                <hr style="margin: 24px 0;" />
-                <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
-              </div>
-            `,
-          });
+          await sendEmail(resend, profile.contactEmail, 'SB Connect — Membership Expired', dripBody(profile.companyName, daysUntilExpiry, profile.paidDate));
           results.push(`Expired and notified: ${profile.contactEmail}`);
         }
       } catch (err) {
