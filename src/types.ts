@@ -167,11 +167,20 @@ export interface AppNotification {
 export interface UserNotification {
   id: string;
   uid: string;
-  type: 'issue_resolved' | 'admin_message';
+  type: 'issue_resolved' | 'admin_message' | 'issue_reply';
   title: string;
   message: string;
   relatedId: string;
   read: boolean;
+  createdAt: number;
+}
+
+export interface IssueReply {
+  id: string;
+  text: string;
+  authorUid: string;
+  authorName: string;
+  authorRole: 'user' | 'admin' | 'super_admin';
   createdAt: number;
 }
 
@@ -186,6 +195,7 @@ export interface IssueReport {
   description: string;
   status: 'open' | 'resolved';
   adminNote: string;
+  replies: IssueReply[];
   createdAt: number;
 }
 

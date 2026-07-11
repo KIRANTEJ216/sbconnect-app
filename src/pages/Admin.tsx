@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
@@ -70,6 +70,7 @@ function exportProfilesCSV(profiles: BusinessProfile[]) {
 
 export default function Admin() {
   const { user, profile } = useAuth();
+  const canWrite = isSuperAdmin(user?.email, profile?.role);
   const navigate = useNavigate();
   const [pending, setPending] = useState<BusinessProfile[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
@@ -122,6 +123,8 @@ export default function Admin() {
   const [issueReports, setIssueReports] = useState<IssueReport[]>([]);
   const [issueLoading, setIssueLoading] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [replyingId, setReplyingId] = useState<string | null>(null);
 
   const [healthReport, setHealthReport] = useState<HealthReport | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
@@ -391,6 +394,13 @@ export default function Admin() {
         ))}
       </div>
 
+      {!canWrite && (
+        <div className="px-4 py-2 bg-warning-light/30 border border-warning/20 rounded-lg text-xs text-warning font-medium flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.29 3.86l-8.09 14A1 1 0 0 0 3 19h18a1 1 0 0 0 .8-1.6l-8.09-14a1 1 0 0 0-1.72 0z" /></svg>
+          Read-only view — only Super Admin can modify data.
+        </div>
+      )}
+
       {/* ── Members Tab ── */}
       {activeTab === 'members' && (
         <div className="space-y-6">
@@ -427,12 +437,14 @@ export default function Admin() {
                       </div>
                       <div className="flex gap-2 shrink-0">
                         <Button size="sm" variant="outline" onClick={() => navigate(`/profile/${p.uid}`)}>View</Button>
-                        <Button size="sm" onClick={() => handleApprove(p.uid)} loading={approving === p.uid}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                          Approve
-                        </Button>
+                        {canWrite && (
+                          <Button size="sm" onClick={() => handleApprove(p.uid)} loading={approving === p.uid}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Approve
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -580,14 +592,16 @@ export default function Admin() {
             </div>
             <CardContent>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <Input label="Meeting Date" type="date" value={newMeetingDate} onChange={(e) => setNewMeetingDate(e.target.value)} />
-                  <Input label="Meeting Label" value={newMeetingLabel} onChange={(e) => setNewMeetingLabel(e.target.value)} placeholder="e.g. July 2026 Meeting" />
-                  <Input label="Location" value={newMeetingLocation} onChange={(e) => setNewMeetingLocation(e.target.value)} placeholder="e.g. Community Hall" />
-                  <div className="flex items-end">
-                    <Button onClick={handleCreateMeeting} loading={creating} className="w-full sm:w-auto">Create Meeting</Button>
+                {canWrite && (
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <Input label="Meeting Date" type="date" value={newMeetingDate} onChange={(e) => setNewMeetingDate(e.target.value)} />
+                    <Input label="Meeting Label" value={newMeetingLabel} onChange={(e) => setNewMeetingLabel(e.target.value)} placeholder="e.g. July 2026 Meeting" />
+                    <Input label="Location" value={newMeetingLocation} onChange={(e) => setNewMeetingLocation(e.target.value)} placeholder="e.g. Community Hall" />
+                    <div className="flex items-end">
+                      <Button onClick={handleCreateMeeting} loading={creating} className="w-full sm:w-auto">Create Meeting</Button>
+                    </div>
                   </div>
-                </div>
+                )}
                 {meetingMsg && <p className={`text-sm ${meetingMsg.includes('Failed') ? 'text-danger' : 'text-success'}`}>{meetingMsg}</p>}
 
                 <div className="divide-y divide-border max-h-64 overflow-y-auto border border-border rounded-xl">
@@ -603,7 +617,7 @@ export default function Admin() {
                         <div className="flex items-center gap-2">
                           <Badge variant={m.active ? 'success' : 'neutral'}>{m.active ? 'Active' : 'Inactive'}</Badge>
                           <Button size="sm" variant="outline" onClick={() => handleViewMeeting(m.id)} loading={attLoading && selectedMeeting === m.id}>View</Button>
-                          <Button size="sm" variant="danger" onClick={async () => { if (!confirm(`Delete "${m.label}"?`)) return; try { await deleteMeeting(m.id); loadMeetings(); } catch (e) { alert('Failed to delete: ' + (e instanceof Error ? e.message : e)); } }}>Delete</Button>
+                          {canWrite && <Button size="sm" variant="danger" onClick={async () => { if (!confirm(`Delete "${m.label}"?`)) return; try { await deleteMeeting(m.id); loadMeetings(); } catch (e) { alert('Failed to delete: ' + (e instanceof Error ? e.message : e)); } }}>Delete</Button>}
                         </div>
                       </div>
                     ))
@@ -809,17 +823,19 @@ export default function Admin() {
             </div>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3 items-end">
-                  <div className="flex-1 w-full">
-                    <Input
-                      label="Notification text"
-                      value={notifText}
-                      onChange={(e) => setNotifText(e.target.value)}
-                      placeholder="e.g. Next meeting on 3rd Sunday!"
-                    />
+                {canWrite && (
+                  <div className="flex flex-col sm:flex-row gap-3 items-end">
+                    <div className="flex-1 w-full">
+                      <Input
+                        label="Notification text"
+                        value={notifText}
+                        onChange={(e) => setNotifText(e.target.value)}
+                        placeholder="e.g. Next meeting on 3rd Sunday!"
+                      />
+                    </div>
+                    <Button onClick={handleAddNotif} loading={addingNotif} className="w-full sm:w-auto">Send Update</Button>
                   </div>
-                  <Button onClick={handleAddNotif} loading={addingNotif} className="w-full sm:w-auto">Send Update</Button>
-                </div>
+                )}
                 {notifMsg && <p className={`text-sm ${notifMsg.includes('Failed') ? 'text-danger' : 'text-success'}`}>{notifMsg}</p>}
 
                 {allNotifs.length > 0 && (
@@ -830,9 +846,9 @@ export default function Admin() {
                           <span className={`w-2 h-2 rounded-full shrink-0 ${n.active ? 'bg-success' : 'bg-muted/40'}`} />
                           <span className={`text-sm truncate ${n.active ? 'text-charcoal' : 'text-muted line-through'}`}>{n.text}</span>
                         </div>
-                        <Button size="sm" variant="outline" onClick={async () => { if (confirm('Delete this notification?')) { await deleteNotification(n.id); loadNotifs(); } }}>
+                        {canWrite && <Button size="sm" variant="outline" onClick={async () => { if (confirm('Delete this notification?')) { await deleteNotification(n.id); loadNotifs(); } }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </Button>
+                        </Button>}
                       </div>
                     ))}
                   </div>
@@ -895,32 +911,77 @@ export default function Admin() {
                               className="flex-1 min-w-0 rounded-[0.5rem] border border-border px-2.5 py-1.5 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
                               id={`note-${r.id}`}
                             />
+                            {canWrite && (
+                              <Button
+                                size="xs"
+                                variant="primary"
+                                onClick={async () => {
+                                  const note = (document.getElementById(`note-${r.id}`) as HTMLInputElement)?.value || '';
+                                  setResolvingId(r.id);
+                                  try {
+                                    await resolveIssueReport(r.id, note);
+                                    await sendUserNotification(r.uid, 'issue_resolved', 'Issue Resolved', note ? `Your report "${r.subject}" was resolved. Admin note: ${note}` : `Your report "${r.subject}" was resolved.`, r.id);
+                                    setIssueReports((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'resolved', adminNote: note } : x));
+                                  } catch { /* error tracked */ }
+                                  setResolvingId(null);
+                                }}
+                                loading={resolvingId === r.id}
+                              >
+                                Resolve
+                              </Button>
+                            )}
+                            {canWrite && (
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={async () => {
+                                  if (!confirm('Delete this report?')) return;
+                                  try { await deleteIssueReport(r.id); setIssueReports((prev) => prev.filter((x) => x.id !== r.id)); } catch { /* error tracked */ }
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </div>
+                        )}
+
+                        {(r.replies ?? []).length > 0 && (
+                          <div className="pl-4 space-y-1.5 border-l-2 border-border ml-1">
+                            {r.replies.map((reply) => (
+                              <div key={reply.id} className="flex items-start gap-2">
+                                <span className="text-[11px] font-semibold text-steel shrink-0 mt-0.5">{reply.authorName}:</span>
+                                <p className="text-xs text-charcoal">{reply.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {canWrite && (
+                          <div className="flex items-center gap-2 pl-4 pt-1">
+                            <input
+                              type="text"
+                              placeholder="Type a reply..."
+                              className="flex-1 min-w-0 rounded-[0.5rem] border border-border px-2.5 py-1.5 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
+                              value={replyTexts[r.id] ?? ''}
+                              onChange={(e) => setReplyTexts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                            />
                             <Button
                               size="xs"
                               variant="primary"
+                              loading={replyingId === r.id}
                               onClick={async () => {
-                                const note = (document.getElementById(`note-${r.id}`) as HTMLInputElement)?.value || '';
-                                setResolvingId(r.id);
+                                const text = replyTexts[r.id]?.trim();
+                                if (!text) return;
+                                setReplyingId(r.id);
                                 try {
-                                  await resolveIssueReport(r.id, note);
-                                  await sendUserNotification(r.uid, 'issue_resolved', 'Issue Resolved', note ? `Your report "${r.subject}" was resolved. Admin note: ${note}` : `Your report "${r.subject}" was resolved.`, r.id);
-                                  setIssueReports((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'resolved', adminNote: note } : x));
+                                  const reply = await addIssueReply(r.id, text, user!.uid, user?.displayName || user?.email || 'Admin', 'super_admin');
+                                  setIssueReports((prev) => prev.map((x) => x.id === r.id ? { ...x, replies: [...(x.replies ?? []), reply] } : x));
+                                  setReplyTexts((prev) => ({ ...prev, [r.id]: '' }));
                                 } catch { /* error tracked */ }
-                                setResolvingId(null);
-                              }}
-                              loading={resolvingId === r.id}
-                            >
-                              Resolve
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              onClick={async () => {
-                                if (!confirm('Delete this report?')) return;
-                                try { await deleteIssueReport(r.id); setIssueReports((prev) => prev.filter((x) => x.id !== r.id)); } catch { /* error tracked */ }
+                                setReplyingId(null);
                               }}
                             >
-                              Delete
+                              Reply
                             </Button>
                           </div>
                         )}
@@ -1004,20 +1065,20 @@ export default function Admin() {
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              {!req.awardedTo && req.status === 'open' && (
-                                <>
-                                  <Button size="xs" variant="primary" onClick={() => openAwardModal(req)}>
-                                    Deal Closed
-                                  </Button>
-                                  <Button size="xs" variant="outline" onClick={() => handleCloseRequest(req.id)} loading={closingRequestId === req.id}>
-                                    Close
-                                  </Button>
-                                  <Button size="xs" variant="outline" onClick={() => handleDeleteRequest(req.id)} loading={deletingRequestId === req.id}>
-                                    Delete
-                                  </Button>
-                                </>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                {canWrite && !req.awardedTo && req.status === 'open' && (
+                                  <>
+                                    <Button size="xs" variant="primary" onClick={() => openAwardModal(req)}>
+                                      Deal Closed
+                                    </Button>
+                                    <Button size="xs" variant="outline" onClick={() => handleCloseRequest(req.id)} loading={closingRequestId === req.id}>
+                                      Close
+                                    </Button>
+                                    <Button size="xs" variant="outline" onClick={() => handleDeleteRequest(req.id)} loading={deletingRequestId === req.id}>
+                                      Delete
+                                    </Button>
+                                  </>
+                                )}
                               {req.awardedTo && (
                                 <Badge variant="success">Deal Closed</Badge>
                               )}
@@ -1236,8 +1297,8 @@ export default function Admin() {
                       placeholder="https://script.google.com/macros/s/..."
                     />
                   </div>
-                  <Button onClick={handleSaveWebhook} loading={webhookSaving} variant="outline" className="w-full sm:w-auto">Save URL</Button>
-                  <Button onClick={handleSyncNow} loading={webhookSyncing} className="w-full sm:w-auto">Sync Now</Button>
+                  {canWrite && <Button onClick={handleSaveWebhook} loading={webhookSaving} variant="outline" className="w-full sm:w-auto">Save URL</Button>}
+                  {canWrite && <Button onClick={handleSyncNow} loading={webhookSyncing} className="w-full sm:w-auto">Sync Now</Button>}
                 </div>
                 {webhookStatus && (
                   <p className={`text-sm ${webhookStatus.startsWith('✓') ? 'text-success' : webhookStatus.startsWith('✗') || webhookStatus.includes('Failed') ? 'text-danger' : 'text-charcoal'}`}>
@@ -1304,7 +1365,7 @@ export default function Admin() {
                   <div className="flex-1 w-full">
                     <Input label="Add by email" type="email" value={superEmail} onChange={(e) => setSuperEmail(e.target.value)} placeholder="user@example.com" />
                   </div>
-                  <Button onClick={handleSuperAdd} loading={superSearching} className="w-full sm:w-auto">Add Admin</Button>
+                    {canWrite && <Button onClick={handleSuperAdd} loading={superSearching} className="w-full sm:w-auto">Add Admin</Button>}
                 </div>
                 {superMsg && <p className={`text-sm mb-3 ${superMsg.includes('already') || superMsg.includes('No user') || superMsg.includes('Failed') ? 'text-danger' : 'text-success'}`}>{superMsg}</p>}
                 {adminsLoading ? (
@@ -1317,7 +1378,7 @@ export default function Admin() {
                           <p className="text-sm font-medium text-charcoal truncate">{a.displayName || a.email}</p>
                           <p className="text-xs text-muted font-mono truncate">{a.email} · <Badge variant={a.role === 'super_admin' ? 'accent' : 'success'}>{a.role.replace('_', ' ')}</Badge></p>
                         </div>
-                        {a.role !== 'super_admin' && (
+                        {canWrite && a.role !== 'super_admin' && (
                           <Button size="sm" variant="outline" onClick={() => handleRemoveAdmin(a.uid)} loading={removingAdmin === a.uid}>Remove</Button>
                         )}
                       </div>
@@ -1358,7 +1419,7 @@ export default function Admin() {
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" className="flex-1" onClick={() => setAwardingRequest(null)}>Cancel</Button>
-                  <Button variant="primary" className="flex-1" onClick={confirmAward} loading={awardingLoading} disabled={!awardingTo}>Confirm Deal</Button>
+                  {canWrite && <Button variant="primary" className="flex-1" onClick={confirmAward} loading={awardingLoading} disabled={!awardingTo}>Confirm Deal</Button>}
                 </div>
               </div>
             )}

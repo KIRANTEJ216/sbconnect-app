@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserRequests, recordDeal, getMyNotifications } from '../lib/firestore';
+import { getUserRequests, recordDeal, getMyNotifications, getUserIssueReports, addIssueReply } from '../lib/firestore';
 import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile } from '../hooks/useFirebaseQuery';
-import type { UserNotification } from '../types';
+import type { UserNotification, IssueReport } from '../types';
 import { formatDate, formatCurrency } from '../lib/format';
 import confetti from 'canvas-confetti';
 import { Card, CardContent } from '../components/ui/Card';
@@ -37,11 +37,17 @@ export default function Dashboard() {
   const [dealSaving, setDealSaving] = useState(false);
   const [dealMsg, setDealMsg] = useState('');
   const [myNotifications, setMyNotifications] = useState<UserNotification[]>([]);
+  const [myIssues, setMyIssues] = useState<IssueReport[]>([]);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [replyingId, setReplyingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     getMyNotifications()
       .then(setMyNotifications)
+      .catch(() => {});
+    getUserIssueReports(user.uid)
+      .then(setMyIssues)
       .catch(() => {});
   }, [user]);
 
@@ -257,11 +263,19 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {myNotifications.filter((n) => !n.read).map((n) => (
-              <div key={n.id} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${n.type === 'issue_resolved' ? 'bg-success-light/20 border-success/15' : 'bg-primary-light/20 border-primary/15'}`}>
+              <div key={n.id} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${
+                n.type === 'issue_resolved' ? 'bg-success-light/20 border-success/15' :
+                n.type === 'issue_reply' ? 'bg-warning-light/20 border-warning/15' :
+                'bg-primary-light/20 border-primary/15'
+              }`}>
                 <div className="shrink-0 mt-0.5">
                   {n.type === 'issue_resolved' ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  ) : n.type === 'issue_reply' ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><polyline points="17 9 21 5 17 1" /><line x1="21" y1="5" x2="11" y2="5" />
                     </svg>
                   ) : (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
@@ -271,13 +285,83 @@ export default function Dashboard() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full text-white ${n.type === 'issue_resolved' ? 'bg-success' : 'bg-primary'}`}>
-                      {n.type === 'issue_resolved' ? 'Resolved' : 'New Pitch'}
+                    <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full text-white ${
+                      n.type === 'issue_resolved' ? 'bg-success' :
+                      n.type === 'issue_reply' ? 'bg-warning' :
+                      'bg-primary'
+                    }`}>
+                      {n.type === 'issue_resolved' ? 'Resolved' : n.type === 'issue_reply' ? 'New Reply' : 'New Pitch'}
                     </span>
                     <span className="text-xs font-medium text-charcoal">{n.title}</span>
                   </div>
                   <p className="text-[11px] text-steel mt-1">{n.message}</p>
                   <p className="text-[10px] text-muted mt-0.5">{new Date(n.createdAt).toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {myIssues.length > 0 && (
+        <div className="rounded-card bg-surface border border-border shadow-card p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-charcoal tracking-tight text-xs">My Reports ({myIssues.length})</h3>
+          </div>
+          <div className="space-y-2">
+            {myIssues.map((r) => (
+              <div key={r.id} className="border border-border rounded-lg px-3 py-2.5 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${r.status === 'open' ? 'bg-danger' : 'bg-success'}`} />
+                      <p className="text-xs font-semibold text-charcoal">{r.subject}</p>
+                    </div>
+                    <p className="text-[11px] text-steel mt-0.5">{r.description}</p>
+                  </div>
+                  <Badge variant={r.status === 'open' ? 'danger' : 'success'}>
+                    {r.status}
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted">{new Date(r.createdAt).toLocaleString('en-IN')}</p>
+
+                {(r.replies ?? []).length > 0 && (
+                  <div className="space-y-1.5 pl-2 border-l-2 border-border">
+                    {r.replies.map((reply) => (
+                      <div key={reply.id} className="flex items-start gap-2">
+                        <span className="text-[10px] font-semibold text-steel shrink-0 mt-0.5">{reply.authorName}:</span>
+                        <p className="text-[11px] text-charcoal">{reply.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Type a reply..."
+                    className="flex-1 min-w-0 rounded-[0.5rem] border border-border px-2.5 py-1.5 text-xs bg-canvas focus:outline-none focus:ring-2 focus:ring-primary-ring"
+                    value={replyTexts[r.id] ?? ''}
+                    onChange={(e) => setReplyTexts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                  />
+                  <Button
+                    size="xs"
+                    variant="primary"
+                    loading={replyingId === r.id}
+                    onClick={async () => {
+                      const text = replyTexts[r.id]?.trim();
+                      if (!text) return;
+                      setReplyingId(r.id);
+                      try {
+                        const reply = await addIssueReply(r.id, text, user!.uid, profile?.displayName || user?.displayName || 'You', 'user');
+                        setMyIssues((prev) => prev.map((x) => x.id === r.id ? { ...x, replies: [...(x.replies ?? []), reply] } : x));
+                        setReplyTexts((prev) => ({ ...prev, [r.id]: '' }));
+                      } catch { /* error tracked */ }
+                      setReplyingId(null);
+                    }}
+                  >
+                    Send
+                  </Button>
                 </div>
               </div>
             ))}

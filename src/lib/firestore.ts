@@ -6,20 +6,20 @@ import {
 import { db } from './firebase';
 import { getAuth } from 'firebase/auth';
 
-async function requireAdmin(): Promise<string> {
+async function requireSuperAdmin(): Promise<string> {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
   const snap = await getDoc(doc(db, 'users', user.uid));
   const profile = snap.data();
   const role = profile?.role;
-  if (role !== 'admin' && role !== 'super_admin') throw new Error('Admin access required');
+  if (role !== 'super_admin') throw new Error('Super admin access required');
   return user.uid;
 }
 import type {
   BusinessProfile, Request, Conversation, Message,
   Interest, Deal, LeaderboardEntry, UserProfile,
-  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport, UserNotification,
+  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport, IssueReply, UserNotification,
 } from '../types';
 
 export async function createBusinessProfile(
@@ -136,12 +136,12 @@ export async function getRequest(id: string): Promise<Request | null> {
 }
 
 export async function closeRequest(id: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await updateDoc(doc(db, 'requests', id), { status: 'closed' });
 }
 
 export async function deleteRequest(id: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await deleteDoc(doc(db, 'requests', id));
 }
 
@@ -203,7 +203,7 @@ export async function awardDeal(
   receiverCompanyName: string,
   amount: string,
 ) {
-  await requireAdmin();
+  await requireSuperAdmin();
   const dealRef = await addDoc(collection(db, 'deals'), {
     requestId,
     requestTitle,
@@ -418,7 +418,7 @@ export async function getAllUsers(max = 999): Promise<UserProfile[]> {
 }
 
 export async function setUserRole(uid: string, role: 'user' | 'admin' | 'super_admin') {
-  await requireAdmin();
+  await requireSuperAdmin();
   await updateDoc(doc(db, 'users', uid), { role });
 }
 
@@ -430,7 +430,7 @@ export async function getUserByEmail(email: string): Promise<UserProfile | null>
 }
 
 export async function verifyBusinessProfile(uid: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await updateDoc(doc(db, 'profiles', uid), { verified: true });
 }
 
@@ -443,7 +443,7 @@ export async function getUnverifiedProfiles(): Promise<BusinessProfile[]> {
 // ─── Meetings & Attendance ───
 
 export async function createMeeting(_uid: string, date: string, label: string, location: string = '') {
-  await requireAdmin();
+  await requireSuperAdmin();
   const ref = await addDoc(collection(db, 'meetings'), {
     date,
     label,
@@ -581,29 +581,64 @@ export async function reportIssue(data: {
     ...data,
     status: 'open',
     adminNote: '',
+    replies: [],
     createdAt: Date.now(),
   });
 }
 
+export async function addIssueReply(issueId: string, text: string, authorUid: string, authorName: string, authorRole: IssueReply['authorRole']) {
+  const reply: IssueReply = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    text,
+    authorUid,
+    authorName,
+    authorRole,
+    createdAt: Date.now(),
+  };
+  await updateDoc(doc(db, 'issueReports', issueId), {
+    replies: arrayUnion(reply),
+  });
+  const issueSnap = await getDoc(doc(db, 'issueReports', issueId));
+  const issue = issueSnap.data() as IssueReport;
+  if (authorRole === 'user' || authorRole === 'admin') {
+    await notifyAdmins('issue_reply', `New reply on "${issue.subject}"`, `${authorName}: ${text}`, issueId);
+  } else {
+    await sendUserNotification(issue.uid, 'issue_reply', `Admin replied to "${issue.subject}"`, `${authorName}: ${text}`, issueId);
+  }
+  return reply;
+}
+
+export async function getUserIssueReports(uid: string): Promise<IssueReport[]> {
+  const q = query(collection(db, 'issueReports'), where('uid', '==', uid), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as IssueReport));
+}
+
+export async function notifyAdmins(type: UserNotification['type'], title: string, message: string, relatedId: string) {
+  const userSnap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['admin', 'super_admin'])));
+  const promises = userSnap.docs.map((d) => sendUserNotification(d.id, type, title, message, relatedId));
+  await Promise.all(promises);
+}
+
 export async function getIssueReports(): Promise<IssueReport[]> {
-  await requireAdmin();
+  await requireSuperAdmin();
   const q = query(collection(db, 'issueReports'), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as IssueReport));
 }
 
 export async function resolveIssueReport(id: string, adminNote: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await updateDoc(doc(db, 'issueReports', id), { status: 'resolved', adminNote });
 }
 
 export async function deleteIssueReport(id: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await deleteDoc(doc(db, 'issueReports', id));
 }
 
 export async function addNotification(text: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await addDoc(collection(db, 'notifications'), { text, active: true, createdAt: Date.now() });
 }
 
@@ -612,12 +647,12 @@ export async function toggleNotification(id: string, active: boolean) {
 }
 
 export async function deleteNotification(id: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await deleteDoc(doc(db, 'notifications', id));
 }
 
 export async function deleteMeeting(id: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await deleteDoc(doc(db, 'meetings', id));
 }
 
@@ -658,7 +693,7 @@ export async function getLoginLogs(limitCount = 50): Promise<LoginLog[]> {
 // ─── Webhook / Google Sheets Sync ───
 
 export async function saveWebhookUrl(url: string) {
-  await requireAdmin();
+  await requireSuperAdmin();
   await setDoc(doc(db, 'config', 'webhook'), { url, updatedAt: Date.now() }, { merge: true });
 }
 
@@ -668,7 +703,7 @@ export async function getWebhookUrl(): Promise<string> {
 }
 
 export async function triggerWebhookExport(): Promise<{ ok: boolean; message: string }> {
-  const uid = await requireAdmin();
+  const uid = await requireSuperAdmin();
 
   const webhookSnap = await getDoc(doc(db, 'config', 'webhook'));
   if (!webhookSnap.exists() || !webhookSnap.data().url) {

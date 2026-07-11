@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation } from '../lib/firestore';
-import { isAdmin } from '../lib/admin';
+import { isAdmin, isSuperAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
 import { replaceProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { formatDate } from '../lib/format';
@@ -212,8 +212,8 @@ export default function Profile() {
     try {
       let photoURL = profile.photoURL || '';
       let catalogURLs = [...(profile.catalogURLs || [])];
-      const newEditCount = isAdminViewer ? (profile.editCount || 0) : (profile.editCount || 0) + 1;
-      const locked = isAdminViewer ? profile.locked : newEditCount >= 3;
+      const newEditCount = isSuperAdminUser ? (profile.editCount || 0) : (profile.editCount || 0) + 1;
+      const locked = isSuperAdminUser ? profile.locked : newEditCount >= 3;
 
       if (photoFile) {
         photoURL = await replaceProfilePhoto(user.uid, photoFile, profile.photoURL || '');
@@ -320,7 +320,8 @@ export default function Profile() {
 
   const isOwnProfile = user?.uid === id;
   const isAdminViewer = isAdmin(user?.email, authProfile?.role);
-  const canEdit = isOwnProfile || isAdminViewer;
+  const isSuperAdminUser = isSuperAdmin(user?.email, authProfile?.role);
+  const canEdit = isOwnProfile || isSuperAdminUser;
 
   if (loading) {
     return (
