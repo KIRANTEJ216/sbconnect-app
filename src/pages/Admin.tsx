@@ -75,6 +75,7 @@ export default function Admin() {
   const [pending, setPending] = useState<BusinessProfile[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
+  const [approveMsg, setApproveMsg] = useState('');
   const [paidDialogUid, setPaidDialogUid] = useState<string | null>(null);
   const [paidDateValue, setPaidDateValue] = useState('');
   const [paidSaving, setPaidSaving] = useState(false);
@@ -250,10 +251,16 @@ export default function Admin() {
 
   const handleApprove = async (uid: string) => {
     setApproving(uid);
+    setApproveMsg('');
     try {
       await verifyBusinessProfile(uid);
       setPending((prev) => prev.filter((p) => p.uid !== uid));
-    } catch (e) { console.error(e); }
+      setApproveMsg('Profile verified successfully!');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to verify profile';
+      console.error(e);
+      setApproveMsg(msg);
+    }
     setApproving(null);
   };
 
@@ -442,6 +449,11 @@ export default function Admin() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {approveMsg && (
+                    <div className={`px-4 py-2 rounded-lg text-sm font-medium ${approveMsg.includes('Failed') || approveMsg.includes('Error') || approveMsg.includes('required') ? 'bg-danger-light/30 border border-danger/20 text-danger' : 'bg-success-light/30 border border-success/20 text-success'}`}>
+                      {approveMsg}
+                    </div>
+                  )}
                   {pending.map((p) => (
                     <div key={p.uid} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border border-border">
                       <div className="flex items-center gap-4 min-w-0">

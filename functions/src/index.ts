@@ -10,12 +10,76 @@ admin.initializeApp();
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
 
+const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
+
+const DRIP_SUBJECTS: Record<number, string> = {
+  90: 'SB Connect — Membership Renewal Reminder (3 Months)',
+  60: 'SB Connect — 2 Months Until Membership Expires',
+  30: 'SB Connect — 30 Days Until Membership Expires',
+  14: 'SB Connect — 2 Weeks Until Membership Expires',
+  7: 'SB Connect — 1 Week Until Membership Expires',
+  1: 'SB Connect — Last Day! Membership Expires Tomorrow',
+  0: 'SB Connect — Membership Expired',
+};
+
+function dripBody(companyName: string, daysUntilExpiry: number, paidDate: number): string {
+  if (daysUntilExpiry > 0) {
+    return `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Membership Renewal Reminder</h2>
+        <p>Dear ${companyName},</p>
+        <p>Your SB Connect membership will expire in <strong>${daysUntilExpiry} days</strong>.</p>
+        ${daysUntilExpiry <= 30 ? '<p style="color: #d97706; font-weight: 600;">⚠️ Your membership is expiring soon. Please renew to avoid interruption.</p>' : ''}
+        <p>Log in to your dashboard to renew your membership and continue enjoying network benefits.</p>
+        <hr style="margin: 24px 0;" />
+        <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+      </div>
+    `;
+  }
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Membership Expired</h2>
+      <p>Dear ${companyName},</p>
+      <p>Your SB Connect membership has expired.</p>
+      <p>Renew now to reactivate your profile and continue connecting with the network.</p>
+      <hr style="margin: 24px 0;" />
+      <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+    </div>
+  `;
+}
+
+function dripWelcomeBody(companyName: string, paidDate: number, expiry: number): string {
+  const start = new Date(paidDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const end = new Date(expiry).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>🎉 Welcome to SB Connect!</h2>
+      <p>Dear ${companyName},</p>
+      <p>Your membership is now <strong style="color: #059669;">active</strong>.</p>
+      <p><strong>Member since:</strong> ${start}</p>
+      <p><strong>Valid until:</strong> ${end}</p>
+      <p>You now have access to:</p>
+      <ul>
+        <li>Business directory listing</li>
+        <li>Networking requests & pitches</li>
+        <li>Meeting RSVPs & attendance</li>
+        <li>Member leaderboard</li>
+      </ul>
+      <p>Log in to your dashboard to get started.</p>
+      <hr style="margin: 24px 0;" />
+      <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+    </div>
+  `;
+}
+
 interface BusinessProfile {
   uid: string;
   companyName: string;
   contactEmail: string;
   membershipStatus: string;
   membershipExpiry: number;
+  paidDate: number;
+  dripSentDays: number[];
 }
 
 function generateCode(): string {
