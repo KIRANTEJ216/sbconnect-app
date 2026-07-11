@@ -457,7 +457,8 @@ export async function setUserRole(uid: string, role: 'user' | 'admin' | 'super_a
 }
 
 export async function getUserByEmail(email: string): Promise<UserProfile | null> {
-  const q = query(collection(db, 'users'), where('email', '==', email));
+  const normalized = email.toLowerCase().trim();
+  const q = query(collection(db, 'users'), where('email', '>=', normalized), where('email', '<=', normalized + '\uf8ff'));
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return snap.docs[0].data() as UserProfile;
