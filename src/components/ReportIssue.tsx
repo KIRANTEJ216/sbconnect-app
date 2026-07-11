@@ -95,15 +95,12 @@ export default function ReportIssue() {
                     />
                     <p className="text-[10px] text-muted text-right mt-0.5">{description.length}/1000</p>
                   </div>
-                  <p className="text-[11px] text-steel">
-                    Page: <span className="font-mono text-muted">{location.pathname}</span>
-                  </p>
                   <button
                     onClick={handleSubmit}
                     disabled={!subject.trim() || !description.trim() || sending}
                     className="w-full rounded-[0.625rem] bg-primary text-white font-semibold text-sm px-5 py-2.5 shadow-btn hover:shadow-btn-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {sending ? 'Sending...' : 'Send Report'}
+                    {sending ? 'Submitting...' : 'Submit'}
                   </button>
                 </div>
               </>
