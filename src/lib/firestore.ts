@@ -12,12 +12,26 @@ async function requireSuperAdmin(): Promise<string> {
   if (!user) throw new Error('Not authenticated');
   const email = user.email?.toLowerCase().trim() || '';
   const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
-  if (SUPER_ADMIN_EMAILS.includes(email)) return user.uid;
+  if (SUPER_ADMIN_EMAILS.includes(email)) {
+    // Ensure super admin role is set in Firestore
+    await ensureUserRole(user.uid, 'super_admin', email);
+    return user.uid;
+  }
   const snap = await getDoc(doc(db, 'users', user.uid));
   const profile = snap.data();
   const role = profile?.role;
   if (role !== 'super_admin') throw new Error('Super admin access required');
   return user.uid;
+}
+
+async function ensureUserRole(uid: string, role: string, email: string) {
+  const userRef = doc(db, 'users', uid);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    await setDoc(userRef, { uid, email, role, createdAt: Date.now() });
+  } else if (snap.data().role !== role) {
+    await updateDoc(userRef, { role });
+  }
 }
 import type {
   BusinessProfile, Request, Conversation, Message,
