@@ -10,6 +10,9 @@ async function requireSuperAdmin(): Promise<string> {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
+  const email = user.email?.toLowerCase().trim() || '';
+  const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
+  if (SUPER_ADMIN_EMAILS.includes(email)) return user.uid;
   const snap = await getDoc(doc(db, 'users', user.uid));
   const profile = snap.data();
   const role = profile?.role;
