@@ -33,9 +33,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkMembershipExpiry = exports.verifyAdminCode = exports.sendAdminCode = void 0;
+exports.checkMembershipExpiry = exports.syncUserRole = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const callable = __importStar(require("firebase-functions/v2/https"));
+const firestore_1 = require("firebase-functions/v2/firestore");
+const identity_1 = require("firebase-functions/v2/identity");
 const admin = __importStar(require("firebase-admin"));
 const resend_1 = require("resend");
 admin.initializeApp();
@@ -109,7 +111,32 @@ exports.verifyAdminCode = callable.onCall(async (request) => {
     }
     await admin.firestore().collection('adminCodes').doc(uid).update({ used: true });
     await admin.firestore().collection('users').doc(uid).update({ role: 'admin' });
+    await admin.auth().setCustomUserClaims(uid, { role: 'admin' });
     return { success: true, message: 'You are now an admin!' };
+});
+const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
+exports.onUserCreate = (0, identity_1.beforeUserCreated)(async (event) => {
+    const userData = event.data;
+    const email = (userData?.email || '').toLowerCase().trim();
+    const role = SUPER_ADMIN_EMAILS.includes(email) ? 'super_admin' : 'user';
+    return {
+        customClaims: { role },
+    };
+});
+exports.syncUserRole = (0, firestore_1.onDocumentWritten)('users/{uid}', async (event) => {
+    const change = event.data;
+    if (!change)
+        return;
+    const snapshot = change.after;
+    if (!snapshot.exists)
+        return;
+    const data = snapshot.data();
+    const role = data?.role;
+    if (!role || !['user', 'admin', 'super_admin'].includes(role))
+        return;
+    const uid = event.params.uid;
+    await admin.auth().setCustomUserClaims(uid, { role });
+    functions.logger.info(`Synced role "${role}" for user ${uid}`);
 });
 exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Kolkata' }, async () => {
     if (!RESEND_API_KEY) {

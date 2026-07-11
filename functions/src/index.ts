@@ -1,5 +1,7 @@
 import * as functions from 'firebase-functions/v2';
 import * as callable from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { beforeUserCreated } from 'firebase-functions/v2/identity';
 import * as admin from 'firebase-admin';
 import { Resend } from 'resend';
 
@@ -100,8 +102,36 @@ export const verifyAdminCode = callable.onCall(async (request) => {
 
   await admin.firestore().collection('adminCodes').doc(uid).update({ used: true });
   await admin.firestore().collection('users').doc(uid).update({ role: 'admin' });
+  await admin.auth().setCustomUserClaims(uid, { role: 'admin' });
 
   return { success: true, message: 'You are now an admin!' };
+});
+
+const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
+
+export const onUserCreate = beforeUserCreated(async (event) => {
+  const userData = event.data;
+  const email = (userData?.email || '').toLowerCase().trim();
+  const role = SUPER_ADMIN_EMAILS.includes(email) ? 'super_admin' : 'user';
+  return {
+    customClaims: { role },
+  };
+});
+
+export const syncUserRole = onDocumentWritten('users/{uid}', async (event) => {
+  const change = event.data;
+  if (!change) return;
+
+  const snapshot = change.after;
+  if (!snapshot.exists) return;
+
+  const data = snapshot.data();
+  const role = data?.role;
+  if (!role || !['user', 'admin', 'super_admin'].includes(role)) return;
+
+  const uid = event.params.uid;
+  await admin.auth().setCustomUserClaims(uid, { role });
+  functions.logger.info(`Synced role "${role}" for user ${uid}`);
 });
 
 export const checkMembershipExpiry = functions.scheduler.onSchedule(
