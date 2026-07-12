@@ -78,8 +78,8 @@ export default function CreateProfile() {
     if (user?.email) {
       setForm((f) => ({ ...f, contactEmail: user.email! }));
     }
-    if (profile?.surname && user?.displayName) {
-      const firstName = user.displayName.split(' ')[0];
+    if (profile?.surname && profile?.displayName) {
+      const firstName = profile.displayName.split(' ')[0];
       setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname }));
     }
     getProfilesForReferral(5).then((profiles) => {
