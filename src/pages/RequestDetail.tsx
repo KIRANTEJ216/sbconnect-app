@@ -52,21 +52,10 @@ export default function RequestDetail() {
     load();
   }, [id]);
 
-  const BLOCKED_WORDS = ['fuck', 'shit', 'ass', 'bastard', 'damn', 'bitch', 'crap', 'dick', 'piss', 'slut', 'whore', 'cock', 'cunt', 'douche'];
-
-  const containsProfanity = (text: string) => {
-    const lower = text.toLowerCase();
-    return BLOCKED_WORDS.some((w) => new RegExp(`\\b${w}\\b`).test(lower));
-  };
-
   const handleExpressInterest = async () => {
     if (!user || !id || !request) return;
     if (!interestMessage.trim()) {
       setError('Please include a message.');
-      return;
-    }
-    if (containsProfanity(interestMessage)) {
-      setError('Please keep your message professional. Abusive language is not allowed.');
       return;
     }
     setSubmitting(true);
