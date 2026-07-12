@@ -41,7 +41,7 @@ import type {
 
 export async function createBusinessProfile(
   uid: string,
-  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'membershipDate' | 'paidDate' | 'dripSentDays' | 'editCount' | 'locked' | 'lastRequestsViewedAt' | 'createdAt' | 'updatedAt' | 'ownerSurname'>,
+  data: Omit<BusinessProfile, 'uid' | 'photoURL' | 'catalogURLs' | 'qrCodeURL' | 'verified' | 'membershipStatus' | 'membershipExpiry' | 'membershipDate' | 'paidDate' | 'dripSentDays' | 'editCount' | 'locked' | 'lastRequestsViewedAt' | 'createdAt' | 'updatedAt' | 'ownerSurname' | 'referredByPhone' | 'referredByName' | 'countryCode'>,
 ) {
   const profile: BusinessProfile = {
     ...data,
@@ -59,6 +59,9 @@ export async function createBusinessProfile(
     dripSentDays: [],
     editCount: 0,
     locked: false,
+    countryCode: '+91',
+    referredByPhone: '',
+    referredByName: '',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -88,6 +91,9 @@ const DEFAULTS = {
   editCount: 0,
   locked: false,
   lastRequestsViewedAt: 0,
+  countryCode: '+91',
+  referredByPhone: '',
+  referredByName: '',
 };
 
 function fillDefaults(data: Record<string, unknown>): BusinessProfile {
@@ -96,6 +102,11 @@ function fillDefaults(data: Record<string, unknown>): BusinessProfile {
     migrated.catalogURLs = [migrated.catalogPDFURL as string];
   }
   delete migrated.catalogPDFURL;
+  const phoneRaw = (migrated.phone as string) || '';
+  if (phoneRaw.startsWith('+91-') || phoneRaw.startsWith('+91')) {
+    migrated.phone = phoneRaw.replace(/^\+91[-\s]?/, '');
+    if (!migrated.countryCode) migrated.countryCode = '+91';
+  }
   return { ...DEFAULTS, ...migrated } as unknown as BusinessProfile;
 }
 
@@ -119,6 +130,21 @@ export async function updateMembershipDates(uid: string, paidDate: number) {
     membershipExpiry: expiry,
     dripSentDays: [],
     updatedAt: Date.now(),
+  });
+}
+
+export async function getProfilesForReferral(limitCount = 5): Promise<Pick<BusinessProfile, 'uid' | 'ownerName' | 'ownerSurname' | 'phone' | 'companyName'>[]> {
+  const q = query(collection(db, 'profiles'), orderBy('createdAt', 'desc'), limit(limitCount));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      uid: d.id,
+      ownerName: data.ownerName || '',
+      ownerSurname: data.ownerSurname || '',
+      phone: data.phone || '',
+      companyName: data.companyName || '',
+    };
   });
 }
 
@@ -464,6 +490,27 @@ export async function getUserByEmail(email: string): Promise<UserProfile | null>
   return snap.docs[0].data() as UserProfile;
 }
 
+export async function getProfileByContactEmail(email: string): Promise<BusinessProfile | null> {
+  const normalized = email.toLowerCase().trim();
+  const q = query(collection(db, 'profiles'), where('contactEmail', '>=', normalized), where('contactEmail', '<=', normalized + '\uf8ff'));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return snap.docs[0].data() as BusinessProfile;
+}
+
+export async function getProfileByPhone(phone: string): Promise<BusinessProfile | null> {
+  const digits = phone.replace(/\D/g, '');
+  const q = query(collection(db, 'profiles'), where('phone', '==', phone));
+  const snap = await getDocs(q);
+  if (!snap.empty) return fillDefaults(snap.docs[0].data());
+  if (!phone.startsWith('+91-')) {
+    const legacyQ = query(collection(db, 'profiles'), where('phone', '==', `+91-${digits}`));
+    const legacySnap = await getDocs(legacyQ);
+    if (!legacySnap.empty) return fillDefaults(legacySnap.docs[0].data());
+  }
+  return null;
+}
+
 export async function verifyBusinessProfile(uid: string) {
   await requireSuperAdmin();
   await updateDoc(doc(db, 'profiles', uid), { verified: true });
@@ -563,18 +610,18 @@ export async function getAttendanceCompliance(uid: string): Promise<{
 
 // ─── RSVP ───
 
-export async function submitRSVP(meetingId: string, uid: string, displayName: string, companyName: string, response: 'yes' | 'no' | 'maybe') {
+export async function submitRSVP(meetingId: string, uid: string, displayName: string, companyName: string, response: 'yes' | 'no' | 'maybe', guestCount: number = 0) {
   const existing = query(
     collection(db, 'meetings', meetingId, 'rsvps'),
     where('uid', '==', uid),
   );
   const snap = await getDocs(existing);
   if (!snap.empty) {
-    await updateDoc(doc(db, 'meetings', meetingId, 'rsvps', snap.docs[0].id), { response, respondedAt: Date.now() });
+    await updateDoc(doc(db, 'meetings', meetingId, 'rsvps', snap.docs[0].id), { response, guestCount, respondedAt: Date.now() });
     return { updated: true };
   }
   await addDoc(collection(db, 'meetings', meetingId, 'rsvps'), {
-    meetingId, uid, displayName, companyName, response, respondedAt: Date.now(),
+    meetingId, uid, displayName, companyName, response, guestCount, respondedAt: Date.now(),
   });
   return { updated: false };
 }
@@ -708,14 +755,16 @@ export interface LoginLog {
   email: string
   displayName: string
   timestamp: number
+  ip?: string
 }
 
-export async function logLogin(uid: string, email: string, displayName: string) {
+export async function logLogin(uid: string, email: string, displayName: string, ip?: string) {
   await addDoc(collection(db, 'loginLogs'), {
     uid,
     email,
     displayName: displayName || email.split('@')[0],
     timestamp: Date.now(),
+    ip: ip || '',
   });
 }
 

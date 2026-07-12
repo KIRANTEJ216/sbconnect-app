@@ -508,8 +508,8 @@ export default function Admin() {
                     Export CSV
                   </Button>
                 </div>
-                <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-80 overflow-y-auto">
-                  <table className="w-full text-sm min-w-[500px]">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-80 overflow-y-auto">
+                  <table className="w-full text-sm min-w-[600px]">
                     <thead>
                       <tr className="border-b border-border text-left">
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Company</th>
@@ -517,7 +517,7 @@ export default function Admin() {
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden sm:table-cell">Surname</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden sm:table-cell">Phone</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden sm:table-cell">Email</th>
-                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden sm:table-cell">Keywords</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden lg:table-cell">Referred By</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Actions</th>
                       </tr>
@@ -530,7 +530,7 @@ export default function Admin() {
                           <td className="px-4 py-3 text-steel text-xs hidden sm:table-cell">{p.ownerSurname || '—'}</td>
                           <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell">{p.phone}</td>
                           <td className="px-4 py-3 text-steel text-xs font-mono truncate max-w-[140px] hidden sm:table-cell">{p.contactEmail}</td>
-                          <td className="px-4 py-3 text-steel text-xs max-w-[120px] truncate hidden sm:table-cell">{(p.keywords ?? []).slice(0, 3).join(', ')}{(p.keywords ?? []).length > 3 ? '..' : ''}</td>
+                          <td className="px-4 py-3 text-steel text-xs hidden lg:table-cell">{p.referredByName || '—'}</td>
                           <td className="px-4 py-3"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
                           <td className="px-4 py-3">
                             <div className="flex gap-1.5">
@@ -590,21 +590,22 @@ export default function Admin() {
                     </thead>
                     <tbody className="divide-y divide-border">
                       {profiles.map((p) => {
-                        const days = Math.floor((p.membershipExpiry - Date.now()) / (1000 * 60 * 60 * 24));
-                        const isExpired = days <= 0;
-                        const isWarning = days <= 60 && days > 0;
+                        const hasMembership = p.membershipExpiry > 0;
+                        const days = hasMembership ? Math.floor((p.membershipExpiry - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+                        const isExpired = hasMembership && days <= 0;
+                        const isWarning = hasMembership && days <= 60 && days > 0;
                         return (
                           <tr key={p.uid} className="hover:bg-canvas/50 transition-colors">
                             <td className="px-4 py-3 font-medium text-charcoal text-xs max-w-[140px] truncate">{p.companyName}</td>
                             <td className="px-4 py-3 text-steel text-xs">{`${p.ownerName} ${p.ownerSurname || ''}`.trim() || '—'}</td>
-                            <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell">{formatDate(p.membershipDate > 0 ? p.membershipDate : p.createdAt)}</td>
-                            <td className="px-4 py-3 text-steel text-xs font-mono">{formatDate(p.membershipExpiry)}</td>
+                            <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell">{p.membershipDate > 0 ? formatDate(p.membershipDate) : '—'}</td>
+                            <td className="px-4 py-3 text-steel text-xs font-mono">{hasMembership ? formatDate(p.membershipExpiry) : '—'}</td>
                             <td className="px-4 py-3 text-xs font-mono">
                               <span className={`font-semibold ${isExpired ? 'text-danger' : isWarning ? 'text-warning' : 'text-success'}`}>
-                                {isExpired ? 'Expired' : days}
+                                {isExpired ? 'Expired' : hasMembership ? days : '—'}
                               </span>
                             </td>
-                            <td className="px-4 py-3"><Badge variant={isExpired ? 'danger' : isWarning ? 'neutral' : 'success'}>{isExpired ? 'Expired' : p.membershipStatus}</Badge></td>
+                            <td className="px-4 py-3"><Badge variant={isExpired ? 'danger' : isWarning ? 'neutral' : 'success'}>{hasMembership ? (isExpired ? 'Expired' : p.membershipStatus) : 'Inactive'}</Badge></td>
                           </tr>
                         );
                       })}
@@ -678,10 +679,14 @@ export default function Admin() {
 
                 {selectedMeeting && selectedMeetingData && (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                       <div className="bg-primary-light/40 rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-primary">{meetingRsvps.filter((r) => r.response === 'yes').length} / {profiles.length}</p>
                         <p className="text-[11px] text-steel font-medium mt-0.5">Confirmed / Total Members</p>
+                      </div>
+                      <div className="bg-accent-light/40 rounded-xl p-3 text-center">
+                        <p className="text-2xl font-bold text-accent">{meetingRsvps.filter((r) => r.response === 'yes').reduce((sum, r) => sum + 1 + (r.guestCount || 0), 0)}</p>
+                        <p className="text-[11px] text-steel font-medium mt-0.5">Estimated Headcount</p>
                       </div>
                       <div className="bg-success-light/30 rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-success">{meetingAttendance.length}</p>
@@ -724,11 +729,12 @@ export default function Admin() {
                               RSVPs — <span className="text-success">Yes: {meetingRsvps.filter((r) => r.response === 'yes').length}</span> · <span className="text-danger">No: {meetingRsvps.filter((r) => r.response === 'no').length}</span> · <span className="text-accent">Maybe: {meetingRsvps.filter((r) => r.response === 'maybe').length}</span>
                             </p>
                             <Button size="sm" variant="outline" onClick={() => {
-                              const headers = ['Name', 'Company', 'Response', 'Responded At'];
+                              const headers = ['Name', 'Company', 'Response', 'Guests', 'Responded At'];
                               const rows = meetingRsvps.map((r) => [
                                 r.displayName,
                                 r.companyName || '',
                                 r.response,
+                                String(r.guestCount || 0),
                                 formatDate(r.respondedAt),
                               ]);
                               const csv = [headers, ...rows].map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -750,7 +756,7 @@ export default function Admin() {
                             ) : (
                               meetingRsvps.map((r) => (
                                 <div key={r.id} className="flex items-center justify-between text-xs text-charcoal py-1">
-                                  <span className="truncate">{r.displayName}</span>
+                                  <span className="truncate">{r.displayName}{r.response === 'yes' && r.guestCount ? ` +${r.guestCount}` : ''}</span>
                                   <Badge variant={r.response === 'yes' ? 'success' : r.response === 'no' ? 'neutral' : 'accent'}>{r.response}</Badge>
                                 </div>
                               ))
@@ -781,7 +787,7 @@ export default function Admin() {
                 <>
                 <div className="flex justify-end gap-2 mb-3">
                   <Button size="sm" variant="outline" onClick={() => {
-                    const allRows: { meeting: string; date: string; member: string; company: string; response: string; respondedAt: string }[] = [];
+                    const allRows: { meeting: string; date: string; member: string; company: string; response: string; guests: string; respondedAt: string }[] = [];
                     Object.entries(meetingRsvpMap).forEach(([meetingId, rsvps]) => {
                       const m = meetings.find((x) => x.id === meetingId);
                       rsvps.forEach((r) => {
@@ -791,12 +797,13 @@ export default function Admin() {
                           member: r.displayName,
                           company: r.companyName || '',
                           response: r.response,
+                          guests: String(r.guestCount || 0),
                           respondedAt: new Date(r.respondedAt).toLocaleString('en-IN'),
                         });
                       });
                     });
                     allRows.sort((a, b) => new Date(b.respondedAt).getTime() - new Date(a.respondedAt).getTime());
-                    const headers = ['Meeting', 'Date', 'Member', 'Company', 'Response', 'Responded At'];
+                    const headers = ['Meeting', 'Date', 'Member', 'Company', 'Response', 'Guests', 'Responded At'];
                     const csv = [headers, ...allRows.map((r) => Object.values(r).map((c) => `"${c.replace(/"/g, '""')}"`))].map((r) => r.join(',')).join('\n');
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
@@ -811,8 +818,8 @@ export default function Admin() {
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => refetchRsvps()} loading={rsvpMapLoading}>Refresh</Button>
                 </div>
-                <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-[600px] overflow-y-auto">
-                  <table className="w-full text-sm min-w-[650px]">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-[600px] overflow-y-auto">
+                  <table className="w-full text-sm min-w-[750px]">
                     <thead>
                       <tr className="border-b border-border text-left">
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Meeting</th>
@@ -820,6 +827,7 @@ export default function Admin() {
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Member</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Company</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Response</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Guests</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Responded At</th>
                       </tr>
                     </thead>
@@ -829,7 +837,7 @@ export default function Admin() {
                         if (rsvps.length === 0) {
                           return (
                             <tr key={m.id} className="hover:bg-canvas/50 transition-colors">
-                              <td className="px-4 py-3 font-medium text-charcoal text-xs" colSpan={6}>
+                              <td className="px-4 py-3 font-medium text-charcoal text-xs" colSpan={7}>
                                 <span className="text-muted italic">{m.label} — No RSVPs yet</span>
                               </td>
                             </tr>
@@ -846,6 +854,7 @@ export default function Admin() {
                                 {r.response === 'yes' ? 'Going' : r.response === 'no' ? 'Not Going' : 'Maybe'}
                               </Badge>
                             </td>
+                            <td className="px-4 py-3 text-xs text-steel font-mono">{r.guestCount || '0'}</td>
                             <td className="px-4 py-3 text-xs text-muted font-mono whitespace-nowrap">{new Date(r.respondedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                           </tr>
                         ));
@@ -854,7 +863,7 @@ export default function Admin() {
                   </table>
                 </div>
                 <p className="text-[10px] text-muted text-right mt-2">
-                  {Object.values(meetingRsvpMap).reduce((sum, r) => sum + r.length, 0)} total RSVPs across all meetings
+                  {Object.values(meetingRsvpMap).reduce((sum, r) => sum + r.length, 0)} total RSVPs across all meetings · {Object.values(meetingRsvpMap).reduce((sum, rsvps) => sum + rsvps.reduce((s, r) => s + (r.response === 'yes' ? 1 + (r.guestCount || 0) : 0), 0), 0)} total estimated headcount
                 </p>
                 </>
               )}
@@ -1380,12 +1389,13 @@ export default function Admin() {
                   {logs.length === 0 ? (
                     <p className="text-sm text-muted text-center py-8">No login activity recorded yet.</p>
                   ) : (
-                    <table className="w-full text-sm min-w-[400px]">
+                    <table className="w-full text-sm min-w-[550px]">
                       <thead>
                         <tr className="border-b border-border text-left">
                           <th className="px-4 py-2 font-medium text-muted font-mono tracking-tight text-xs">Name</th>
                           <th className="px-4 py-2 font-medium text-muted font-mono tracking-tight text-xs">Email</th>
                           <th className="px-4 py-2 font-medium text-muted font-mono tracking-tight text-xs">Time</th>
+                          <th className="px-4 py-2 font-medium text-muted font-mono tracking-tight text-xs">IP</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -1394,6 +1404,7 @@ export default function Admin() {
                             <td className="px-4 py-2 text-charcoal text-xs">{log.displayName}</td>
                             <td className="px-4 py-2 text-steel text-xs font-mono">{log.email}</td>
                             <td className="px-4 py-2 text-muted font-mono text-[11px] whitespace-nowrap">{formatDate(log.timestamp)} {formatTime(log.timestamp)}</td>
+                            <td className="px-4 py-2 text-muted font-mono text-[11px]">{log.ip || '—'}</td>
                           </tr>
                         ))}
                       </tbody>

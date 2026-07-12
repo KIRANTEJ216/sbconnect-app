@@ -169,4 +169,105 @@ Major robustness, security, and admin-control improvements across the applicatio
 
 ---
 
-*Updated: 2026-07-09*
+## Progressive Updates (2026-07-11)
+
+### 2026-07-11 — Permission Model Restructure & Issue Reply System
+**Commit**: `16ac907` → `c47dffa` → `6e1274b`
+
+#### Permission Model: Admin = Read-Only, Super Admin = Full Write
+- **`src/lib/admin.ts`**: Added `isAdminViewer(role)` and `isSuperAdminRole(role)` helpers
+- **`src/lib/firestore.ts`**: Replaced all 14 `requireAdmin()` calls with `requireSuperAdmin()` — only super_admin can now perform writes
+- **`src/pages/Admin.tsx`**: `canWrite` gates 16+ buttons (Approve, Create/Delete Meeting, Send/Delete Update, Resolve/Delete Issue, Deal Closed, Close/Delete Request, Save URL, Sync Now, Confirm Deal, Add/Remove Admin); read-only banner shown when `!canWrite`
+- **`firestore.rules`**: Every `admin` write rule changed to `super_admin`; admin retains all read access; owner writes preserved
+- **`src/pages/Profile.tsx`**: `canEdit` and edit-count bypass now require `isSuperAdminUser` (admin can view but not edit profiles)
+
+#### Issue Reply / Conversation System
+- **`src/types.ts`**: Added `IssueReply` type (`id`, `text`, `authorUid`, `authorName`, `authorRole`, `createdAt`); added `replies: IssueReply[]` to `IssueReport`; `UserNotification.type` adds `'issue_reply'`
+- **`src/lib/firestore.ts`**: 
+  - `addIssueReply(issueId, text, authorUid, authorName, authorRole)` — appends reply via `arrayUnion`, notifies reporter (super_admin) or all admins (user reply) via `sendUserNotification`/`notifyAdmins`
+  - `getUserIssueReports(uid)` — fetches user's own reports with replies
+  - `notifyAdmins(type, title, message, relatedId)` — broadcasts to all admin/super_admin users
+- **`src/pages/Admin.tsx`**: Reports tab shows threaded replies + reply input (gated by `canWrite`)
+- **`src/pages/Dashboard.tsx`**: "My Reports" section with reply capability; notification badge shows "New Reply" with warning color
+- **`firestore.rules`**: Issue owner can read+update own reports for replies; super_admin full access
+
+#### Cloud Functions for Custom Claims Sync
+- **`functions/src/index.ts`**:
+  - `onUserCreate` (`beforeUserCreated` blocking function) — sets initial `customClaims.role` on signup (super_admin for `kktej3d@gmail.com`, user for others)
+  - `syncUserRole` (`onDocumentWritten` on `users/{uid}`) — syncs Firestore `role` to Auth custom claims on any change
+  - `verifyAdminCode` updated — calls `setCustomUserClaims(uid, { role: 'admin' })` immediately after promotion
+- **Purpose**: Makes `request.auth.token.role` resolve in Firestore rules, eliminating fallback reads
+
+---
+
+### 2026-07-11 — Firestore Rules Fix + Membership Paid Date + Drip Emails
+**Commit**: `d4359ac` → `6e1274b`
+
+#### Firestore Rules — Token.Role Fallback to Firestore Read
+- **`firestore.rules`**: Added `isSuperAdmin()` and `isAdminOrSuperAdmin()` helpers
+  - Check `request.auth.token.role` FIRST (fast path after functions deploy)
+  - Fall back to `get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role` (works immediately without custom claims)
+- **Result**: ALL super_admin write operations now work (profile verification, meetings, notifications, etc.) WITHOUT requiring Cloud Functions deployment
+
+#### Membership Payment Date System
+- **`src/types.ts`**: Added `paidDate: number` (payment timestamp) + `dripSentDays: number[]` (tracks notified intervals)
+- **`src/lib/firestore.ts`**:
+  - `createBusinessProfile`: Sets `membershipDate=0`, `membershipStatus='inactive'`, `paidDate=0`, `dripSentDays=[]` — admin must set paid date
+  - New `updateMembershipDates(uid, paidDate)` — super_admin only; sets `paidDate`, `membershipDate=paidDate`, `membershipExpiry=paidDate+364 days`, `membershipStatus='active'`, resets `dripSentDays`
+- **`src/pages/Admin.tsx`**: "Set Paid" button in Business Directory for profiles without `paidDate` → date picker dialog → calls `updateMembershipDates`
+- **`src/pages/Profile.tsx`**: Membership edit form uses "Date Paid" field; auto-computes and shows expiry date; saves `paidDate`, `membershipDate`, `membershipExpiry` together
+
+#### Drip Email Notifications (Resend)
+- **`functions/src/index.ts`**: `checkMembershipExpiry` scheduler now sends drip emails at **90, 60, 30, 14, 7, 1, 0** days before expiry
+- **Tracking**: Uses `dripSentDays` array on profile to avoid duplicate sends
+- **Templates**: `DRIP_SUBJECTS` + `dripBody()` per interval; includes company name and days remaining
+- **Welcome email**: Could be sent immediately when `paidDate` is set (client-side or callable function)
+
+---
+
+*Updated: 2026-07-12*
+
+---
+
+### 2026-07-12 — Catalog Download, Referred By, Guest Count, Phone Split, Location Autocomplete
+
+#### Catalog Download (replaces open-in-tab)
+- **`src/lib/storage.ts`**: Added `downloadCatalogFile(url, index)` — fetches file as blob, creates `URL.createObjectURL()`, triggers download via temp `<a download>`, fallback to `window.open`
+- **`src/pages/Profile.tsx`**: Both PDF and image catalog items changed from `<a href={url} target="_blank">` to `<button onClick={() => downloadCatalogFile(url, i)}>`
+
+#### Referred By (phone-validated from existing members)
+- **`src/types.ts`**: Added `referredByPhone: string`, `referredByName: string` to `BusinessProfile`
+- **`src/lib/firestore.ts`**: Added `referredByPhone`/`referredByName` to DEFAULTS and createBusinessProfile. New `getProfilesForReferral(limitCount=5)` fetches most recent profiles for top-5 chips.
+- **`src/pages/CreateProfile.tsx`**: Top-5 clickable referral chips + text input with datalist autocomplete. On blur, validates via `getProfileByPhone()`. Submits both `referredByPhone` and `referredByName`.
+- **`src/pages/Profile.tsx`**: Same chips + input in edit mode. View mode shows "Referred by [Name]" below location.
+- **`src/pages/Admin.tsx`**: "Referred By" column in Business Directory table.
+
+#### Guest Count (Bringing to Meeting)
+- **`src/types.ts`**: Added `guestCount: number` to `MeetingRSVP`
+- **`src/lib/firestore.ts`**: `submitRSVP()` accepts `guestCount` param (default 0), stored in create/update paths.
+- **`src/components/DashboardUpdates.tsx`**: Guest count `<select>` (0–10) below Yes/No buttons. After "Going", shows badge "Going +3" with edit icon. Re-submits RSVP on guest count change.
+- **`src/pages/Admin.tsx`**: "Estimated Headcount" stat card in meeting detail. Guest count column in RSVP lists. CSV exports include guest count. Detailed table has Guests column + total headcount footer.
+
+#### Referral Chips + Location Autocomplete (UX polish)
+- **`src/pages/CreateProfile.tsx` + `src/pages/Profile.tsx`**: Top-5 referral chips + datalist autocomplete for referred-by. Location replaced `<datalist>` with filter-as-you-type dropdown (all 100+ cities, show on type).
+
+#### Phone — Country Code Badge + Digits-Only Input
+- **`src/types.ts`**: Added `countryCode: string` to `BusinessProfile`
+- **`src/lib/firestore.ts`**: `countryCode: '+91'` in DEFAULTS/createBusinessProfile. `fillDefaults()` strips `+91-` prefix from legacy data. `getProfileByPhone()` fallback queries both new (digits-only) and legacy (`+91-{digits}`) formats.
+- **`src/pages/CreateProfile.tsx` + `src/pages/Profile.tsx`**: Phone input split into `+91` badge + 10-digit input. Auto-strips non-digits, max 10 chars. View mode shows `+91 {phone}`.
+
+#### Production Scrub Guide
+- **`docs/future-features/scrub-deletedata-for-prod-deply.md`**: New guide for clearing test data from Firestore (profiles, deals, meetings, requests, etc.) for production deployment.
+
+#### Files Changed (2026-07-12 session)
+
+| File | Change |
+|------|--------|
+| `src/types.ts` | +3 fields: `countryCode`, `referredByPhone`, `referredByName`, `guestCount` on MeetingRSVP |
+| `src/lib/firestore.ts` | `getProfilesForReferral()`, `getProfileByPhone()` backward-compat, `submitRSVP()` guestCount, DEFAULTS update |
+| `src/lib/storage.ts` | `downloadCatalogFile()` |
+| `src/pages/CreateProfile.tsx` | Referred chips + location autocomplete + phone country code split |
+| `src/pages/Profile.tsx` | Same 3 updates in edit mode + view mode phone/referred-by display |
+| `src/pages/Admin.tsx` | Referred By column + guest count in meeting stats/RSVPs/CSV + headcount footer |
+| `src/components/DashboardUpdates.tsx` | Guest count dropdown with edit |
+| `docs/future-features/scrub-deletedata-for-prod-deply.md` | New: production data scrub guide |

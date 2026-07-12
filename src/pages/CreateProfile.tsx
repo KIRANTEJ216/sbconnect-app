@@ -2,12 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { createBusinessProfile, updateBusinessProfile } from '../lib/firestore';
+import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
 import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
-import { INDUSTRIES, COMPANY_SIZES } from '../types';
+import { INDUSTRIES, COMPANY_SIZES, LOCATIONS } from '../types';
 import type { BusinessProfile } from '../types';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { ProfileSuggestions } from '../components/profile/ProfileSuggestions';
@@ -35,9 +35,25 @@ export default function CreateProfile() {
     contactEmail: '',
     website: '',
     description: '',
+    referredByPhone: '',
   });
 
   const [keywordInput, setKeywordInput] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
+  const [referredByName, setReferredByName] = useState('');
+  const [referredByStatus, setReferredByStatus] = useState<'idle' | 'found' | 'not_found'>('idle');
+  const [referralOptions, setReferralOptions] = useState<{ name: string; phone: string }[]>([]);
+  const [locationFiltered, setLocationFiltered] = useState<string[]>([]);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+
+  const handleLocationInput = (value: string) => {
+    update('location', value);
+    const filtered = value.trim()
+      ? LOCATIONS.filter((l) => l.toLowerCase().includes(value.toLowerCase()))
+      : [];
+    setLocationFiltered(filtered);
+    setShowLocationDropdown(filtered.length > 0);
+  };
 
   const addKeyword = (kw: string) => {
     const trimmed = kw.trim();
@@ -62,12 +78,29 @@ export default function CreateProfile() {
     if (user?.email) {
       setForm((f) => ({ ...f, contactEmail: user.email! }));
     }
+    getProfilesForReferral(5).then((profiles) => {
+      setReferralOptions(profiles.map((p) => ({
+        name: `${p.ownerName} ${p.ownerSurname}`.trim() || p.companyName,
+        phone: p.phone,
+      })));
+    }).catch(() => {});
   }, [user]);
+
+  const selectReferral = (name: string, phone: string) => {
+    update('referredByPhone', phone);
+    setReferredByName(name);
+    setReferredByStatus('found');
+  };
+
+  const normalizePhone = (val: string) => val.replace(/\D/g, '').slice(0, 10);
 
   const update = (field: string, value: string | string[]) =>
     setForm((f) => ({ ...f, [field]: value }));
 
   const toggleCategory = (cat: string) => {
+    if (cat === 'Other' && form.categories.includes('Other')) {
+      setCustomCategory('');
+    }
     setForm((f) => ({
       ...f,
       categories: f.categories.includes(cat)
@@ -138,8 +171,23 @@ export default function CreateProfile() {
     if (form.categories.length === 0) { setError('Please select at least one category.'); return; }
     if (!form.companySize) { setError('Please select company size.'); return; }
     if (!form.location.trim()) { setError('Location is required.'); return; }
+    if (form.location.trim() && !LOCATIONS.includes(form.location.trim() as any)) {
+      setError('Please select a valid location from the suggestions.');
+      return;
+    }
     if (!form.contactEmail.trim()) { setError('Contact email is required.'); return; }
     if (!user) return;
+
+    const normalizedPhone = normalizePhone(form.phone);
+    setForm((f) => ({ ...f, phone: normalizedPhone }));
+    const cleanEmail = form.contactEmail.toLowerCase().trim();
+
+    const [existingEmail, existingPhone] = await Promise.all([
+      getProfileByContactEmail(cleanEmail),
+      getProfileByPhone(normalizedPhone),
+    ]);
+    if (existingEmail) { setError('This email is already registered to another business.'); return; }
+    if (existingPhone) { setError('This phone number is already registered to another business.'); return; }
 
     setLoading(true);
     setError('');
@@ -154,11 +202,15 @@ export default function CreateProfile() {
         catalogURLs = await uploadCatalogFiles(user.uid, catalogFiles);
       }
 
+      const finalCategories = form.categories
+        .filter((c) => c !== 'Other')
+        .concat(customCategory.trim() ? [customCategory.trim()] : []);
+
       await createBusinessProfile(user.uid, {
         ownerName: form.ownerName,
         phone: form.phone,
         companyName: form.companyName,
-        categories: form.categories,
+        categories: finalCategories,
         companySize: form.companySize,
         location: form.location,
         contactEmail: form.contactEmail,
@@ -171,6 +223,8 @@ export default function CreateProfile() {
       if (photoURL) updates.photoURL = photoURL;
       if (catalogURLs.length > 0) updates.catalogURLs = catalogURLs;
       if (form.ownerSurname) updates.ownerSurname = form.ownerSurname;
+      if (form.referredByPhone) updates.referredByPhone = form.referredByPhone;
+      if (referredByName) updates.referredByName = referredByName;
       if (Object.keys(updates).length > 0) {
         await updateBusinessProfile(user.uid, updates as Partial<BusinessProfile>);
       }
@@ -229,14 +283,21 @@ export default function CreateProfile() {
                     onChange={(e) => update('ownerSurname', e.target.value)}
                   />
                 </div>
-                <Input
-                  label="Phone Number"
-                  type="tel"
-                  placeholder="e.g. +91-9876543210"
-                  value={form.phone}
-                  onChange={(e) => update('phone', e.target.value)}
-                  required
-                />
+                <div>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Phone Number <span className="text-danger">*</span></label>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-2.5 rounded-[0.75rem] border border-border bg-muted-bg text-sm text-charcoal font-medium shrink-0">+91</span>
+                    <input
+                      type="tel"
+                      placeholder="9876543210"
+                      value={form.phone}
+                      onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onBlur={(e) => { const n = normalizePhone(e.target.value); if (n !== e.target.value) update('phone', n); }}
+                      required
+                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
                 <Input
                   label="Company Name"
                   placeholder="e.g. Sri Sai Enterprises"
@@ -263,6 +324,17 @@ export default function CreateProfile() {
                       </button>
                     ))}
                   </div>
+                  {form.categories.includes('Other') && (
+                    <div className="mt-3">
+                      <Input
+                        label="Specify your category"
+                        type="text"
+                        placeholder="e.g. AI Services, Interior Design"
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -285,13 +357,39 @@ export default function CreateProfile() {
                   </div>
                 </div>
 
-                <Input
-                  label="Location"
-                  placeholder="e.g. Hyderabad, India"
-                  value={form.location}
-                  onChange={(e) => update('location', e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Location <span className="text-danger">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Hyderabad, India"
+                    value={form.location}
+                    onChange={(e) => handleLocationInput(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowLocationDropdown(false), 200)}
+                    onFocus={(e) => {
+                      const filtered = e.target.value.trim()
+                        ? LOCATIONS.filter((l) => l.toLowerCase().includes(e.target.value.toLowerCase()))
+                        : [];
+                      setLocationFiltered(filtered);
+                      if (filtered.length > 0) setShowLocationDropdown(true);
+                    }}
+                    required
+                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                  />
+                  {showLocationDropdown && (
+                    <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
+                      {locationFiltered.map((loc) => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onMouseDown={() => { update('location', loc); setShowLocationDropdown(false); }}
+                          className="w-full text-left px-4 py-2 text-sm text-charcoal hover:bg-primary-light transition-colors cursor-pointer"
+                        >
+                          {loc}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
@@ -415,6 +513,65 @@ export default function CreateProfile() {
                     value={form.website}
                     onChange={(e) => update('website', e.target.value)}
                   />
+                  <div>
+                    <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
+                      Referred By <span className="text-muted font-normal">(member who referred you)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Search by name or phone"
+                      value={referredByStatus === 'found' ? referredByName : form.referredByPhone}
+                      onChange={(e) => {
+                        update('referredByPhone', e.target.value);
+                        setReferredByStatus('idle');
+                        setReferredByName('');
+                      }}
+                      onBlur={async (e) => {
+                        const val = normalizePhone(e.target.value);
+                        if (val !== e.target.value) update('referredByPhone', val);
+                        if (!val.trim()) { setReferredByStatus('idle'); setReferredByName(''); return; }
+                        const profile = await getProfileByPhone(val);
+                        if (profile) {
+                          setReferredByName(`${profile.ownerName} ${profile.ownerSurname}`.trim() || profile.companyName);
+                          setReferredByStatus('found');
+                        } else {
+                          setReferredByName('');
+                          setReferredByStatus('not_found');
+                        }
+                      }}
+                      list="referred-list"
+                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    />
+                    <datalist id="referred-list">
+                      {referralOptions.map((r) => (
+                        <option key={r.phone} value={`${r.name} (${r.phone})`} />
+                      ))}
+                    </datalist>
+                    {referralOptions.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {referralOptions.map((r) => (
+                          <button
+                            key={r.phone}
+                            type="button"
+                            onClick={() => selectReferral(r.name, r.phone)}
+                            className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors cursor-pointer ${
+                              form.referredByPhone === r.phone
+                                ? 'bg-primary-light text-primary border-primary'
+                                : 'bg-canvas text-muted border-border hover:border-primary hover:text-primary'
+                            }`}
+                          >
+                            {r.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {referredByStatus === 'found' && (
+                      <p className="text-xs text-success mt-1">Referred by: <span className="font-medium">{referredByName}</span></p>
+                    )}
+                    {referredByStatus === 'not_found' && (
+                      <p className="text-xs text-danger mt-1">No member found with this phone number. Type the phone number of the person who referred you.</p>
+                    )}
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
                       Company Description

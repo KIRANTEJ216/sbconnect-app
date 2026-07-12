@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation } from '../lib/firestore';
+import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
 import { isAdmin, isSuperAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
-import { replaceProfilePhoto, uploadCatalogFiles } from '../lib/storage';
+import { replaceProfilePhoto, uploadCatalogFiles, downloadCatalogFile } from '../lib/storage';
 import { formatDate } from '../lib/format';
 import type { BusinessProfile, UserProfile } from '../types';
-import { INDUSTRIES, COMPANY_SIZES } from '../types';
+import { INDUSTRIES, COMPANY_SIZES, LOCATIONS } from '../types';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -62,12 +62,27 @@ export default function Profile() {
     contactEmail: '',
     website: '',
     description: '',
+    referredByPhone: '',
   });
 
   const [keywordInput, setKeywordInput] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
+  const [referredByName, setReferredByName] = useState('');
+  const [referredByStatus, setReferredByStatus] = useState<'idle' | 'found' | 'not_found'>('idle');
+  const [referralOptions, setReferralOptions] = useState<{ name: string; phone: string }[]>([]);
+  const [locationFiltered, setLocationFiltered] = useState<string[]>([]);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+
+  const handleLocationInput = (value: string) => {
+    update('location', value);
+    const filtered = value.trim()
+      ? LOCATIONS.filter((l) => l.toLowerCase().includes(value.toLowerCase()))
+      : [];
+    setLocationFiltered(filtered);
+    setShowLocationDropdown(filtered.length > 0);
+  };
 
   const [editingMembership, setEditingMembership] = useState(false);
-  const [membershipStatus, setMembershipStatus] = useState<'active' | 'inactive' | 'expired'>('inactive');
   const [editPaidDate, setEditPaidDate] = useState('');
 
   useEffect(() => {
@@ -85,7 +100,7 @@ export default function Profile() {
             updateBusinessProfile(bp.uid, { membershipExpiry: computedExpiry }).catch(console.error);
           }
         }
-        if (bp.membershipStatus === 'active' && Date.now() > bp.membershipExpiry) {
+        if (bp.membershipStatus === 'active' && bp.membershipExpiry > 0 && Date.now() > bp.membershipExpiry) {
           bp.membershipStatus = 'expired';
           updateBusinessProfile(bp.uid, { membershipStatus: 'expired' }).catch(console.error);
         }
@@ -95,6 +110,12 @@ export default function Profile() {
       setLoading(false);
     }
     load();
+    getProfilesForReferral(5).then((profiles) => {
+      setReferralOptions(profiles.map((p) => ({
+        name: `${p.ownerName} ${p.ownerSurname}`.trim() || p.companyName,
+        phone: p.phone,
+      })));
+    }).catch(() => {});
   }, [id]);
 
   const handleChat = async () => {
@@ -111,24 +132,39 @@ export default function Profile() {
       setError('This profile is locked. Maximum 3 edits reached.');
       return;
     }
+    const currentCategories = [...(profile.categories ?? [])];
+    const customCats = currentCategories.filter((c) => !INDUSTRIES.includes(c as any));
+    const presetCats = currentCategories.filter((c) => INDUSTRIES.includes(c as any));
+    if (customCats.length > 0) {
+      presetCats.push('Other');
+      setCustomCategory(customCats[0]);
+    } else {
+      setCustomCategory('');
+    }
     setForm({
       ownerName: profile.ownerName || '',
       ownerSurname: profile.ownerSurname || '',
       phone: profile.phone || '',
       companyName: profile.companyName,
-      categories: [...(profile.categories ?? [])],
+      categories: presetCats,
       companySize: profile.companySize,
       location: profile.location,
       keywords: [...(profile.keywords ?? [])],
       contactEmail: profile.contactEmail,
       website: profile.website,
       description: profile.description,
+      referredByPhone: profile.referredByPhone || '',
     });
+    setReferredByName(profile.referredByName || '');
+    setReferredByStatus(profile.referredByPhone ? 'found' : 'idle');
     setPhotoPreview(profile.photoURL || '');
     setEditing(true);
   };
 
   const toggleCategory = (cat: string) => {
+    if (cat === 'Other' && form.categories.includes('Other')) {
+      setCustomCategory('');
+    }
     setForm((f) => {
       const cats = f.categories ?? [];
       return {
@@ -200,6 +236,10 @@ export default function Profile() {
       setError('Location is required.');
       return;
     }
+    if (form.location.trim() && !LOCATIONS.includes(form.location.trim() as any)) {
+      setError('Please select a valid location from the suggestions.');
+      return;
+    }
     if (!form.contactEmail.trim()) {
       setError('Contact email is required.');
       return;
@@ -208,6 +248,17 @@ export default function Profile() {
       setError('Company description is required.');
       return;
     }
+    const normalizedPhone = normalizePhone(form.phone);
+    if (normalizedPhone !== form.phone) setForm((f) => ({ ...f, phone: normalizedPhone }));
+    const cleanEmail = form.contactEmail.toLowerCase().trim();
+
+    const [existingEmail, existingPhone] = await Promise.all([
+      getProfileByContactEmail(cleanEmail),
+      getProfileByPhone(normalizedPhone),
+    ]);
+    if (existingEmail && existingEmail.uid !== user.uid) { setError('This email is already registered to another business.'); setSaving(false); return; }
+    if (existingPhone && existingPhone.uid !== user.uid) { setError('This phone number is already registered to another business.'); setSaving(false); return; }
+
     setSaving(true);
     try {
       let photoURL = profile.photoURL || '';
@@ -222,12 +273,16 @@ export default function Profile() {
         catalogURLs = await uploadCatalogFiles(user.uid, catalogFiles);
       }
 
+      const finalCategories = form.categories
+        .filter((c) => c !== 'Other')
+        .concat(customCategory.trim() ? [customCategory.trim()] : []);
+
       await updateBusinessProfile(user.uid, {
         ownerName: form.ownerName,
         ownerSurname: form.ownerSurname,
         phone: form.phone,
         companyName: form.companyName,
-        categories: form.categories,
+        categories: finalCategories,
         companySize: form.companySize,
         location: form.location,
         keywords: form.keywords,
@@ -238,6 +293,8 @@ export default function Profile() {
         catalogURLs,
         editCount: newEditCount,
         locked,
+        referredByPhone: form.referredByPhone,
+        referredByName,
       });
 
       setProfile({
@@ -246,7 +303,7 @@ export default function Profile() {
         ownerSurname: form.ownerSurname,
         phone: form.phone,
         companyName: form.companyName,
-        categories: form.categories,
+        categories: finalCategories,
         companySize: form.companySize,
         location: form.location,
         keywords: form.keywords,
@@ -271,7 +328,6 @@ export default function Profile() {
   };
 
   const handleEditMembership = () => {
-    setMembershipStatus(profile!.membershipStatus);
     setEditPaidDate(profile!.paidDate > 0 ? new Date(profile!.paidDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
     setEditingMembership(true);
   };
@@ -283,13 +339,14 @@ export default function Profile() {
     try {
       const paidTimestamp = new Date(editPaidDate).getTime();
       const expiryTimestamp = paidTimestamp + 364 * 24 * 60 * 60 * 1000;
+      const derivedStatus = Date.now() >= expiryTimestamp ? 'expired' : 'active' as const;
       await updateBusinessProfile(user.uid, {
-        membershipStatus,
+        membershipStatus: derivedStatus,
         paidDate: paidTimestamp,
         membershipDate: paidTimestamp,
         membershipExpiry: expiryTimestamp,
       });
-      setProfile({ ...profile, membershipStatus, paidDate: paidTimestamp, membershipDate: paidTimestamp, membershipExpiry: expiryTimestamp });
+      setProfile({ ...profile, membershipStatus: derivedStatus, paidDate: paidTimestamp, membershipDate: paidTimestamp, membershipExpiry: expiryTimestamp });
       setEditingMembership(false);
     } catch (err) {
       console.error('Failed to update membership:', err);
@@ -298,6 +355,14 @@ export default function Profile() {
       setSaving(false);
     }
   };
+
+  const selectReferral = (name: string, phone: string) => {
+    update('referredByPhone', phone);
+    setReferredByName(name);
+    setReferredByStatus('found');
+  };
+
+  const normalizePhone = (val: string) => val.replace(/\D/g, '').slice(0, 10);
 
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -418,13 +483,21 @@ export default function Profile() {
                     onChange={(e) => update('ownerSurname', e.target.value)}
                   />
                 </div>
-                <Input
-                  label="Phone Number"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => update('phone', e.target.value)}
-                  required
-                />
+                <div>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Phone Number <span className="text-danger">*</span></label>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-2.5 rounded-[0.75rem] border border-border bg-muted-bg text-sm text-charcoal font-medium shrink-0">+91</span>
+                    <input
+                      type="tel"
+                      placeholder="9876543210"
+                      value={form.phone}
+                      onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      onBlur={(e) => { const n = normalizePhone(e.target.value); if (n !== e.target.value) update('phone', n); }}
+                      required
+                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
                 <Input
                   label="Company Name"
                   value={form.companyName}
@@ -450,6 +523,17 @@ export default function Profile() {
                       </button>
                     ))}
                   </div>
+                  {form.categories.includes('Other') && (
+                    <div className="mt-3">
+                      <Input
+                        label="Specify your category"
+                        type="text"
+                        placeholder="e.g. AI Services, Interior Design"
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -472,12 +556,39 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <Input
-                  label="Location"
-                  value={form.location}
-                  onChange={(e) => update('location', e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Location <span className="text-danger">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Hyderabad, India"
+                    value={form.location}
+                    onChange={(e) => handleLocationInput(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowLocationDropdown(false), 200)}
+                    onFocus={(e) => {
+                      const filtered = e.target.value.trim()
+                        ? LOCATIONS.filter((l) => l.toLowerCase().includes(e.target.value.toLowerCase()))
+                        : [];
+                      setLocationFiltered(filtered);
+                      if (filtered.length > 0) setShowLocationDropdown(true);
+                    }}
+                    required
+                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                  />
+                  {showLocationDropdown && (
+                    <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
+                      {locationFiltered.map((loc) => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onMouseDown={() => { update('location', loc); setShowLocationDropdown(false); }}
+                          className="w-full text-left px-4 py-2 text-sm text-charcoal hover:bg-primary-light transition-colors cursor-pointer"
+                        >
+                          {loc}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
@@ -573,6 +684,65 @@ export default function Profile() {
                 />
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
+                    Referred By <span className="text-muted font-normal">(member who referred you)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Search by name or phone"
+                    value={referredByStatus === 'found' ? referredByName : form.referredByPhone}
+                    onChange={(e) => {
+                      update('referredByPhone', e.target.value);
+                      setReferredByStatus('idle');
+                      setReferredByName('');
+                    }}
+                    onBlur={async (e) => {
+                      const val = normalizePhone(e.target.value);
+                      if (val !== e.target.value) update('referredByPhone', val);
+                      if (!val.trim()) { setReferredByStatus('idle'); setReferredByName(''); return; }
+                      const profile = await getProfileByPhone(val);
+                      if (profile) {
+                        setReferredByName(`${profile.ownerName} ${profile.ownerSurname}`.trim() || profile.companyName);
+                        setReferredByStatus('found');
+                      } else {
+                        setReferredByName('');
+                        setReferredByStatus('not_found');
+                      }
+                    }}
+                    list="referred-list"
+                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                  />
+                  <datalist id="referred-list">
+                    {referralOptions.map((r) => (
+                      <option key={r.phone} value={`${r.name} (${r.phone})`} />
+                    ))}
+                  </datalist>
+                  {referralOptions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {referralOptions.map((r) => (
+                        <button
+                          key={r.phone}
+                          type="button"
+                          onClick={() => selectReferral(r.name, r.phone)}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors cursor-pointer ${
+                            form.referredByPhone === r.phone
+                              ? 'bg-primary-light text-primary border-primary'
+                              : 'bg-canvas text-muted border-border hover:border-primary hover:text-primary'
+                          }`}
+                        >
+                          {r.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {referredByStatus === 'found' && (
+                    <p className="text-xs text-success mt-1">Referred by: <span className="font-medium">{referredByName}</span></p>
+                  )}
+                  {referredByStatus === 'not_found' && (
+                    <p className="text-xs text-danger mt-1">No member found with this phone number. Type the phone number of the person who referred you.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">
                     Company Description
                     <span className="text-muted font-normal"> ({form.description.length}/500)</span>
                   </label>
@@ -627,6 +797,9 @@ export default function Profile() {
                         <span className="text-sm text-muted font-mono tracking-tight">{profile.companySize} employees</span>
                       </div>
                       <p className="text-steel mt-1.5">{profile.location}</p>
+                      {profile.referredByName && (
+                        <p className="text-xs text-muted mt-2">Referred by <span className="font-medium text-charcoal">{profile.referredByName}</span></p>
+                      )}
                     </div>
                     <span className="text-xs text-muted font-mono">
                       {userProfile?.onlineStatus === 'online' ? 'Online' : 'Offline'}
@@ -671,7 +844,7 @@ export default function Profile() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                         </svg>
-                        <span className="text-steel">{profile.phone}</span>
+                        <span className="text-steel">+91 {profile.phone}</span>
                       </div>
                     )}
                     {profile.website && (
@@ -699,17 +872,17 @@ export default function Profile() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {(profile.catalogURLs ?? []).map((url, i) => (
                       url.endsWith('.pdf') ? (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-canvas border border-border hover:bg-primary-light transition-colors">
+                        <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-canvas border border-border hover:bg-primary-light transition-colors cursor-pointer">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                           </svg>
                           <span className="text-[11px] text-muted font-mono">PDF {i + 1}</span>
-                        </a>
+                        </button>
                       ) : (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity">
+                        <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="block aspect-square rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity cursor-pointer">
                           <img src={url} alt={`Catalog ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
-                        </a>
+                        </button>
                       )
                     ))}
                   </div>
@@ -729,18 +902,11 @@ export default function Profile() {
                 <button onClick={() => setEditingMembership(false)} className="text-sm text-muted hover:text-charcoal transition-colors cursor-pointer">Cancel</button>
               </div>
               <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-muted font-mono tracking-tight uppercase block mb-1.5">Status</label>
-                  <select
-                    value={membershipStatus}
-                    onChange={(e) => setMembershipStatus(e.target.value as 'active' | 'inactive' | 'expired')}
-                    className="w-full px-3 py-2 rounded-input border border-border bg-canvas text-charcoal text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="expired">Expired</option>
-                  </select>
-                </div>
+                {!isSuperAdminUser && (
+                  <p className="text-xs text-warning font-medium bg-warning/10 px-3 py-2 rounded-lg">
+                    This action cannot be changed once submitted.
+                  </p>
+                )}
                 <Input label="Date Paid" type="date" value={editPaidDate} onChange={(e) => setEditPaidDate(e.target.value)} />
                 {editPaidDate && (
                   <p className="text-[11px] text-steel">Expires: {new Date(new Date(editPaidDate).getTime() + 364 * 86400000).toLocaleDateString('en-IN')}</p>
@@ -756,9 +922,9 @@ export default function Profile() {
             <CardContent className="p-4 sm:p-6 lg:p-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-charcoal tracking-tight">Membership</h3>
-                {canEdit && (
+                {(isSuperAdminUser || (isOwnProfile && !profile.paidDate)) && (
                   <button onClick={handleEditMembership} className="text-sm text-primary hover:text-primary-hover transition-colors font-medium cursor-pointer">
-                    Edit
+                    Set Membership
                   </button>
                 )}
               </div>
@@ -775,19 +941,19 @@ export default function Profile() {
                   if (profile.membershipStatus === 'active' && days <= 30) {
                     return <p className="text-sm text-warning font-medium">{days <= 0 ? 'Expiring today' : `${days} days remaining`}</p>;
                   }
-                  if (profile.membershipStatus === 'expired' || days < 0) {
+                  if (profile.membershipStatus === 'expired') {
                     return <p className="text-sm text-danger font-medium">Expired {Math.abs(days)} days ago</p>;
                   }
                   return null;
                 })()}
                 <div className="text-sm">
-                  <span className="text-muted font-mono tracking-tight">Member since </span>
-                  <span className="text-charcoal font-medium">{formatDate(profile.membershipDate > 0 ? profile.membershipDate : profile.createdAt)}</span>
+                  {profile.membershipDate > 0 && <><span className="text-muted font-mono tracking-tight">Member since </span>
+                  <span className="text-charcoal font-medium">{formatDate(profile.membershipDate)}</span></>}
                 </div>
-                <div className="text-sm">
+                {profile.membershipExpiry > 0 && <div className="text-sm">
                   <span className="text-muted font-mono tracking-tight">Expires </span>
                   <span className="text-charcoal font-medium">{formatDate(profile.membershipExpiry)}</span>
-                </div>
+                </div>}
                 {profile.membershipExpiry > 0 && (
                   <div className="mt-2">
                     <MembershipCountdown membershipExpiry={profile.membershipExpiry} />

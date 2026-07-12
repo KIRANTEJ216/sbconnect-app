@@ -24,6 +24,7 @@ export interface BusinessProfile {
   uid: string;
   ownerName: string;
   ownerSurname: string;
+  countryCode: string;
   phone: string;
   companyName: string;
   categories: string[];
@@ -45,6 +46,8 @@ export interface BusinessProfile {
   editCount: number;
   locked: boolean;
   lastRequestsViewedAt: number;
+  referredByPhone: string;
+  referredByName: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -156,6 +159,7 @@ export interface MeetingRSVP {
   displayName: string;
   companyName: string;
   response: 'yes' | 'no' | 'maybe';
+  guestCount: number;
   respondedAt: number;
 }
 
@@ -200,6 +204,109 @@ export interface IssueReport {
   replies: IssueReply[];
   createdAt: number;
 }
+
+export const LOCATIONS = [
+  'Mumbai, Maharashtra',
+  'Delhi, Delhi',
+  'Bangalore, Karnataka',
+  'Hyderabad, Telangana',
+  'Chennai, Tamil Nadu',
+  'Kolkata, West Bengal',
+  'Pune, Maharashtra',
+  'Ahmedabad, Gujarat',
+  'Jaipur, Rajasthan',
+  'Surat, Gujarat',
+  'Lucknow, Uttar Pradesh',
+  'Kanpur, Uttar Pradesh',
+  'Nagpur, Maharashtra',
+  'Indore, Madhya Pradesh',
+  'Thane, Maharashtra',
+  'Bhopal, Madhya Pradesh',
+  'Visakhapatnam, Andhra Pradesh',
+  'Vadodara, Gujarat',
+  'Patna, Bihar',
+  'Ludhiana, Punjab',
+  'Agra, Uttar Pradesh',
+  'Nashik, Maharashtra',
+  'Faridabad, Haryana',
+  'Meerut, Uttar Pradesh',
+  'Rajkot, Gujarat',
+  'Varanasi, Uttar Pradesh',
+  'Srinagar, Jammu & Kashmir',
+  'Aurangabad, Maharashtra',
+  'Dhanbad, Jharkhand',
+  'Amritsar, Punjab',
+  'Navi Mumbai, Maharashtra',
+  'Allahabad, Uttar Pradesh',
+  'Ranchi, Jharkhand',
+  'Howrah, West Bengal',
+  'Coimbatore, Tamil Nadu',
+  'Jabalpur, Madhya Pradesh',
+  'Gwalior, Madhya Pradesh',
+  'Vijayawada, Andhra Pradesh',
+  'Jodhpur, Rajasthan',
+  'Madurai, Tamil Nadu',
+  'Raipur, Chhattisgarh',
+  'Kota, Rajasthan',
+  'Chandigarh, Chandigarh',
+  'Guwahati, Assam',
+  'Solapur, Maharashtra',
+  'Hubli, Karnataka',
+  'Mysore, Karnataka',
+  'Tiruchirappalli, Tamil Nadu',
+  'Bareilly, Uttar Pradesh',
+  'Aligarh, Uttar Pradesh',
+  'Tiruppur, Tamil Nadu',
+  'Gurugram, Haryana',
+  'Moradabad, Uttar Pradesh',
+  'Jalandhar, Punjab',
+  'Bhubaneswar, Odisha',
+  'Salem, Tamil Nadu',
+  'Warangal, Telangana',
+  'Kochi, Kerala',
+  'Bikaner, Rajasthan',
+  'Udaipur, Rajasthan',
+  'Kolhapur, Maharashtra',
+  'Ajmer, Rajasthan',
+  'Jamnagar, Gujarat',
+  'Belgaum, Karnataka',
+  'Jhansi, Uttar Pradesh',
+  'Guntur, Andhra Pradesh',
+  'Thiruvananthapuram, Kerala',
+  'Ujjain, Madhya Pradesh',
+  'Kozhikode, Kerala',
+  'Dehradun, Uttarakhand',
+  'Durgapur, West Bengal',
+  'Asansol, West Bengal',
+  'Kollam, Kerala',
+  'Nellore, Andhra Pradesh',
+  'Mangalore, Karnataka',
+  'Panaji, Goa',
+  'Shimla, Himachal Pradesh',
+  'Haridwar, Uttarakhand',
+  'Rishikesh, Uttarakhand',
+  'Siliguri, West Bengal',
+  'Pondicherry, Puducherry',
+  'Imphal, Manipur',
+  'Shillong, Meghalaya',
+  'Agartala, Tripura',
+  'Aizawl, Mizoram',
+  'Kohima, Nagaland',
+  'Gangtok, Sikkim',
+  'Itanagar, Arunachal Pradesh',
+  'Noida, Uttar Pradesh',
+  'Ghaziabad, Uttar Pradesh',
+  'Vellore, Tamil Nadu',
+  'Tirunelveli, Tamil Nadu',
+  'Cuttack, Odisha',
+  'Bhavnagar, Gujarat',
+  'Rohtak, Haryana',
+  'Mathura, Uttar Pradesh',
+  'Patiala, Punjab',
+  'Saharanpur, Uttar Pradesh',
+  'Muzaffarpur, Bihar',
+  'New Delhi, Delhi',
+] as const;
 
 export const INDUSTRIES = [
   'Technology',
