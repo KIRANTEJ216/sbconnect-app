@@ -64,7 +64,7 @@ export default function CreateRequest() {
               label="Request Title"
               placeholder="What are you looking for?"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value.replace(/[^a-zA-Z0-9\s.,!?\-']/g, ''))}
               required
             />
 
@@ -103,7 +103,7 @@ export default function CreateRequest() {
                 maxLength={1000}
                 placeholder="Describe what you're looking for..."
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value.replace(/[^a-zA-Z0-9\s.,!?\-']/g, ''))}
               />
             </div>
 
@@ -113,7 +113,7 @@ export default function CreateRequest() {
                 type="text"
                 placeholder="e.g. ₹ 50,000"
                 value={budget}
-                onChange={(e) => setBudget(e.target.value)}
+                onChange={(e) => setBudget(e.target.value.replace(/\D/g, ''))}
               />
               <Input
                 label="Deadline"

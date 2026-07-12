@@ -287,7 +287,9 @@ export default function Profile() {
         location: form.location,
         keywords: form.keywords,
         contactEmail: form.contactEmail,
-        website: form.website,
+        website: form.website && !form.website.startsWith('http://') && !form.website.startsWith('https://')
+          ? `https://${form.website}`
+          : form.website,
         description: form.description,
         photoURL,
         catalogURLs,
@@ -308,7 +310,9 @@ export default function Profile() {
         location: form.location,
         keywords: form.keywords,
         contactEmail: form.contactEmail,
-        website: form.website,
+        website: form.website && !form.website.startsWith('http://') && !form.website.startsWith('https://')
+          ? `https://${form.website}`
+          : form.website,
         description: form.description,
         photoURL,
         catalogURLs,

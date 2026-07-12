@@ -204,7 +204,9 @@ export default function CreateProfile() {
         companySize: form.companySize,
         location: form.location,
         contactEmail: form.contactEmail,
-        website: form.website,
+        website: form.website && !form.website.startsWith('http://') && !form.website.startsWith('https://')
+          ? `https://${form.website}`
+          : form.website,
         description: form.description,
         keywords: form.keywords,
       });

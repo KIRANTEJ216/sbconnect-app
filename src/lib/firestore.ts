@@ -1,6 +1,6 @@
 import {
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  collection, query, where, orderBy, limit, increment, arrayUnion,
+  collection, query, where, orderBy, limit, arrayUnion,
   addDoc, onSnapshot, runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -221,32 +221,25 @@ export async function getUserRequests(uid: string): Promise<Request[]> {
 
 export async function expressInterest(requestId: string, uid: string, companyName: string, phone: string, message: string) {
   const reqRef = doc(db, 'requests', requestId);
-  const result = await runTransaction(db, async (tx) => {
-    const snap = await tx.get(reqRef);
-    if (!snap.exists()) throw new Error('Request not found');
-    const data = snap.data();
-    if ((data.interestedUids ?? []).includes(uid)) {
-      throw new Error('You have already pitched for this request');
-    }
-    const requestOwnerUid = data.uid;
-    const requestTitle = data.title || '';
-    tx.update(reqRef, {
-      interestCount: increment(1),
-      interestedUids: arrayUnion(uid),
-    });
-    const ref = doc(collection(db, 'requests', requestId, 'interests'));
-    tx.set(ref, {
-      requestId,
-      uid,
-      companyName,
-      phone,
-      message,
-      createdAt: Date.now(),
-    });
-    return { refId: ref.id, requestOwnerUid, requestTitle };
+  const snap = await getDoc(reqRef);
+  if (!snap.exists()) throw new Error('Request not found');
+  const data = snap.data();
+  if ((data.interestedUids ?? []).includes(uid)) {
+    throw new Error('You have already pitched for this request');
+  }
+  const requestOwnerUid = data.uid;
+  const requestTitle = data.title || '';
+  const ref = doc(collection(db, 'requests', requestId, 'interests'));
+  await setDoc(ref, {
+    requestId,
+    uid,
+    companyName,
+    phone,
+    message,
+    createdAt: Date.now(),
   });
-  sendUserNotification(result.requestOwnerUid, 'admin_message', 'New Pitch', `${companyName} pitched for "${result.requestTitle}": ${message}`, requestId).catch(() => {});
-  return result.refId;
+  sendUserNotification(requestOwnerUid, 'admin_message', 'New Pitch', `${companyName} pitched for "${requestTitle}": ${message}`, requestId).catch(() => {});
+  return ref.id;
 }
 
 export async function getInterests(requestId: string): Promise<Interest[]> {
@@ -263,7 +256,12 @@ export async function awardDeal(
   receiverCompanyName: string,
   amount: string,
 ) {
-  await requireSuperAdmin();
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  if (user.uid !== giverUid) {
+    await requireSuperAdmin();
+  }
   const dealRef = await addDoc(collection(db, 'deals'), {
     requestId,
     requestTitle,
