@@ -510,7 +510,7 @@ export default function CreateProfile() {
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter phone number"
+                      placeholder="Search by Phone Number"
                       value={referredByStatus === 'found' ? referredByName : form.referredByPhone}
                       onChange={(e) => {
                         update('referredByPhone', e.target.value);
