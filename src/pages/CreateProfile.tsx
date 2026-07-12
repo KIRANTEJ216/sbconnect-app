@@ -77,8 +77,9 @@ export default function CreateProfile() {
     if (user?.email) {
       setForm((f) => ({ ...f, contactEmail: user.email! }));
     }
-    if (profile?.displayName) {
-      setForm((f) => ({ ...f, ownerName: profile.displayName!, ownerSurname: '' }));
+    if (profile?.surname && profile?.displayName) {
+      const firstName = profile.displayName.split(' ')[0];
+      setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname }));
     }
   }, [user, profile]);
 
@@ -258,12 +259,20 @@ export default function CreateProfile() {
           <Card>
             <CardContent className="p-5 sm:p-8 lg:p-10">
               <form onSubmit={handleSubmit} className="space-y-6">
-                <Input
-                  label="Full Name"
-                  placeholder="e.g. Ravi Sharma"
-                  value={form.ownerName}
-                  onChange={(e) => update('ownerName', e.target.value)}
-                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Full Name"
+                    placeholder="e.g. Ravi"
+                    value={form.ownerName}
+                    onChange={(e) => update('ownerName', e.target.value)}
+                  />
+                  <Input
+                    label="Surname"
+                    placeholder="e.g. Sharma"
+                    value={form.ownerSurname}
+                    onChange={(e) => update('ownerSurname', e.target.value)}
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Phone Number <span className="text-danger">*</span></label>
                   <div className="flex items-center gap-2">
