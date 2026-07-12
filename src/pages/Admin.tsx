@@ -393,6 +393,7 @@ export default function Admin() {
     { id: 'requests', label: 'Requests', icon: '📋' },
     { id: 'reports', label: 'Reports', icon: '📊' },
     { id: 'security', label: 'Security', icon: '🔑' },
+    { id: 'referrals', label: 'Referrals', icon: '📢' },
   ] as const;
 
   return (
@@ -1453,6 +1454,76 @@ export default function Admin() {
               </CardContent>
             </Card>
           )}
+        </div>
+      )}
+
+      {/* ── Referrals Tab ── */}
+      {activeTab === 'referrals' && (
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-charcoal">Referral Leaderboard</h2>
+                <span className="text-xs text-muted bg-canvas px-2.5 py-1 rounded-lg">
+                  {profiles.filter((p) => p.referredByPhone).length} referred
+                </span>
+              </div>
+              {profilesLoading ? (
+                <p className="text-sm text-muted text-center py-8">Loading...</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">#</th>
+                        <th className="text-left py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">Referrer</th>
+                        <th className="text-left py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">Phone</th>
+                        <th className="text-right py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">Referrals</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const grouped = new Map<string, { count: number }>();
+                        const referrerMap = new Map<string, BusinessProfile | undefined>();
+                        for (const p of profiles) {
+                          const phone = p.referredByPhone;
+                          if (!phone) continue;
+                          if (!referrerMap.has(phone)) {
+                            referrerMap.set(phone, profiles.find((bp) => bp.phone === phone));
+                          }
+                          grouped.set(phone, { count: (grouped.get(phone)?.count ?? 0) + 1 });
+                        }
+                        const entries = [...grouped.entries()].sort((a, b) => b[1].count - a[1].count);
+                        if (entries.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={4} className="text-center text-muted py-8">No referrals yet.</td>
+                            </tr>
+                          );
+                        }
+                        return entries.map(([phone, { count }], i) => {
+                          const referrer = referrerMap.get(phone);
+                          const name = referrer ? `${referrer.ownerName} ${referrer.ownerSurname}`.trim() : null;
+                          return (
+                            <tr key={phone} className="border-b border-border last:border-0 hover:bg-canvas/50 transition-colors">
+                              <td className="py-3 px-2 text-muted text-xs">{i + 1}</td>
+                              <td className="py-3 px-2 font-medium text-charcoal">
+                                {name || <span className="text-muted italic">No profile</span>}
+                              </td>
+                              <td className="py-3 px-2 text-muted font-mono text-xs">{phone}</td>
+                              <td className="py-3 px-2 text-right">
+                                <span className="inline-flex items-center justify-center min-w-[2rem] h-6 px-2 rounded-full bg-primary-light text-primary text-xs font-semibold">{count}</span>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
