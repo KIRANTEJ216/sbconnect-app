@@ -14,7 +14,7 @@ import { ProfileSuggestions } from '../components/profile/ProfileSuggestions';
 
 export default function CreateProfile() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -78,13 +78,17 @@ export default function CreateProfile() {
     if (user?.email) {
       setForm((f) => ({ ...f, contactEmail: user.email! }));
     }
+    if (profile?.surname && user?.displayName) {
+      const firstName = user.displayName.split(' ')[0];
+      setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname }));
+    }
     getProfilesForReferral(5).then((profiles) => {
       setReferralOptions(profiles.map((p) => ({
         name: `${p.ownerName} ${p.ownerSurname}`.trim() || p.companyName,
         phone: p.phone,
       })));
     }).catch(() => {});
-  }, [user]);
+  }, [user, profile]);
 
   const selectReferral = (name: string, phone: string) => {
     update('referredByPhone', phone);

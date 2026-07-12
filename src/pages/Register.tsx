@@ -11,7 +11,8 @@ import { AnimatedPage } from '../components/motion/AnimatedPage';
 export default function Register() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -38,7 +39,8 @@ export default function Register() {
 
     setLoading(true);
     try {
-      await signUp(email, password, displayName, phone);
+      const displayName = `${firstName} ${surname}`.trim();
+      await signUp(email, password, displayName, surname, phone);
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') setError('An account with this email already exists.');
       else setError('Failed to create account. Please try again.');
@@ -64,14 +66,24 @@ export default function Register() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <Input
-              label="Full Name"
-              type="text"
-              placeholder="Ravi Sharma"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              required
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="First Name"
+                type="text"
+                placeholder="Ravi"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+              <Input
+                label="Surname"
+                type="text"
+                placeholder="Sharma"
+                value={surname}
+                onChange={(e) => setSurname(e.target.value)}
+                required
+              />
+            </div>
             <Input
               label="Email"
               type="email"

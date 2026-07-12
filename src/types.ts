@@ -11,6 +11,7 @@ export interface UserProfile {
   email: string;
   phone: string;
   displayName: string;
+  surname: string;
   photoURL: string;
   onlineStatus: 'online' | 'offline' | 'away';
   role: 'user' | 'admin' | 'super_admin';

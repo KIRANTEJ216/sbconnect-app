@@ -20,6 +20,7 @@ export async function signUp(
   email: string,
   password: string,
   displayName: string,
+  surname: string,
   phone: string,
 ) {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
@@ -29,6 +30,7 @@ export async function signUp(
     email,
     phone,
     displayName,
+    surname,
     photoURL: '',
     onlineStatus: 'online',
     role: 'user',
