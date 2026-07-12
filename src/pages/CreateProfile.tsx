@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
+import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone } from '../lib/firestore';
 import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -42,7 +42,6 @@ export default function CreateProfile() {
   const [customCategory, setCustomCategory] = useState('');
   const [referredByName, setReferredByName] = useState('');
   const [referredByStatus, setReferredByStatus] = useState<'idle' | 'found' | 'not_found'>('idle');
-  const [referralOptions, setReferralOptions] = useState<{ name: string; phone: string }[]>([]);
   const [locationFiltered, setLocationFiltered] = useState<string[]>([]);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
 
@@ -82,19 +81,7 @@ export default function CreateProfile() {
       const firstName = profile.displayName.split(' ')[0];
       setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname }));
     }
-    getProfilesForReferral(5).then((profiles) => {
-      setReferralOptions(profiles.map((p) => ({
-        name: `${p.ownerName} ${p.ownerSurname}`.trim() || p.companyName,
-        phone: p.phone,
-      })));
-    }).catch(() => {});
   }, [user, profile]);
-
-  const selectReferral = (name: string, phone: string) => {
-    update('referredByPhone', phone);
-    setReferredByName(name);
-    setReferredByStatus('found');
-  };
 
   const normalizePhone = (val: string) => val.replace(/\D/g, '').slice(0, 10);
 
@@ -543,32 +530,8 @@ export default function CreateProfile() {
                           setReferredByStatus('not_found');
                         }
                       }}
-                      list="referred-list"
                       className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                     />
-                    <datalist id="referred-list">
-                      {referralOptions.map((r) => (
-                        <option key={r.phone} value={`${r.name} (${r.phone})`} />
-                      ))}
-                    </datalist>
-                    {referralOptions.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {referralOptions.map((r) => (
-                          <button
-                            key={r.phone}
-                            type="button"
-                            onClick={() => selectReferral(r.name, r.phone)}
-                            className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors cursor-pointer ${
-                              form.referredByPhone === r.phone
-                                ? 'bg-primary-light text-primary border-primary'
-                                : 'bg-canvas text-muted border-border hover:border-primary hover:text-primary'
-                            }`}
-                          >
-                            {r.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                     {referredByStatus === 'found' && (
                       <p className="text-xs text-success mt-1">Referred by: <span className="font-medium">{referredByName}</span></p>
                     )}
