@@ -271,3 +271,38 @@ Major robustness, security, and admin-control improvements across the applicatio
 | `src/pages/Admin.tsx` | Referred By column + guest count in meeting stats/RSVPs/CSV + headcount footer |
 | `src/components/DashboardUpdates.tsx` | Guest count dropdown with edit |
 | `docs/future-features/scrub-deletedata-for-prod-deply.md` | New: production data scrub guide |
+
+---
+
+### 2026-07-12 — Name Fields Merge, Login Cleanup, Referrals Leaderboard
+
+#### Register Form — Single "Full Name" Field
+- **`src/pages/Register.tsx`**: Replaced split "First Name" + "Surname" inputs with single "Full Name" field; stores as `displayName`, passes empty `surname` to `signUp()`
+
+#### CreateProfile Form — Single "Full Name" Field
+- **`src/pages/CreateProfile.tsx`**: Merged "Name" + "Surname" into single "Full Name" auto-populated from `profile.displayName`; `ownerSurname` saved as empty in new profiles. Removed from progress completion check and save logic.
+
+#### Login UI — Clean Label + Fixed Phone Resolution
+- **`src/pages/Login.tsx`**: Label changed from `"Email or Phone"` to `"Email"`, placeholder to `"Email address"`
+- **`src/lib/auth.ts`**: Fixed `resolvePhoneToEmail()` — normalizes input to digits-only, queries both raw-digits and `+91-{digits}` formats so phone login actually works with any stored format
+
+#### Referrals Leaderboard (Admin Panel)
+- **`src/pages/Admin.tsx`**: New "Referrals" tab in admin panel (visible to all admin/super_admin). Computes leaderboard from existing profiles data — groups by `referredByPhone`, looks up referrer's profile to show name/surname, sorts by count descending. No new Firestore queries needed.
+
+#### Referred By — Chips Removed, Phone-Only Lookup
+- **`src/pages/CreateProfile.tsx`**: Removed top-5 referral chips and `<datalist>` autocomplete. Referred By now works solely by typing a phone number — on blur, looks up via `getProfileByPhone()` and shows matched name. Placeholder: `"Search by Phone Number"`
+
+#### Files Changed
+
+| File | Change |
+|------|--------|
+| `src/types.ts` | No changes (backward compatible) |
+| `src/lib/auth.ts` | Fixed `resolvePhoneToEmail()` with digit normalization + multi-format fallback |
+| `src/pages/Register.tsx` | First Name + Surname → single Full Name; `-8 lines` |
+| `src/pages/CreateProfile.tsx` | Merged name fields, removed chips/datalist, phone-only lookup; `-6 lines` |
+| `src/pages/Login.tsx` | Label/placeholder cleanup |
+| `src/pages/Admin.tsx` | New Referrals leaderboard tab; `+71 lines` |
+
+---
+
+*Updated: 2026-07-12 21:00*
