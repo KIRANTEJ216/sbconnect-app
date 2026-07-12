@@ -43,7 +43,12 @@ export default function Login() {
       }
       await signIn(email, password);
       const u = auth.currentUser;
-      if (u) logLogin(u.uid, u.email || email, u.displayName || '').catch(() => {});
+      if (u) {
+        fetch('https://api.ipify.org?format=json')
+          .then((r) => r.json())
+          .then((d) => logLogin(u.uid, u.email || email, u.displayName || '', d.ip))
+          .catch(() => logLogin(u.uid, u.email || email, u.displayName || ''));
+      }
       navigate(redirectTo, { replace: true });
     } catch (err: any) {
       const code = err.code;
@@ -96,9 +101,9 @@ export default function Login() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <Input
-                  label="Email or Phone"
+                  label="Email"
                   type="text"
-                  placeholder="you@example.com"
+                  placeholder="Email address"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   required

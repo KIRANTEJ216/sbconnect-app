@@ -77,9 +77,8 @@ export default function CreateProfile() {
     if (user?.email) {
       setForm((f) => ({ ...f, contactEmail: user.email! }));
     }
-    if (profile?.surname && profile?.displayName) {
-      const firstName = profile.displayName.split(' ')[0];
-      setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname }));
+    if (profile?.displayName) {
+      setForm((f) => ({ ...f, ownerName: profile.displayName!, ownerSurname: '' }));
     }
   }, [user, profile]);
 
@@ -138,8 +137,7 @@ export default function CreateProfile() {
   };
 
   const fields = [
-    { key: 'ownerName', label: 'Name', weight: 5, filled: form.ownerName.trim().length > 0 },
-    { key: 'ownerSurname', label: 'Surname', weight: 5, filled: form.ownerSurname.trim().length > 0 },
+    { key: 'ownerName', label: 'Full Name', weight: 5, filled: form.ownerName.trim().length > 0 },
     { key: 'phone', label: 'Phone', weight: 10, filled: form.phone.trim().length > 0 },
     { key: 'companyName', label: 'Company Name', weight: 15, filled: form.companyName.trim().length > 0 },
     { key: 'categories', label: 'Categories', weight: 15, filled: form.categories.length > 0 },
@@ -213,7 +211,7 @@ export default function CreateProfile() {
       const updates: Record<string, unknown> = {};
       if (photoURL) updates.photoURL = photoURL;
       if (catalogURLs.length > 0) updates.catalogURLs = catalogURLs;
-      if (form.ownerSurname) updates.ownerSurname = form.ownerSurname;
+      updates.ownerSurname = form.ownerSurname;
       if (form.referredByPhone) updates.referredByPhone = form.referredByPhone;
       if (referredByName) updates.referredByName = referredByName;
       if (Object.keys(updates).length > 0) {
@@ -260,20 +258,12 @@ export default function CreateProfile() {
           <Card>
             <CardContent className="p-5 sm:p-8 lg:p-10">
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    label="Name"
-                    placeholder="e.g. Ravi"
-                    value={form.ownerName}
-                    onChange={(e) => update('ownerName', e.target.value)}
-                  />
-                  <Input
-                    label="Surname"
-                    placeholder="e.g. Sharma"
-                    value={form.ownerSurname}
-                    onChange={(e) => update('ownerSurname', e.target.value)}
-                  />
-                </div>
+                <Input
+                  label="Full Name"
+                  placeholder="e.g. Ravi Sharma"
+                  value={form.ownerName}
+                  onChange={(e) => update('ownerName', e.target.value)}
+                />
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Phone Number <span className="text-danger">*</span></label>
                   <div className="flex items-center gap-2">

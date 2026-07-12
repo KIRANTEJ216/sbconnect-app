@@ -57,10 +57,15 @@ export async function signOut() {
 }
 
 export async function resolvePhoneToEmail(phone: string): Promise<string | null> {
-  const q = query(collection(db, 'users'), where('phone', '==', phone));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  return snap.docs[0].data().email as string;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  const q1 = query(collection(db, 'users'), where('phone', '==', digits));
+  const snap1 = await getDocs(q1);
+  if (!snap1.empty) return snap1.docs[0].data().email as string;
+  const q2 = query(collection(db, 'users'), where('phone', '==', `+91-${digits}`));
+  const snap2 = await getDocs(q2);
+  if (!snap2.empty) return snap2.docs[0].data().email as string;
+  return null;
 }
 
 export async function setUserOnline(uid: string) {
