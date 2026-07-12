@@ -220,6 +220,11 @@ export async function getUserRequests(uid: string): Promise<Request[]> {
 // ─── Interest & Deals ───
 
 export async function expressInterest(requestId: string, uid: string, companyName: string, phone: string, message: string) {
+  const BLOCKED_WORDS = ['fuck', 'shit', 'ass', 'bastard', 'damn', 'bitch', 'crap', 'dick', 'piss', 'slut', 'whore', 'cock', 'cunt', 'douche'];
+  const lower = message.toLowerCase();
+  const hasProfanity = BLOCKED_WORDS.some((w) => new RegExp(`\\b${w}\\b`).test(lower));
+  if (hasProfanity) throw new Error('Please keep your message professional. Abusive language is not allowed.');
+
   const reqRef = doc(db, 'requests', requestId);
   const snap = await getDoc(reqRef);
   if (!snap.exists()) throw new Error('Request not found');

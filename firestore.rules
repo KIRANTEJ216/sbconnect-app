@@ -44,7 +44,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
 
       match /interests/{interest} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null && (request.auth.uid == get(/databases/$(database)/documents/requests/$(id)).data.uid || isSuperAdmin());
         allow create: if request.auth != null;
         allow update, delete: if isSuperAdmin();
       }
@@ -125,6 +125,11 @@ service cloud.firestore {
     match /config/{key} {
       allow read: if isAdminOrSuperAdmin();
       allow write: if isSuperAdmin();
+    }
+
+    // Health checks: super_admin only (triggered from Admin Reports tab)
+    match /_health/{docId} {
+      allow read, write, delete: if isSuperAdmin();
     }
   }
 }
