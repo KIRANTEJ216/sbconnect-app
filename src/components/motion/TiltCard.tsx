@@ -7,13 +7,15 @@ interface Props extends HTMLMotionProps<'div'> {
   className?: string;
 }
 
+const isHoverDevice = typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches;
+
 export const TiltCard = memo(function TiltCard({ children, className = '', ...props }: Props) {
   return (
     <motion.div
       className={`relative ${className}`}
-      whileHover={{ scale: 1.015 }}
+      whileHover={isHoverDevice ? { scale: 1.015 } : undefined}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      style={{ perspective: 1000, transformStyle: 'preserve-3d' }}
+      style={isHoverDevice ? { perspective: 1000, transformStyle: 'preserve-3d' } : undefined}
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;

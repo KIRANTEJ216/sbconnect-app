@@ -783,8 +783,8 @@ export default function Profile() {
                         )}
                         <div className={`w-2.5 h-2.5 rounded-full ${userProfile?.onlineStatus === 'online' ? 'bg-success' : 'bg-zinc-300'}`} />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-fluid-h1 font-bold text-charcoal tracking-tight">{profile.companyName}</h2>
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                        <h2 className="text-fluid-h1 font-bold text-charcoal tracking-tight break-words">{profile.companyName}</h2>
                         {profile.verified ? (
                           <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified</span>
                         ) : (
