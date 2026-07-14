@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkMembershipExpiry = exports.syncUserRole = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = void 0;
+exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const callable = __importStar(require("firebase-functions/v2/https"));
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -43,9 +43,102 @@ const resend_1 = require("resend");
 admin.initializeApp();
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
+const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
+const DRIP_SUBJECTS = {
+    90: 'SB Connect — Membership Renewal Reminder (3 Months)',
+    60: 'SB Connect — 2 Months Until Membership Expires',
+    30: 'SB Connect — 30 Days Until Membership Expires',
+    14: 'SB Connect — 2 Weeks Until Membership Expires',
+    7: 'SB Connect — 1 Week Until Membership Expires',
+    1: 'SB Connect — Last Day! Membership Expires Tomorrow',
+    0: 'SB Connect — Membership Expired',
+};
+function dripBody(companyName, daysUntilExpiry, paidDate) {
+    if (daysUntilExpiry > 0) {
+        return `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Membership Renewal Reminder</h2>
+        <p>Dear ${companyName},</p>
+        <p>Your SB Connect membership will expire in <strong>${daysUntilExpiry} days</strong>.</p>
+        ${daysUntilExpiry <= 30 ? '<p style="color: #d97706; font-weight: 600;">⚠️ Your membership is expiring soon. Please renew to avoid interruption.</p>' : ''}
+        <p>Log in to your dashboard to renew your membership and continue enjoying network benefits.</p>
+        <hr style="margin: 24px 0;" />
+        <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+      </div>
+    `;
+    }
+    return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Membership Expired</h2>
+      <p>Dear ${companyName},</p>
+      <p>Your SB Connect membership has expired.</p>
+      <p>Renew now to reactivate your profile and continue connecting with the network.</p>
+      <hr style="margin: 24px 0;" />
+      <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+    </div>
+  `;
+}
+function dripWelcomeBody(companyName, paidDate, expiry) {
+    const start = new Date(paidDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const end = new Date(expiry).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>🎉 Welcome to SB Connect!</h2>
+      <p>Dear ${companyName},</p>
+      <p>Your membership is now <strong style="color: #059669;">active</strong>.</p>
+      <p><strong>Member since:</strong> ${start}</p>
+      <p><strong>Valid until:</strong> ${end}</p>
+      <p>You now have access to:</p>
+      <ul>
+        <li>Business directory listing</li>
+        <li>Networking requests & pitches</li>
+        <li>Meeting RSVPs & attendance</li>
+        <li>Member leaderboard</li>
+      </ul>
+      <p>Log in to your dashboard to get started.</p>
+      <hr style="margin: 24px 0;" />
+      <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+    </div>
+  `;
+}
 function generateCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
+async function sendEmail(resend, to, subject, html) {
+    await resend.emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject,
+        html,
+    });
+}
+exports.sendWelcomeEmail = callable.onCall(async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+        throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
+    }
+    const profileDoc = await admin.firestore().collection('profiles').doc(uid).get();
+    if (!profileDoc.exists) {
+        throw new callable.HttpsError('not-found', 'Profile not found.');
+    }
+    const profile = profileDoc.data();
+    if (!profile.paidDate || profile.paidDate <= 0) {
+        throw new callable.HttpsError('failed-precondition', 'Membership not activated yet.');
+    }
+    if (!RESEND_API_KEY) {
+        throw new callable.HttpsError('internal', 'Email service not configured.');
+    }
+    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const expiry = profile.paidDate + 364 * 24 * 60 * 60 * 1000;
+    try {
+        await sendEmail(resend, profile.contactEmail, 'Welcome to SB Connect!', dripWelcomeBody(profile.companyName, profile.paidDate, expiry));
+        return { success: true, message: 'Welcome email sent.' };
+    }
+    catch (err) {
+        functions.logger.error('Failed to send welcome email:', err);
+        throw new callable.HttpsError('internal', 'Failed to send welcome email.');
+    }
+});
 exports.sendAdminCode = callable.onCall(async (request) => {
     const uid = request.auth?.uid;
     const email = request.auth?.token?.email;
@@ -138,6 +231,34 @@ exports.syncUserRole = (0, firestore_1.onDocumentWritten)('users/{uid}', async (
     await admin.auth().setCustomUserClaims(uid, { role });
     functions.logger.info(`Synced role "${role}" for user ${uid}`);
 });
+exports.onMembershipActivated = (0, firestore_1.onDocumentWritten)('profiles/{uid}', async (event) => {
+    const change = event.data;
+    if (!change)
+        return;
+    const before = change.before.data();
+    const after = change.after.data();
+    if (!after)
+        return;
+    // Check if paidDate was newly set (was 0 or undefined, now has a value)
+    const beforePaid = before?.paidDate ?? 0;
+    const afterPaid = after.paidDate ?? 0;
+    if (beforePaid > 0 && afterPaid > 0)
+        return; // Already had paidDate, not a new activation
+    if (afterPaid === 0)
+        return; // Still no paidDate
+    const profile = after;
+    if (!profile.contactEmail || !RESEND_API_KEY)
+        return;
+    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const expiry = afterPaid + 364 * 24 * 60 * 60 * 1000;
+    try {
+        await sendEmail(resend, profile.contactEmail, 'Welcome to SB Connect!', dripWelcomeBody(profile.companyName, afterPaid, expiry));
+        functions.logger.info(`Welcome email sent to ${profile.contactEmail}`);
+    }
+    catch (err) {
+        functions.logger.error('Failed to send welcome email:', err);
+    }
+});
 exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Kolkata' }, async () => {
     if (!RESEND_API_KEY) {
         functions.logger.warn('RESEND_API_KEY not set — skipping email notifications');
@@ -152,45 +273,29 @@ exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 
         if (!profile.contactEmail)
             continue;
         const daysUntilExpiry = Math.floor((profile.membershipExpiry - now) / (1000 * 60 * 60 * 24));
+        const dripSent = Array.isArray(profile.dripSentDays) ? profile.dripSentDays : [];
         try {
-            if (profile.membershipStatus === 'active' && daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
-                await resend.emails.send({
-                    from: FROM_EMAIL,
-                    to: profile.contactEmail,
-                    subject: `SB Connect — Membership Expiring in ${daysUntilExpiry} Days`,
-                    html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Membership Renewal Reminder</h2>
-                <p>Dear ${profile.companyName},</p>
-                <p>Your SB Connect membership will expire in <strong>${daysUntilExpiry} days</strong>.</p>
-                <p>Please renew your membership to continue enjoying network benefits.</p>
-                <p>Log in to your dashboard to renew.</p>
-                <hr style="margin: 24px 0;" />
-                <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
-              </div>
-            `,
-                });
-                results.push(`Reminder sent to ${profile.contactEmail} (${daysUntilExpiry} days remaining)`);
+            // Welcome email should be sent via onMembershipActivated trigger, not here
+            // Drip reminders
+            for (const threshold of DRIP_THRESHOLDS) {
+                if (daysUntilExpiry === threshold && !dripSent.includes(threshold)) {
+                    const subject = DRIP_SUBJECTS[threshold] || `SB Connect — Membership Update`;
+                    const html = dripBody(profile.companyName, daysUntilExpiry, profile.paidDate);
+                    await sendEmail(resend, profile.contactEmail, subject, html);
+                    // Update dripSentDays
+                    await admin.firestore().collection('profiles').doc(doc.id).update({
+                        dripSentDays: [...dripSent, threshold],
+                    });
+                    results.push(`Drip ${threshold}d sent to ${profile.contactEmail}`);
+                    break; // Only send one drip per day
+                }
             }
+            // Expired
             if (daysUntilExpiry <= 0 && profile.membershipStatus === 'active') {
                 await admin.firestore().collection('profiles').doc(doc.id).update({
                     membershipStatus: 'expired',
                 });
-                await resend.emails.send({
-                    from: FROM_EMAIL,
-                    to: profile.contactEmail,
-                    subject: 'SB Connect — Membership Expired',
-                    html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Membership Expired</h2>
-                <p>Dear ${profile.companyName},</p>
-                <p>Your SB Connect membership has expired.</p>
-                <p>Renew now to reactivate your profile and continue connecting with the network.</p>
-                <hr style="margin: 24px 0;" />
-                <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
-              </div>
-            `,
-                });
+                await sendEmail(resend, profile.contactEmail, 'SB Connect — Membership Expired', dripBody(profile.companyName, daysUntilExpiry, profile.paidDate));
                 results.push(`Expired and notified: ${profile.contactEmail}`);
             }
         }

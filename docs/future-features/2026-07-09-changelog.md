@@ -305,4 +305,70 @@ Major robustness, security, and admin-control improvements across the applicatio
 
 ---
 
-*Updated: 2026-07-12 21:00*
+### 2026-07-12 (late) — Restore Two-Column Names, Fix Permissions & Input Filtering
+
+#### Two-Column Name Layout Restored
+- **`src/pages/Register.tsx`** + **`src/pages/CreateProfile.tsx`**: Split back to "Full Name" + "Surname" columns with proper auto-population from `profile.surname`
+- Surname captured during registration stored in `users/{uid}.surname`
+
+#### Permission Fix — Award Deal Ownership
+- **`src/lib/firestore.ts`**: `awardDeal()` now allows request owner to award their own deal without super_admin; only requires `requireSuperAdmin()` when a different user awards
+
+#### Input Filtering (Create Request)
+- **`src/pages/CreateRequest.tsx`**: Title/description filtered to alphanumeric + basic punctuation; budget field digits-only
+
+#### Website URL Normalization
+- **`src/pages/CreateProfile.tsx`**, **`src/pages/Profile.tsx`**: Website auto-prepends `https://` when no protocol is entered (e.g., `example.com` → `https://example.com`)
+
+#### Simplified Interest Transaction
+- **`src/lib/firestore.ts`**: `expressInterest()` simplified from `runTransaction` to direct reads/writes (removed `interestCount: increment(1)`)
+
+**Files Changed:**
+
+| File | Change |
+|------|--------|
+| `src/lib/firestore.ts` | Simplified `expressInterest()`, owner-can-award in `awardDeal()` |
+| `src/pages/CreateProfile.tsx` | Two-column name, website normalization |
+| `src/pages/Register.tsx` | Two-column name layout restored |
+| `src/pages/CreateRequest.tsx` | Input filtering (title, description, budget) |
+| `src/pages/Profile.tsx` | Website normalization in edit + view |
+
+---
+
+### 2026-07-14 — Admin UX, Audit Report HTML, Phone Pre-fill, Website Flexibility
+
+#### Audit Report — HTML + Print-to-PDF
+- **`src/lib/auditReport.ts`**: Replaced JSON download with styled HTML report page. Opens in new tab with formatted summary stats grid, attendance compliance section, member directory (color-coded status badges), meetings table, deals table, and admin list. Uses `window.print()` for save-as-PDF. Fallback to file download when popup blocked.
+
+#### Admin Panel — Date Columns & Sorting
+- **`src/pages/Admin.tsx`**:
+  - **Requests tab**: Added "Date" column showing `DD-MM-YYYY` creation date (already sorted by latest first)
+  - **Members tab → Business Directory**: Added "Registered" column showing profile creation date; profiles sorted by `createdAt` descending so newest members appear first
+  - **Meeting Attendance**: Summary footer redesigned from plain text into a gradient stat bar with icons, bold numbers for "Total RSVPs" and "Estimated Headcount"
+
+#### Phone Auto-Populate from Registration
+- **`src/pages/CreateProfile.tsx`**: Phone number from registration (`profile.phone`) now auto-fills the business profile phone field, stripping any `+91-` prefix. Works alongside existing email/name auto-population.
+
+#### Website Input — Flexible Format
+- **`src/pages/CreateProfile.tsx`**, **`src/pages/Profile.tsx`**: Changed from `type="url"` to `type="text"` so users can enter `www.example.com`, `https://example.com`, or `example.com` without browser validation blocking. Existing `https://` normalization still works on submit.
+
+#### Storage Rules — Catalog Subdirectory Support
+- **`storage.rules`**: Path pattern widened from `profiles/{userId}/{fileName}` to `profiles/{userId}/{allPaths=**}` to allow nested catalog file uploads (e.g., `profiles/{uid}/catalog/image.jpg`)
+
+#### Dev Dependency
+- **`package.json`**: Added `@playwright/test` dev dependency
+
+**Files Changed:**
+
+| File | Change |
+|------|--------|
+| `src/lib/auditReport.ts` | HTML report generation with print-to-PDF; `+268 lines` |
+| `src/pages/Admin.tsx` | Date column in Requests, Registered column in Members (sorted), stat bar for Meeting Attendance |
+| `src/pages/CreateProfile.tsx` | Phone auto-populate from registration; website `type="url"` → `type="text"` |
+| `src/pages/Profile.tsx` | Website `type="url"` → `type="text"` |
+| `storage.rules` | `{fileName}` → `{allPaths=**}` for catalog subdirectories |
+| `package.json` | Added `@playwright/test` dev dependency |
+
+---
+
+*Updated: 2026-07-14*

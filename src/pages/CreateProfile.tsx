@@ -77,9 +77,15 @@ export default function CreateProfile() {
     if (user?.email) {
       setForm((f) => ({ ...f, contactEmail: user.email! }));
     }
-    if (profile?.surname && profile?.displayName) {
-      const firstName = profile.displayName.split(' ')[0];
-      setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname }));
+    if (profile) {
+      const firstName = profile.displayName?.split(' ')[0] || '';
+      setForm((f) => ({ ...f, ownerName: firstName, ownerSurname: profile.surname || '' }));
+    }
+    if (profile?.phone) {
+      const cleanedPhone = profile.phone.replace(/^\+91[-\s]?/, '').replace(/\D/g, '').slice(0, 10);
+      if (cleanedPhone) {
+        setForm((f) => ({ ...f, phone: cleanedPhone }));
+      }
     }
   }, [user, profile]);
 
@@ -500,7 +506,7 @@ export default function CreateProfile() {
                   />
                   <Input
                     label="Website"
-                    type="url"
+                    type="text"
                     placeholder="https://yourcompany.com"
                     value={form.website}
                     onChange={(e) => update('website', e.target.value)}

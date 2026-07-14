@@ -680,10 +680,10 @@ export default function Profile() {
                   onChange={(e) => update('contactEmail', e.target.value)}
                   required
                 />
-                <Input
-                  label="Website"
-                  type="url"
-                  value={form.website}
+                  <Input
+                    label="Website"
+                    type="text"
+                    value={form.website}
                   onChange={(e) => update('website', e.target.value)}
                 />
                 <div>

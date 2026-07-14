@@ -169,7 +169,11 @@ export default function Admin() {
 
   async function loadProfiles() {
     setProfilesLoading(true);
-    try { setProfiles(await getAllProfiles()); }
+    try {
+      const all = await getAllProfiles();
+      all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setProfiles(all);
+    }
     catch (e) { console.error(e); }
     setProfilesLoading(false);
   }
@@ -519,6 +523,7 @@ export default function Admin() {
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden sm:table-cell">Phone</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden sm:table-cell">Email</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden lg:table-cell">Referred By</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs hidden lg:table-cell">Registered</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Actions</th>
                       </tr>
@@ -532,6 +537,7 @@ export default function Admin() {
                           <td className="px-4 py-3 text-steel text-xs font-mono hidden sm:table-cell">{p.phone}</td>
                           <td className="px-4 py-3 text-steel text-xs font-mono truncate max-w-[140px] hidden sm:table-cell">{p.contactEmail}</td>
                           <td className="px-4 py-3 text-steel text-xs hidden lg:table-cell">{p.referredByName || '—'}</td>
+                          <td className="px-4 py-3 text-muted text-xs font-mono hidden lg:table-cell whitespace-nowrap">{formatDate(p.createdAt)}</td>
                           <td className="px-4 py-3"><Badge variant={p.verified ? 'success' : 'neutral'}>{p.verified ? 'Verified' : 'Pending'}</Badge></td>
                           <td className="px-4 py-3">
                             <div className="flex gap-1.5">
@@ -863,9 +869,27 @@ export default function Admin() {
                     </tbody>
                   </table>
                 </div>
-                <p className="text-[10px] text-muted text-right mt-2">
-                  {Object.values(meetingRsvpMap).reduce((sum, r) => sum + r.length, 0)} total RSVPs across all meetings · {Object.values(meetingRsvpMap).reduce((sum, rsvps) => sum + rsvps.reduce((s, r) => s + (r.response === 'yes' ? 1 + (r.guestCount || 0) : 0), 0), 0)} total estimated headcount
-                </p>
+                <div className="flex items-center justify-end gap-4 mt-3 px-4 py-3 rounded-xl bg-gradient-to-r from-primary-light/40 via-accent-light/20 to-success-light/30 border border-primary/10">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </span>
+                    <span className="text-sm font-bold text-charcoal">
+                      {Object.values(meetingRsvpMap).reduce((sum, r) => sum + r.length, 0)}
+                    </span>
+                    <span className="text-xs text-steel font-medium">Total RSVPs</span>
+                  </div>
+                  <div className="w-px h-6 bg-border" />
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </span>
+                    <span className="text-sm font-bold text-charcoal">
+                      {Object.values(meetingRsvpMap).reduce((sum, rsvps) => sum + rsvps.reduce((s, r) => s + (r.response === 'yes' ? 1 + (r.guestCount || 0) : 0), 0), 0)}
+                    </span>
+                    <span className="text-xs text-steel font-medium">Estimated Headcount</span>
+                  </div>
+                </div>
                 </>
               )}
             </CardContent>
@@ -1081,6 +1105,7 @@ export default function Admin() {
                     <tr className="border-b border-border text-left">
                       <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Request</th>
                       <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Posted By</th>
+                      <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Date</th>
                       <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
                       <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Pitched By</th>
                       <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Awarded To</th>
@@ -1102,6 +1127,7 @@ export default function Admin() {
                             <p className="text-[10px] text-muted font-mono mt-0.5">{req.category}{req.budget ? ` · ${formatCurrency(req.budget)}` : ''}</p>
                           </td>
                           <td className="px-4 py-3 text-xs text-steel font-mono">{req.companyName}</td>
+                          <td className="px-4 py-3 text-xs text-muted font-mono whitespace-nowrap">{formatDate(req.createdAt)}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>{req.status === 'open' ? 'Open' : 'Closed'}</Badge>
