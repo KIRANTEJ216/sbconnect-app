@@ -17,44 +17,59 @@ export function StrikeWarning({ uid, compact }: StrikeWarningProps) {
 
   if (compact) {
     return (
-      <div className="px-4 py-3 rounded-xl bg-danger-light border border-danger/20 text-sm space-y-1.5 text-center">
+      <div className="px-4 py-3 rounded-xl bg-gradient-to-br from-danger-light via-danger/5 to-warning/10 border border-danger/20 text-sm space-y-2">
         <div className="flex items-center justify-center gap-2 text-danger">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          <span>Attendance warning: {missing} more meeting{missing > 1 ? 's' : ''} required in 6-month window.</span>
+          <span className="font-semibold">Attendance warning: {missing} more meeting{missing > 1 ? 's' : ''} required in 6-month window.</span>
         </div>
-        <p className="text-xs text-steel">
-          If you do not meet this requirement, you will need to <strong>renew your membership for ₹1,000</strong> to rejoin the community.
-        </p>
+        <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-danger-light/60 border border-danger/10">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-danger shrink-0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+          </svg>
+          <p className="text-xs text-steel">
+            Non-compliance requires <strong className="text-danger">renewing at ₹1,000</strong> to rejoin
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <Card className="stat-accent-top">
-      <CardContent className="p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-danger-light rounded-2xl flex items-center justify-center shrink-0">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-danger" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <Card className="stat-accent-top overflow-hidden">
+      <CardContent className="p-3 sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-danger-light rounded-2xl flex items-center justify-center shrink-0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-danger" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
               <line x1="12" y1="9" x2="12" y2="13" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-charcoal tracking-tight mb-1">Meeting Attendance Required</h3>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-charcoal tracking-tight">Meeting Attendance Required</h3>
+              <span className="px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-[10px] font-bold text-danger tracking-tight">
+                {missing} {missing > 1 ? 'Meetings' : 'Meeting'} Needed
+              </span>
+            </div>
             <p className="text-sm text-steel leading-relaxed">
-              You have attended <strong>{compliance.attendedCount}</strong> of {compliance.requiredCount} required meetings in the last {compliance.monthsWindow} months.
+              You have attended <strong className="text-danger">{compliance.attendedCount}</strong> of <strong>{compliance.requiredCount}</strong> required meetings in the last {compliance.monthsWindow} months.
               {missing > 0 && (
-                <> You need to attend <strong>{missing} more meeting{missing > 1 ? 's' : ''}</strong> to remain an active member.</>
+                <> You need to attend <strong className="text-danger">{missing} more meeting{missing > 1 ? 's' : ''}</strong> to remain an active member.</>
               )}
             </p>
-            <p className="text-sm text-steel mt-2">
-              If you do not meet this requirement, you will need to <strong>renew your membership for 1,000</strong> to rejoin the community.
-            </p>
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-danger-light border border-danger/15">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-danger shrink-0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <p className="text-xs text-steel">
+                Non-compliance requires <strong className="text-danger">renewing at ₹1,000</strong> to rejoin the community
+              </p>
+            </div>
           </div>
         </div>
       </CardContent>
