@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { signOut } from '../../lib/auth';
-import { useTotalBusinessValue, useRevenueConfig, useOnlineUsersCount } from '../../hooks/useFirebaseQuery';
+import { useTotalBusinessValue, useRevenueConfig } from '../../hooks/useFirebaseQuery';
 import { getFinancialYear } from '../../lib/format';
-import { isSuperAdmin } from '../../lib/admin';
 import { useNavigate } from 'react-router-dom';
 
 const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -24,13 +23,11 @@ interface TopBarProps {
 }
 
 export function TopBar({ onMenuToggle }: TopBarProps) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { data: total = 0 } = useTotalBusinessValue();
   const { data: revenueConfig } = useRevenueConfig();
-  const { data: onlineCount = 0 } = useOnlineUsersCount();
   const [now, setNow] = useState(new Date());
-  const isSuper = isSuperAdmin(user?.email, profile?.role);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -89,15 +86,6 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        {isSuper && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-success/5 border border-success/15 text-xs font-semibold text-success" title="Live online users">
-            <span className="relative flex w-2 h-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-40" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
-            </span>
-            {onlineCount} online
-          </div>
-        )}
         {user && (
           <button
             onClick={handleSignOut}
