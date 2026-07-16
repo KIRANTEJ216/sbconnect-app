@@ -76,8 +76,8 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
       </div>
 
       <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center leading-tight px-2">
-        <span className="text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight gradient-text truncate max-w-full">{hasTarget ? remaining.toLocaleString('en-IN') : total.toLocaleString('en-IN')}</span>
-        <span className="text-[10px] sm:text-xs text-muted font-mono tracking-tight mt-0.5 sm:mt-1">{fy.fyLabel}{hasTarget ? ` · ₹ ${total.toLocaleString('en-IN')} of ₹ ${target.toLocaleString('en-IN')} target` : ` · ₹ ${total.toLocaleString('en-IN')}`}</span>
+        <span className="text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight gradient-text truncate max-w-full">{hasTarget ? remaining.toLocaleString('en-IN') : '0'}</span>
+        <span className="text-[10px] sm:text-xs text-muted font-mono tracking-tight mt-0.5 sm:mt-1">{hasTarget ? `${fy.fyLabel} · ₹ ${total.toLocaleString('en-IN')} of ₹ ${target.toLocaleString('en-IN')} target` : `${fy.fyLabel} · No target set`}</span>
         <div className="hidden sm:flex items-center gap-1.5 mt-0.5">
           <span className={`px-1.5 py-0.5 rounded-full ${badgeColor} border text-[10px] font-semibold transition-all duration-500`}>
             {achieved ? '🎉 Target Hit' : `${badgeEmoji} ${fy.remainingMonths}m ${fy.remainingDaysInMonth}d`}

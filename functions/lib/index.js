@@ -33,12 +33,14 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserRegistered = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = void 0;
+exports.dailyFirestoreBackup = exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserRegistered = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const callable = __importStar(require("firebase-functions/v2/https"));
 const firestore_1 = require("firebase-functions/v2/firestore");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const identity_1 = require("firebase-functions/v2/identity");
 const admin = __importStar(require("firebase-admin"));
+const firestore_2 = require("@google-cloud/firestore");
 const resend_1 = require("resend");
 admin.initializeApp();
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -339,5 +341,23 @@ exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 
         }
     }
     functions.logger.info('Membership check complete', { results });
+});
+exports.dailyFirestoreBackup = (0, scheduler_1.onSchedule)('0 0 * * *', async () => {
+    const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'sbconnect-65338';
+    const bucketName = `${projectId}-backups`;
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const client = new firestore_2.v1.FirestoreAdminClient();
+    const databaseName = client.databasePath(projectId, '(default)');
+    try {
+        const [response] = await client.exportDocuments({
+            name: databaseName,
+            outputUriPrefix: `gs://${bucketName}/backups/${timestamp}`,
+            collectionIds: [],
+        });
+        functions.logger.info(`Daily backup started: ${response.name} → gs://${bucketName}/backups/${timestamp}`);
+    }
+    catch (err) {
+        functions.logger.error('Daily backup failed:', err);
+    }
 });
 //# sourceMappingURL=index.js.map

@@ -19,9 +19,9 @@ async function requireSuperAdmin(): Promise<string> {
         const userRef = doc(db, 'users', user.uid);
         const snap = await getDoc(userRef);
         if (!snap.exists()) {
-          await setDoc(userRef, { uid: user.uid, email, role: 'super_admin', createdAt: Date.now() });
+          await setDoc(userRef, { uid: user.uid, email, role: 'super_admin', createdAt: Date.now(), updatedAt: Date.now() });
         } else if (snap.data().role !== 'super_admin') {
-          await updateDoc(userRef, { role: 'super_admin' });
+          await updateDoc(userRef, { role: 'super_admin', updatedAt: Date.now() });
         }
       } catch {}
     })();
@@ -176,6 +176,7 @@ export async function createRequest(
     interestedUids: [],
     requesterPhone: requesterPhone || '',
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
   return ref.id;
 }
@@ -197,7 +198,7 @@ export async function getRequest(id: string): Promise<Request | null> {
 
 export async function closeRequest(id: string) {
   await requireSuperAdmin();
-  await updateDoc(doc(db, 'requests', id), { status: 'closed' });
+  await updateDoc(doc(db, 'requests', id), { status: 'closed', updatedAt: Date.now() });
 }
 
 export async function deleteRequest(id: string) {
@@ -242,6 +243,7 @@ export async function expressInterest(requestId: string, uid: string, companyNam
     phone,
     message,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
   sendUserNotification(requestOwnerUid, 'admin_message', 'New Pitch', `${companyName} pitched for "${requestTitle}": ${message}`, requestId).catch(() => {});
   return ref.id;
@@ -276,8 +278,9 @@ export async function awardDeal(
     receiverCompanyName,
     amount,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
-  await updateDoc(doc(db, 'requests', requestId), { status: 'closed', awardedTo: receiverUid });
+  await updateDoc(doc(db, 'requests', requestId), { status: 'closed', awardedTo: receiverUid, updatedAt: Date.now() });
   sendUserNotification(receiverUid, 'deal_won', '🎉 You Won!', `Your pitch for "${requestTitle}" was selected by ${giverCompanyName}!`, requestId).catch(() => {});
   sendUserNotification(giverUid, 'deal_thanks', '🙏 Thank You!', `${receiverCompanyName} sends their thanks for awarding "${requestTitle}" to them.`, requestId).catch(() => {});
   return dealRef.id;
@@ -300,6 +303,7 @@ export async function recordDeal(
     receiverCompanyName,
     amount,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
   const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
   if (parsed > 0) {
@@ -392,12 +396,32 @@ export async function getRevenueConfig(): Promise<RevenueConfig | null> {
 }
 
 export async function setRevenueConfig(target: number, financialYear: string, updatedBy: string): Promise<void> {
-  await setDoc(doc(db, 'settings', 'revenue'), {
-    target,
-    financialYear,
-    updatedBy,
-    updatedAt: Date.now(),
-  });
+  const ref = doc(db, 'settings', 'revenue');
+  const snap = await getDoc(ref);
+  const data: Record<string, unknown> = { target, financialYear, updatedBy, updatedAt: Date.now() };
+  if (!snap.exists()) data.createdAt = Date.now();
+  await setDoc(ref, data);
+}
+
+export async function resetProductionData(adminUid: string): Promise<void> {
+  const batchSize = 500;
+
+  const deleteCollection = async (colPath: string) => {
+    const docs = await getDocs(query(collection(db, colPath), limit(batchSize)));
+    while (docs.size > 0) {
+      const batch = writeBatch(db);
+      docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      const next = await getDocs(query(collection(db, colPath), limit(batchSize)));
+      if (next.size === 0) break;
+    }
+  };
+
+  await deleteCollection('deals');
+  await deleteCollection('requests');
+  const fy = new Date().getFullYear() + (new Date().getMonth() >= 3 ? 0 : -1);
+  await setDoc(doc(db, 'stats', 'deals'), { totalValue: 0, updatedAt: Date.now() });
+  await setDoc(doc(db, 'settings', 'revenue'), { target: 0, financialYear: `FY ${String(fy).slice(-2)}-${String(fy + 1).slice(-2)}`, updatedBy: adminUid, updatedAt: Date.now(), createdAt: Date.now() });
 }
 
 // ─── Chat ───
@@ -579,9 +603,10 @@ export async function createMeeting(_uid: string, date: string, label: string, l
     active: true,
     rsvpEnabled: true,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
   const qrCodeURL = `${window.location.origin}/attendance/scan?meetingId=${ref.id}`;
-  await updateDoc(ref, { qrCodeURL });
+  await updateDoc(ref, { qrCodeURL, updatedAt: Date.now() });
   return ref.id;
 }
 
@@ -710,6 +735,7 @@ export async function reportIssue(data: {
     adminNote: '',
     replies: [],
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
 }
 
@@ -721,9 +747,11 @@ export async function addIssueReply(issueId: string, text: string, authorUid: st
     authorName,
     authorRole,
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
   await updateDoc(doc(db, 'issueReports', issueId), {
     replies: arrayUnion(reply),
+    updatedAt: Date.now(),
   });
   const issueSnap = await getDoc(doc(db, 'issueReports', issueId));
   const issue = issueSnap.data() as IssueReport;
@@ -756,7 +784,7 @@ export async function getIssueReports(): Promise<IssueReport[]> {
 
 export async function resolveIssueReport(id: string, adminNote: string) {
   await requireSuperAdmin();
-  await updateDoc(doc(db, 'issueReports', id), { status: 'resolved', adminNote });
+  await updateDoc(doc(db, 'issueReports', id), { status: 'resolved', adminNote, updatedAt: Date.now() });
 }
 
 export async function deleteIssueReport(id: string) {
@@ -766,11 +794,11 @@ export async function deleteIssueReport(id: string) {
 
 export async function addNotification(text: string) {
   await requireSuperAdmin();
-  await addDoc(collection(db, 'notifications'), { text, active: true, createdAt: Date.now() });
+  await addDoc(collection(db, 'notifications'), { text, active: true, createdAt: Date.now(), updatedAt: Date.now() });
 }
 
 export async function toggleNotification(id: string, active: boolean) {
-  await updateDoc(doc(db, 'notifications', id), { active });
+  await updateDoc(doc(db, 'notifications', id), { active, updatedAt: Date.now() });
 }
 
 export async function deleteNotification(id: string) {
@@ -887,7 +915,7 @@ export async function triggerWebhookExport(): Promise<{ ok: boolean; message: st
 
 export async function sendUserNotification(uid: string, type: UserNotification['type'], title: string, message: string, relatedId: string) {
   await addDoc(collection(db, 'userNotifications'), {
-    uid, type, title, message, relatedId, read: false, createdAt: Date.now(),
+    uid, type, title, message, relatedId, read: false, createdAt: Date.now(), updatedAt: Date.now(),
   });
 }
 
@@ -901,7 +929,7 @@ export async function getMyNotifications(): Promise<UserNotification[]> {
 }
 
 export async function markNotificationRead(id: string) {
-  await updateDoc(doc(db, 'userNotifications', id), { read: true });
+  await updateDoc(doc(db, 'userNotifications', id), { read: true, updatedAt: Date.now() });
 }
 
 export interface ImportProfileEntry {

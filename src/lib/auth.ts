@@ -37,6 +37,7 @@ export async function signUp(
     role: 'user',
     lastSeen: Date.now(),
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
   return credential;
 }

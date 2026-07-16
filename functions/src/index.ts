@@ -1,8 +1,10 @@
 import * as functions from 'firebase-functions/v2';
 import * as callable from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { beforeUserCreated } from 'firebase-functions/v2/identity';
 import * as admin from 'firebase-admin';
+import { v1 } from '@google-cloud/firestore';
 import { Resend } from 'resend';
 
 admin.initializeApp();
@@ -365,3 +367,22 @@ export const checkMembershipExpiry = functions.scheduler.onSchedule(
     functions.logger.info('Membership check complete', { results });
   },
 );
+
+export const dailyFirestoreBackup = onSchedule('0 0 * * *', async () => {
+  const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'sbconnect-65338';
+  const bucketName = `${projectId}-backups`;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const client = new v1.FirestoreAdminClient();
+  const databaseName = client.databasePath(projectId, '(default)');
+
+  try {
+    const [response] = await client.exportDocuments({
+      name: databaseName,
+      outputUriPrefix: `gs://${bucketName}/backups/${timestamp}`,
+      collectionIds: [],
+    });
+    functions.logger.info(`Daily backup started: ${response.name} → gs://${bucketName}/backups/${timestamp}`);
+  } catch (err) {
+    functions.logger.error('Daily backup failed:', err);
+  }
+});

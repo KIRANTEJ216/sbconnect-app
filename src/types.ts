@@ -17,6 +17,7 @@ export interface UserProfile {
   role: 'user' | 'admin' | 'super_admin';
   lastSeen: number;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export const ROLES = ['user', 'admin', 'super_admin'] as const;
@@ -69,6 +70,7 @@ export interface Request {
   interestedUids: string[];
   requesterPhone: string;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Interest {
@@ -79,6 +81,7 @@ export interface Interest {
   phone: string;
   message: string;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Deal {
@@ -91,6 +94,7 @@ export interface Deal {
   receiverCompanyName: string;
   amount: string;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface LeaderboardEntry {
@@ -141,6 +145,7 @@ export interface Meeting {
   qrCodeURL: string;
   active: boolean;
   createdAt: number;
+  updatedAt?: number;
   rsvpEnabled: boolean;
 }
 
@@ -169,6 +174,7 @@ export interface AppNotification {
   text: string;
   active: boolean;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface UserNotification {
@@ -180,6 +186,7 @@ export interface UserNotification {
   relatedId: string;
   read: boolean;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface IssueReply {
@@ -189,6 +196,7 @@ export interface IssueReply {
   authorName: string;
   authorRole: 'user' | 'admin' | 'super_admin';
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface IssueReport {
@@ -204,6 +212,7 @@ export interface IssueReport {
   adminNote: string;
   replies: IssueReply[];
   createdAt: number;
+  updatedAt?: number;
 }
 
 export const LOCATIONS = [
@@ -335,5 +344,6 @@ export interface RevenueConfig {
   target: number;
   financialYear: string;
   updatedBy: string;
+  createdAt?: number;
   updatedAt: number;
 }

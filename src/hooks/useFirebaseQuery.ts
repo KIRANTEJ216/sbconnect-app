@@ -113,6 +113,7 @@ export function useRevenueConfig() {
     queryKey: ['revenueConfig'],
     queryFn: getRevenueConfig,
     staleTime: 1000 * 60 * 2,
+    refetchInterval: 60_000,
   });
 }
 

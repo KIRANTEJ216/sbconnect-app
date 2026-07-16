@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig, getOnlineUsers } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig, getOnlineUsers, resetProductionData } from '../lib/firestore';
 import type { LoginLog, ImportProfileEntry } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
@@ -120,6 +120,9 @@ export default function Admin() {
   const [revTargetInput, setRevTargetInput] = useState('');
   const [revSaving, setRevSaving] = useState(false);
   const [revMsg, setRevMsg] = useState('');
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMsg, setResetMsg] = useState('');
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
   const { data: onlineCount = 0 } = useOnlineUsersCount();
@@ -436,6 +439,25 @@ export default function Admin() {
       setRevMsg('Failed to save: ' + (e instanceof Error ? e.message : e));
     }
     setRevSaving(false);
+  };
+
+  const handleResetData = async () => {
+    if (!canWrite || !user) return;
+    if (!resetConfirm) { setResetConfirm(true); return; }
+    setResetLoading(true);
+    setResetMsg('');
+    try {
+      await resetProductionData(user.uid);
+      setResetMsg('All deals, requests, and revenue data have been reset.');
+      setResetConfirm(false);
+      queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
+      queryClient.invalidateQueries({ queryKey: ['revenueConfig'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      loadDeals();
+    } catch (e) {
+      setResetMsg('Reset failed: ' + (e instanceof Error ? e.message : e));
+    }
+    setResetLoading(false);
   };
 
   const tabs = [
@@ -1664,6 +1686,36 @@ export default function Admin() {
               )}
             </CardContent>
           </Card>
+
+          {/* Reset Production Data */}
+          {canWrite && (
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-charcoal tracking-tight">⚠️ Reset Production Data</h3>
+            </CardHeader>
+            <CardContent className="p-5 space-y-3">
+              <p className="text-xs text-steel leading-relaxed">
+                This permanently deletes all <strong>deals</strong> and <strong>requests</strong>, and resets the <strong>revenue target</strong> and <strong>total business value</strong> to zero.
+                User accounts, profiles, meetings, attendance, notifications, and chats are <strong>not affected</strong>.
+              </p>
+              {resetConfirm ? (
+                <div className="flex items-center gap-3">
+                  <Button onClick={handleResetData} loading={resetLoading} className="bg-danger hover:bg-danger/90 text-white border-0">
+                    Type RESET to confirm
+                  </Button>
+                  <button onClick={() => setResetConfirm(false)} className="text-xs text-steel hover:text-charcoal transition-colors cursor-pointer">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <Button onClick={handleResetData} className="bg-danger/90 hover:bg-danger text-white border-0">
+                  Reset All Data
+                </Button>
+              )}
+              {resetMsg && <p className={`text-xs ${resetMsg.includes('reset') ? 'text-success' : 'text-danger'}`}>{resetMsg}</p>}
+            </CardContent>
+          </Card>
+          )}
 
           {/* Full Leaderboard */}
           <Card>
