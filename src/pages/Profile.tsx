@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
 import { isAdmin, isSuperAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
@@ -19,6 +20,7 @@ import { CameraCapture } from '../components/CameraCapture';
 
 export default function Profile() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const { user, profile: authProfile } = useAuth();
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -324,6 +326,7 @@ export default function Profile() {
         editCount: newEditCount,
         locked,
       });
+      queryClient.invalidateQueries({ queryKey: ['businessProfile', user.uid] });
       setEditing(false);
       setPhotoFile(null);
       setCatalogFiles([]);
@@ -356,6 +359,7 @@ export default function Profile() {
         membershipExpiry: expiryTimestamp,
       });
       setProfile({ ...profile, membershipStatus: derivedStatus, paidDate: paidTimestamp, membershipDate: paidTimestamp, membershipExpiry: expiryTimestamp });
+      queryClient.invalidateQueries({ queryKey: ['businessProfile', user.uid] });
       setEditingMembership(false);
     } catch (err) {
       console.error('Failed to update membership:', err);
@@ -420,9 +424,19 @@ export default function Profile() {
       <div className="max-w-2xl mx-auto text-center py-20">
         <h2 className="text-xl font-bold text-charcoal tracking-tight">Profile Not Found</h2>
         <p className="text-steel mt-2">This business profile hasn't been created yet.</p>
-        <Link to="/dashboard" className="text-primary hover:text-primary-hover text-sm mt-4 inline-block transition-colors">
-          Back to Dashboard
-        </Link>
+        <div className="flex items-center justify-center gap-3 mt-6">
+          {(isOwnProfile || isAdminViewer) && (
+            <Link
+              to="/create-profile"
+              className="inline-flex items-center px-5 py-2 bg-primary text-white rounded-[0.75rem] hover:bg-primary-hover text-sm font-medium transition-all active:scale-[0.97]"
+            >
+              Create Profile
+            </Link>
+          )}
+          <Link to="/dashboard" className="text-primary hover:text-primary-hover text-sm transition-colors inline-block">
+            Back to Dashboard
+          </Link>
+        </div>
       </div>
     );
   }

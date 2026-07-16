@@ -73,12 +73,11 @@ export async function resolvePhoneToEmail(phone: string): Promise<string | null>
 export async function setUserOnline(uid: string) {
   await runTransaction(db, async (tx) => {
     const userRef = doc(db, 'users', uid);
-    const userSnap = await tx.get(userRef);
+    const statsRef = doc(db, 'stats', 'online');
+    const [userSnap, statsSnap] = await Promise.all([tx.get(userRef), tx.get(statsRef)]);
     const wasOffline = userSnap.exists() && userSnap.data().onlineStatus !== 'online';
     tx.set(userRef, { onlineStatus: 'online', lastSeen: Date.now() }, { merge: true });
     if (wasOffline) {
-      const statsRef = doc(db, 'stats', 'online');
-      const statsSnap = await tx.get(statsRef);
       if (statsSnap.exists()) {
         tx.update(statsRef, { count: increment(1) });
       } else {
@@ -91,12 +90,11 @@ export async function setUserOnline(uid: string) {
 export async function setUserOffline(uid: string) {
   await runTransaction(db, async (tx) => {
     const userRef = doc(db, 'users', uid);
-    const userSnap = await tx.get(userRef);
+    const statsRef = doc(db, 'stats', 'online');
+    const [userSnap, statsSnap] = await Promise.all([tx.get(userRef), tx.get(statsRef)]);
     const wasOnline = userSnap.exists() && userSnap.data().onlineStatus === 'online';
     tx.set(userRef, { onlineStatus: 'offline', lastSeen: Date.now() }, { merge: true });
     if (wasOnline) {
-      const statsRef = doc(db, 'stats', 'online');
-      const statsSnap = await tx.get(statsRef);
       if (statsSnap.exists() && (statsSnap.data().count ?? 0) > 0) {
         tx.update(statsRef, { count: increment(-1) });
       }

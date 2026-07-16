@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone } from '../lib/firestore';
 import { uploadProfilePhoto, uploadCatalogFiles, compressImage } from '../lib/storage';
@@ -15,6 +16,7 @@ import { CameraCapture } from '../components/CameraCapture';
 
 export default function CreateProfile() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -250,6 +252,7 @@ export default function CreateProfile() {
         await updateBusinessProfile(user.uid, updates as Partial<BusinessProfile>);
       }
 
+      queryClient.invalidateQueries({ queryKey: ['businessProfile', user.uid] });
       navigate('/dashboard');
     } catch (err) {
       console.error('Failed to create profile:', err);

@@ -19,11 +19,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, profile: null, loading: true });
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser: User | null) => {
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       if (firebaseUser) {
         const appUser = userToAppUser(firebaseUser);
         setState((s) => ({ ...s, user: appUser, loading: false }));
-        setUserOnline(firebaseUser.uid);
+        await setUserOnline(firebaseUser.uid);
 
         const handleUnload = () => setUserOffline(firebaseUser.uid);
         window.addEventListener('beforeunload', handleUnload);
