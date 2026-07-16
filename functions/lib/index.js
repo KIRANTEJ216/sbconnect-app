@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = void 0;
+exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserRegistered = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = void 0;
 const functions = __importStar(require("firebase-functions/v2"));
 const callable = __importStar(require("firebase-functions/v2/https"));
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -215,6 +215,41 @@ exports.onUserCreate = (0, identity_1.beforeUserCreated)(async (event) => {
     return {
         customClaims: { role },
     };
+});
+exports.onUserRegistered = (0, firestore_1.onDocumentCreated)('users/{uid}', async (event) => {
+    const snap = event.data;
+    if (!snap)
+        return;
+    const userData = snap.data();
+    const email = userData?.email;
+    const displayName = userData?.displayName;
+    if (!email || !RESEND_API_KEY)
+        return;
+    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const body = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>👋 Welcome to SB Connect!</h2>
+      <p>Dear ${displayName || 'Member'},</p>
+      <p>Thank you for registering with SB Connect — the premier business networking community.</p>
+      <p><strong>Next steps:</strong></p>
+      <ul>
+        <li>Complete your business profile</li>
+        <li>Browse the member directory</li>
+        <li>RSVP for upcoming meetings</li>
+        <li>Connect with fellow members</li>
+      </ul>
+      <p>Log in to your dashboard to get started.</p>
+      <hr style="margin: 24px 0;" />
+      <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+    </div>
+  `;
+    try {
+        await sendEmail(resend, email, 'Welcome to SB Connect!', body);
+        functions.logger.info(`Welcome email sent to ${email}`);
+    }
+    catch (err) {
+        functions.logger.error('Failed to send welcome email:', err);
+    }
 });
 exports.syncUserRole = (0, firestore_1.onDocumentWritten)('users/{uid}', async (event) => {
     const change = event.data;

@@ -184,7 +184,7 @@ function formatDate(d: Date): string {
 }
 
 function toINR(n: number): string {
-  return '₹' + n.toLocaleString('en-IN');
+  return n.toLocaleString('en-IN');
 }
 
 function htmlEscape(s: string | number | boolean | undefined | null): string {

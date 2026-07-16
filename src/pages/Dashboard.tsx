@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserRequests, recordDeal, getMyNotifications, getUserIssueReports, addIssueReply } from '../lib/firestore';
-import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile } from '../hooks/useFirebaseQuery';
-import type { UserNotification, IssueReport } from '../types';
-import { formatDate, formatCurrency } from '../lib/format';
+import { getUserRequests, recordDeal, getMyNotifications, getUserIssueReports, addIssueReply, getAwardedRequests } from '../lib/firestore';
+import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useOnlineUsersCount, useRevenueConfig } from '../hooks/useFirebaseQuery';
+import type { UserNotification, IssueReport, Request as BusinessRequest } from '../types';
+import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
 import confetti from 'canvas-confetti';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { isSuperAdmin } from '../lib/admin';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { TiltCard } from '../components/motion/TiltCard';
 import { StrikeWarning } from '../components/StrikeWarning';
@@ -37,9 +38,14 @@ export default function Dashboard() {
   const [dealSaving, setDealSaving] = useState(false);
   const [dealMsg, setDealMsg] = useState('');
   const [myNotifications, setMyNotifications] = useState<UserNotification[]>([]);
+  const [awardedRequests, setAwardedRequests] = useState<BusinessRequest[]>([]);
+  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
   const [myIssues, setMyIssues] = useState<IssueReport[]>([]);
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [replyingId, setReplyingId] = useState<string | null>(null);
+  const { data: totalBusinessValue = 0 } = useTotalBusinessValue();
+  const { data: revenueConfig } = useRevenueConfig();
+  const { data: onlineCount = 0 } = useOnlineUsersCount();
 
   useEffect(() => {
     if (!user) return;
@@ -48,6 +54,9 @@ export default function Dashboard() {
       .catch(() => {});
     getUserIssueReports(user.uid)
       .then(setMyIssues)
+      .catch(() => {});
+    getAwardedRequests(user.uid)
+      .then(setAwardedRequests)
       .catch(() => {});
   }, [user]);
 
@@ -105,8 +114,9 @@ export default function Dashboard() {
         );
       }
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
       const receiverName = dealReceiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealReceiver)?.companyName;
-      setDealMsg(`🎉 Congratulations! Deal recorded — ₹${dealAmount} given to ${receiverName}`);
+      setDealMsg(`🎉 Congratulations! Deal recorded — ${dealAmount} given to ${receiverName}`);
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       setDealReceiver('');
       setDealOtherName('');
@@ -176,6 +186,108 @@ export default function Dashboard() {
         <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Dashboard</h1>
         <p className="text-steel text-sm">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
       </div>
+
+      {(() => {
+        const fy = getFinancialYear();
+        const hasTarget = revenueConfig && revenueConfig.target > 0;
+        const target = hasTarget ? revenueConfig!.target : 0;
+        const revPct = hasTarget ? Math.min((totalBusinessValue / target) * 100, 100) : 0;
+        const remaining = hasTarget ? Math.max(0, target - totalBusinessValue) : 0;
+        const achieved = hasTarget && totalBusinessValue >= target;
+
+        const urgency = fy.timeProgress;
+        const countdownBg = urgency > 0.75
+          ? 'bg-gradient-to-br from-danger/10 via-danger/5 to-warning/15'
+          : urgency > 0.5
+            ? 'bg-gradient-to-br from-warning/10 via-accent/5 to-primary/8'
+            : 'bg-gradient-to-br from-primary/8 via-accent/5 to-success/10';
+        const countdownBorder = urgency > 0.75
+          ? 'border-danger/20'
+          : urgency > 0.5
+            ? 'border-warning/20'
+            : 'border-primary/10';
+        const barGradient = urgency > 0.75
+          ? 'from-danger to-warning'
+          : urgency > 0.5
+            ? 'from-warning to-accent'
+            : 'from-primary to-success';
+        const emoji = urgency > 0.75 ? '🚨' : urgency > 0.5 ? '⚠️' : '🔥';
+        return (
+        <Card className="stat-accent-top overflow-hidden">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted tracking-tight uppercase">
+                  {hasTarget ? `${fy.fyLabel} · Remaining` : fy.fyLabel}
+                </p>
+                <p className="text-lg sm:text-xl font-bold gradient-text mt-0.5 tracking-tight">
+                  ₹ {(hasTarget ? remaining : totalBusinessValue).toLocaleString('en-IN')}
+                </p>
+              </div>
+              {hasTarget && (
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-muted font-medium">Target</p>
+                  <p className="text-base sm:text-lg font-bold text-charcoal tracking-tight">{achieved ? '✓' : `₹ ${target.toLocaleString('en-IN')}`}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-2">
+              <div className="w-full h-2 bg-muted-bg rounded-full overflow-hidden shadow-inner">
+                <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary-light to-success transition-all duration-700 ease-out"
+                  style={{ width: `${hasTarget ? revPct : 0}%` }}
+                />
+              </div>
+              <div className="flex justify-between mt-1 text-[10px]">
+                <span className="font-semibold text-charcoal">₹ {totalBusinessValue.toLocaleString('en-IN')} raised</span>
+                {hasTarget && <span className="text-steel">{Math.round(revPct)}%</span>}
+              </div>
+            </div>
+
+            {!achieved && (
+              <div className={`rounded-xl ${countdownBg} border ${countdownBorder} p-2.5 transition-all duration-500`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">{emoji}</span>
+                    <div>
+                      <p className="text-[11px] font-semibold text-charcoal tracking-tight leading-tight">
+                        {fy.remainingMonths > 0
+                          ? `${fy.remainingMonths}m ${fy.remainingDaysInMonth}d left`
+                          : `${fy.remainingDays}d left`}
+                      </p>
+                      <p className="text-[10px] text-steel mt-px">
+                        {hasTarget
+                          ? `₹ ${Math.round(remaining / Math.max(fy.remainingDays, 1)).toLocaleString('en-IN')}/day needed`
+                          : `₹ ${Math.round(totalBusinessValue / Math.max(fy.elapsedDays, 1)).toLocaleString('en-IN')}/day avg`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[11px] font-bold gradient-text">{Math.round(fy.timeProgress * 100)}%</p>
+                    <p className="text-[9px] text-steel leading-tight -mt-px">elapsed</p>
+                  </div>
+                </div>
+                <div className="w-full h-1 bg-muted-bg/60 rounded-full overflow-hidden mt-2">
+                  <div className={`h-full rounded-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out`}
+                    style={{ width: `${fy.timeProgress * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-0.5 text-[9px] text-muted">
+                  <span>{fy.elapsedDays}d elapsed</span>
+                  <span>{fy.remainingDays}d to go</span>
+                </div>
+              </div>
+            )}
+
+            {achieved && (
+              <div className="rounded-xl bg-gradient-to-br from-success/10 to-success/5 border border-success/20 p-2.5 text-center">
+                <p className="text-xs font-bold text-success">🎉 Target Achieved!</p>
+                <p className="text-[10px] text-steel mt-0.5">₹ {totalBusinessValue.toLocaleString('en-IN')} of ₹ {target.toLocaleString('en-IN')} target</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )})()}
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         {statCards.map((s) => {
@@ -256,15 +368,35 @@ export default function Dashboard() {
         })}
       </div>
 
+      {isSuperAdmin(user?.email, profile?.role) && (
+        <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-success/8 flex items-center justify-center">
+                <div className="relative flex w-3 h-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-40" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-success" />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-charcoal tracking-tight leading-tight">Live Users</p>
+                <p className="text-[10px] text-steel">Currently online</p>
+              </div>
+            </div>
+            <span className="text-xl font-bold text-success tracking-tight">{onlineCount}</span>
+          </div>
+        </div>
+      )}
+
       {myNotifications.filter((n) => !n.read).length > 0 && (
-        <div className="rounded-card bg-surface border border-border shadow-card p-3">
+        <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs">Notifications</h3>
           </div>
           <div className="space-y-2">
             {myNotifications.filter((n) => !n.read).map((n) => (
               <div key={n.id} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${
-                n.type === 'issue_resolved' ? 'bg-success-light/20 border-success/15' :
+                n.type === 'issue_resolved' || n.type === 'deal_won' ? 'bg-success-light/20 border-success/15' :
                 n.type === 'issue_reply' ? 'bg-warning-light/20 border-warning/15' :
                 'bg-primary-light/20 border-primary/15'
               }`}>
@@ -272,6 +404,10 @@ export default function Dashboard() {
                   {n.type === 'issue_resolved' ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                  ) : n.type === 'deal_won' ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-success">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                     </svg>
                   ) : n.type === 'issue_reply' ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-warning">
@@ -287,10 +423,11 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full text-white ${
                       n.type === 'issue_resolved' ? 'bg-success' :
+                      n.type === 'deal_won' ? 'bg-success' :
                       n.type === 'issue_reply' ? 'bg-warning' :
                       'bg-primary'
                     }`}>
-                      {n.type === 'issue_resolved' ? 'Resolved' : n.type === 'issue_reply' ? 'New Reply' : 'New Pitch'}
+                      {n.type === 'deal_won' ? 'Deal Won' : n.type === 'deal_thanks' ? 'Thank You' : n.type === 'issue_resolved' ? 'Resolved' : n.type === 'issue_reply' ? 'New Reply' : 'New Pitch'}
                     </span>
                     <span className="text-xs font-medium text-charcoal">{n.title}</span>
                   </div>
@@ -303,8 +440,38 @@ export default function Dashboard() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {awardedRequests.length > 0 && (
+          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card overflow-hidden">
+            <div className="px-3 py-2 border-b border-border">
+              <h3 className="font-semibold text-charcoal tracking-tight text-xs">🏆 Your Awarded Requests</h3>
+            </div>
+            <div className="divide-y divide-border">
+              {awardedRequests.map((r, i) => {
+                const winnerProfile = allBusinesses.find((b) => b.uid === r.awardedTo);
+                const winnerName = winnerProfile?.companyName || 'Unknown';
+                return (
+                  <div key={r.id} className="flex items-center justify-between px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                      <p className="text-xs font-medium text-charcoal truncate">{r.title}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-[10px] font-semibold text-success truncate max-w-[90px]">{winnerName}</span>
+                      <span className="text-[10px] text-muted font-mono whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString('en-IN')}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {user && <StrikeWarning uid={user.uid} compact />}
+      </div>
+
       {myIssues.length > 0 && (
-        <div className="rounded-card bg-surface border border-border shadow-card p-3">
+        <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs">My Reports ({myIssues.length})</h3>
           </div>
@@ -369,8 +536,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {user && <StrikeWarning uid={user.uid} />}
-
       {!myProfile ? (
         <Card>
           <CardContent className="p-10 text-center">
@@ -413,7 +578,7 @@ export default function Dashboard() {
               <button onClick={() => { setShowDealForm(true); setTimeout(() => document.getElementById('deal-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }}
                 className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal w-full text-left">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                  <text x="12" y="18" textAnchor="middle" fontSize="18" fontWeight="700" fill="currentColor" stroke="none">₹</text>
                 </svg>
                 Record Business Given
               </button>
@@ -421,7 +586,7 @@ export default function Dashboard() {
           </div>
 
           {/* Business Profile */}
-          <div className="rounded-card bg-surface border border-border shadow-card p-3">
+          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Your Business Profile</h3>
             <div className="flex items-start gap-3">
               {myProfile.photoURL ? (
@@ -461,13 +626,14 @@ export default function Dashboard() {
 
           {/* Leaderboard + Upcoming Meetings */}
           <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="rounded-card bg-surface border border-border shadow-card p-3">
+            <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
               <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Leaderboard</h3>
               {leaderboard.length === 0 ? (
                 <p className="text-xs text-muted text-center py-4">No deals recorded yet.</p>
               ) : (
+                <div>
                 <div className="divide-y divide-border">
-                  {leaderboard.slice(0, 7).map((entry, i) => (
+                  {leaderboard.slice(0, showAllLeaderboard ? leaderboard.length : 3).map((entry, i) => (
                     <div key={entry.uid} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'} text-xs`}>
@@ -486,6 +652,15 @@ export default function Dashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+                {isSuperAdmin(user?.email, profile?.role) && leaderboard.length > 3 && (
+                  <button
+                    onClick={() => setShowAllLeaderboard(!showAllLeaderboard)}
+                    className="mt-2 w-full text-[11px] font-medium text-primary hover:text-primary-hover transition-colors cursor-pointer py-1"
+                  >
+                    {showAllLeaderboard ? 'Show Less ▲' : `View All (${leaderboard.length}) ▼`}
+                  </button>
+                )}
                 </div>
               )}
             </div>
@@ -531,7 +706,7 @@ export default function Dashboard() {
                 )}
               </div>
               <Input
-                label="Amount (₹)"
+                label="Amount"
                 type="number"
                 value={dealAmount}
                 onChange={(e) => setDealAmount(e.target.value)}

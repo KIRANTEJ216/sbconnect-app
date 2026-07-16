@@ -4,7 +4,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { AppUser, UserProfile } from '../types';
-import { userToAppUser, setUserOnline } from '../lib/auth';
+import { userToAppUser, setUserOnline, setUserOffline } from '../lib/auth';
 import { isAdminEmail, isSuperAdminEmail } from '../lib/admin';
 
 interface AuthState {
@@ -25,6 +25,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, user: appUser, loading: false }));
         setUserOnline(firebaseUser.uid);
 
+        const handleUnload = () => setUserOffline(firebaseUser.uid);
+        window.addEventListener('beforeunload', handleUnload);
+
         const unsubProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
           if (snap.exists()) {
             const data = snap.data() as UserProfile;
@@ -42,7 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         });
 
-        return () => unsubProfile();
+        return () => {
+          unsubProfile();
+          window.removeEventListener('beforeunload', handleUnload);
+        };
       } else {
         setState({ user: null, profile: null, loading: false });
       }

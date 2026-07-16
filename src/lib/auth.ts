@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, setDoc, getDoc, getDocs, collection, query, where,
+  runTransaction, increment,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type { UserProfile } from '../types';
@@ -69,11 +70,37 @@ export async function resolvePhoneToEmail(phone: string): Promise<string | null>
 }
 
 export async function setUserOnline(uid: string) {
-  await setDoc(
-    doc(db, 'users', uid),
-    { onlineStatus: 'online', lastSeen: Date.now() },
-    { merge: true },
-  );
+  await runTransaction(db, async (tx) => {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await tx.get(userRef);
+    const wasOffline = userSnap.exists() && userSnap.data().onlineStatus !== 'online';
+    tx.set(userRef, { onlineStatus: 'online', lastSeen: Date.now() }, { merge: true });
+    if (wasOffline) {
+      const statsRef = doc(db, 'stats', 'online');
+      const statsSnap = await tx.get(statsRef);
+      if (statsSnap.exists()) {
+        tx.update(statsRef, { count: increment(1) });
+      } else {
+        tx.set(statsRef, { count: 1 });
+      }
+    }
+  });
+}
+
+export async function setUserOffline(uid: string) {
+  await runTransaction(db, async (tx) => {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await tx.get(userRef);
+    const wasOnline = userSnap.exists() && userSnap.data().onlineStatus === 'online';
+    tx.set(userRef, { onlineStatus: 'offline', lastSeen: Date.now() }, { merge: true });
+    if (wasOnline) {
+      const statsRef = doc(db, 'stats', 'online');
+      const statsSnap = await tx.get(statsRef);
+      if (statsSnap.exists() && (statsSnap.data().count ?? 0) > 0) {
+        tx.update(statsRef, { count: increment(-1) });
+      }
+    }
+  });
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {

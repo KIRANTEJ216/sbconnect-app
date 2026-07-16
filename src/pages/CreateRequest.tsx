@@ -111,7 +111,7 @@ export default function CreateRequest() {
               <Input
                 label="Budget"
                 type="text"
-                placeholder="e.g. ₹ 50,000"
+                placeholder="e.g. 50,000"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value.replace(/\D/g, ''))}
               />

@@ -2,8 +2,9 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { storage } from './firebase';
 
 export async function uploadProfilePhoto(uid: string, file: File): Promise<string> {
+  const compressed = await compressImage(file, 400, 0.75);
   const storageRef = ref(storage, `profiles/${uid}/photo_${Date.now()}`);
-  const snap = await uploadBytes(storageRef, file);
+  const snap = await uploadBytes(storageRef, compressed);
   return getDownloadURL(snap.ref);
 }
 
@@ -47,4 +48,33 @@ export async function downloadCatalogFile(url: string, index: number) {
   } catch {
     window.open(url, '_blank');
   }
+}
+
+export function compressImage(file: File, maxWidth = 400, quality = 0.75): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width;
+      let h = img.height;
+      if (w > maxWidth) {
+        h = (h / w) * maxWidth;
+        w = maxWidth;
+      }
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Compression failed'));
+        },
+        'image/jpeg',
+        quality,
+      );
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
 }

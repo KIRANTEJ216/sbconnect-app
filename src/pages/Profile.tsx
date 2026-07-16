@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
 import { isAdmin, isSuperAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
-import { replaceProfilePhoto, uploadCatalogFiles, downloadCatalogFile } from '../lib/storage';
+import { replaceProfilePhoto, uploadCatalogFiles, downloadCatalogFile, compressImage } from '../lib/storage';
 import { formatDate } from '../lib/format';
 import type { BusinessProfile, UserProfile } from '../types';
 import { INDUSTRIES, COMPANY_SIZES, LOCATIONS } from '../types';
@@ -15,24 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { TiltCard } from '../components/motion/TiltCard';
 import { MembershipCountdown } from '../components/MembershipCountdown';
-
-function QrCode({ value, size, fgColor }: { value: string; size: number; fgColor: string }) {
-  const [QRCodeSVG, setQRCodeSVG] = useState<React.ComponentType<{ value: string; size: number; fgColor: string }> | null>(null);
-
-  useEffect(() => {
-    import('qrcode.react').then((mod) => setQRCodeSVG(() => mod.QRCodeSVG));
-  }, []);
-
-  if (!QRCodeSVG) {
-    return (
-      <div className="w-[180px] h-[180px] bg-muted-bg rounded-2xl flex items-center justify-center">
-        <span className="text-xs text-muted">Loading QR...</span>
-      </div>
-    );
-  }
-
-  return <QRCodeSVG value={value} size={size} fgColor={fgColor} />;
-}
+import { CameraCapture } from '../components/CameraCapture';
 
 export default function Profile() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +29,7 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [catalogFiles, setCatalogFiles] = useState<File[]>([]);
   const photoRef = useRef<HTMLInputElement>(null);
   const catalogRef = useRef<HTMLInputElement>(null);
@@ -176,26 +160,42 @@ export default function Profile() {
     });
   };
 
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      setError('Photo must be under 5MB.');
-      return;
-    }
     if (!file.type.startsWith('image/')) {
       setError('Only image files (JPG, PNG, WebP) are allowed.');
       return;
     }
+    try {
+      const compressed = await compressImage(file, 400, 0.75);
+      const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      setPhotoFile(compressedFile);
+      setError('');
+      const reader = new FileReader();
+      reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
+      reader.readAsDataURL(compressedFile);
+    } catch {
+      setError('Failed to compress image. Try a different file.');
+    }
+  };
+
+  const handleCameraCapture = (blob: Blob) => {
+    const file = new File([blob], 'camera_photo.jpg', { type: 'image/jpeg' });
     setPhotoFile(file);
     setError('');
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
+    setCameraOpen(false);
   };
 
-  const handleCatalog = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryInstead = () => {
+    setCameraOpen(false);
+    setTimeout(() => photoRef.current?.click(), 100);
+  };
+
+  const handleCatalog = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     const total = catalogFiles.length + files.length;
@@ -209,7 +209,12 @@ export default function Profile() {
       if (f.size > maxSize) { setError(`"${f.name}" exceeds 10MB limit.`); return; }
       if (!allowed.includes(f.type)) { setError(`"${f.name}" must be JPG, PNG, WebP or PDF.`); return; }
     }
-    setCatalogFiles((prev) => [...prev, ...files]);
+    const compressed = await Promise.all(files.map(async (f) => {
+      if (f.type === 'application/pdf') return f;
+      const blob = await compressImage(f, 1200, 0.8);
+      return new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+    }));
+    setCatalogFiles((prev) => [...prev, ...compressed]);
     setError('');
   };
 
@@ -385,7 +390,7 @@ export default function Profile() {
   const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      addKeyword(keywordInput);
+      addKeyword(keywordInput.replace(/,+$/, '').trim());
       setKeywordInput('');
     }
   };
@@ -422,7 +427,6 @@ export default function Profile() {
     );
   }
 
-  const profileUrl = `${window.location.origin}/profile/${id}`;
 
   return (
     <AnimatedPage>
@@ -584,7 +588,7 @@ export default function Profile() {
                         <button
                           key={loc}
                           type="button"
-                          onMouseDown={() => { update('location', loc); setShowLocationDropdown(false); }}
+                          onMouseDown={(e) => { e.preventDefault(); update('location', loc); setShowLocationDropdown(false); }}
                           className="w-full text-left px-4 py-2 text-sm text-charcoal hover:bg-primary-light transition-colors cursor-pointer"
                         >
                           {loc}
@@ -636,10 +640,17 @@ export default function Profile() {
                       )}
                     </div>
                     <div>
-                      <input ref={photoRef} type="file" accept="image/*" onChange={handlePhoto} className="hidden" />
-                      <Button type="button" variant="outline" size="sm" onClick={() => photoRef.current?.click()}>
-                        {photoPreview ? 'Change Photo' : 'Upload Photo'}
-                      </Button>
+                      <input ref={photoRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => photoRef.current?.click()}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                          {photoPreview ? 'Change' : 'Gallery'}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setCameraOpen(true)}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                          Camera
+                        </Button>
+                      </div>
                       {photoPreview && (
                         <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(''); }} className="text-xs text-danger ml-3 hover:underline cursor-pointer">
                           Remove
@@ -658,7 +669,7 @@ export default function Profile() {
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
                       </svg>
-                      {catalogFiles.length > 0 ? `${catalogFiles.length} file${catalogFiles.length > 1 ? 's' : ''} selected` : 'Upload Files'}
+                      Upload Catalog
                     </Button>
                   </div>
                   {catalogFiles.length > 0 && (
@@ -982,20 +993,10 @@ export default function Profile() {
           </Card>
           </TiltCard>
           )}
-          <TiltCard>
-          <Card>
-            <CardContent className="p-4 sm:p-6 lg:p-8 text-center">
-              <h3 className="font-semibold text-charcoal tracking-tight mb-6">QR Code</h3>
-              <div className="bg-white p-5 rounded-2xl border border-border inline-block">
-                <QrCode value={profileUrl} size={180} fgColor="#18181B" />
-              </div>
-              <p className="text-xs text-muted mt-4 font-mono tracking-tight">Scan to view profile</p>
-            </CardContent>
-          </Card>
-          </TiltCard>
         </div>
       </div>
     </div>
+      {cameraOpen && <CameraCapture onCapture={handleCameraCapture} onClose={() => setCameraOpen(false)} onGallery={handleGalleryInstead} />}
     </AnimatedPage>
   );
 }

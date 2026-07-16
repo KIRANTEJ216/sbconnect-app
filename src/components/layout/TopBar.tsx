@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { signOut } from '../../lib/auth';
-import { useTotalBusinessValue } from '../../hooks/useFirebaseQuery';
+import { useTotalBusinessValue, useRevenueConfig, useOnlineUsersCount } from '../../hooks/useFirebaseQuery';
+import { getFinancialYear } from '../../lib/format';
+import { isSuperAdmin } from '../../lib/admin';
 import { useNavigate } from 'react-router-dom';
 
 const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -22,10 +24,13 @@ interface TopBarProps {
 }
 
 export function TopBar({ onMenuToggle }: TopBarProps) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { data: total = 0 } = useTotalBusinessValue();
+  const { data: revenueConfig } = useRevenueConfig();
+  const { data: onlineCount = 0 } = useOnlineUsersCount();
   const [now, setNow] = useState(new Date());
+  const isSuper = isSuperAdmin(user?.email, profile?.role);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -37,10 +42,19 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
     navigate('/login');
   };
 
-  const nowYear = now.getFullYear();
-  const nowMonth = now.getMonth() + 1;
-  const fyStart = nowMonth >= 4 ? nowYear : nowYear - 1;
-  const fyLabel = `${String(fyStart).slice(-2)}-${String(fyStart + 1).slice(-2)}`;
+  const fy = getFinancialYear();
+  const target = revenueConfig?.target || 0;
+  const remaining = Math.max(0, target - total);
+  const revPct = target > 0 ? Math.min((total / target) * 100, 100) : 0;
+  const achieved = target > 0 && total >= target;
+  const hasTarget = target > 0;
+  const urgency = fy.timeProgress;
+  const badgeColor = urgency > 0.75
+    ? 'bg-gradient-to-r from-danger/15 to-warning/15 border-danger/25 text-danger'
+    : urgency > 0.5
+      ? 'bg-gradient-to-r from-warning/10 to-accent/10 border-warning/20 text-warning'
+      : 'bg-gradient-to-r from-primary/10 to-success/10 border-primary/15 text-charcoal';
+  const badgeEmoji = achieved ? '🎉' : urgency > 0.75 ? '🚨' : urgency > 0.5 ? '⚠️' : '🔥';
 
   return (
     <header className="h-24 shrink-0 bg-surface-warm/80 backdrop-blur-md border-b border-border flex items-center justify-between px-4 sm:px-6 sticky top-0 z-40">
@@ -63,12 +77,28 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
       </div>
 
       <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center leading-tight px-2">
-        <span className="text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight gradient-text truncate max-w-full">₹ {total.toLocaleString('en-IN')}</span>
-        <span className="text-[10px] sm:text-xs text-muted font-mono tracking-tight mt-0.5 sm:mt-1">Revenue &middot; FY {fyLabel}</span>
-        <p className="hidden sm:block text-[11px] text-steel font-mono tracking-tight mt-0.5">{total > 0 ? toWords(total) : 'Zero'} Rupees</p>
+        <span className="text-lg sm:text-2xl lg:text-4xl font-bold tracking-tight gradient-text truncate max-w-full">{hasTarget ? remaining.toLocaleString('en-IN') : total.toLocaleString('en-IN')}</span>
+        <span className="text-[10px] sm:text-xs text-muted font-mono tracking-tight mt-0.5 sm:mt-1">{fy.fyLabel}{hasTarget ? ` · ₹ ${total.toLocaleString('en-IN')} of ₹ ${target.toLocaleString('en-IN')} target` : ` · ₹ ${total.toLocaleString('en-IN')}`}</span>
+        <div className="hidden sm:flex items-center gap-1.5 mt-0.5">
+          <span className={`px-1.5 py-0.5 rounded-full ${badgeColor} border text-[10px] font-semibold transition-all duration-500`}>
+            {achieved ? '🎉 Target Hit' : `${badgeEmoji} ${fy.remainingMonths}m ${fy.remainingDaysInMonth}d`}
+          </span>
+          {total > 0 && (
+            <span className="text-[10px] text-steel font-mono tracking-tight">{toWords(total)}</span>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center">
+      <div className="flex items-center gap-2">
+        {isSuper && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-success/5 border border-success/15 text-xs font-semibold text-success" title="Live online users">
+            <span className="relative flex w-2 h-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-40" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success" />
+            </span>
+            {onlineCount} online
+          </div>
+        )}
         {user && (
           <button
             onClick={handleSignOut}

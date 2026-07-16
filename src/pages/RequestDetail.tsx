@@ -249,7 +249,7 @@ export default function RequestDetail() {
             <textarea
               className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
               rows={3}
-              placeholder="Tell the requester why you're interested and how you can help..."
+               placeholder="Tell the requester why you're interested and how you can help..."
               value={interestMessage}
               onChange={(e) => setInterestMessage(e.target.value)}
             />

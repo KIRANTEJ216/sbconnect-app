@@ -3,7 +3,8 @@ import {
   getAllProfiles, getMeetings, getLeaderboard,
   getAllRequests, getTotalBusinessValue,
   getAttendanceCompliance, getUserRSVPs, getBusinessProfile,
-  getMeetingRSVPs, getUnverifiedProfiles,
+  getMeetingRSVPs, getUnverifiedProfiles, getRevenueConfig,
+  getOnlineUsersCount,
 } from '../lib/firestore';
 import type { MeetingRSVP } from '../types';
 
@@ -43,8 +44,8 @@ export function useTotalBusinessValue() {
   return useQuery({
     queryKey: ['totalBusinessValue'],
     queryFn: getTotalBusinessValue,
-    staleTime: 1000 * 30,
-    refetchInterval: 30000,
+    staleTime: 1000 * 60,
+    refetchInterval: 60000,
   });
 }
 
@@ -95,7 +96,7 @@ export function useAllRsvpsByMeeting() {
       return Object.fromEntries(entries) as Record<string, MeetingRSVP[]>;
     },
     staleTime: 0,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
   });
 }
 
@@ -104,5 +105,22 @@ export function useUnverifiedProfiles() {
     queryKey: ['unverifiedProfiles'],
     queryFn: getUnverifiedProfiles,
     staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useRevenueConfig() {
+  return useQuery({
+    queryKey: ['revenueConfig'],
+    queryFn: getRevenueConfig,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useOnlineUsersCount() {
+  return useQuery({
+    queryKey: ['onlineUsersCount'],
+    queryFn: getOnlineUsersCount,
+    staleTime: 1000 * 30,
+    refetchInterval: 30_000,
   });
 }

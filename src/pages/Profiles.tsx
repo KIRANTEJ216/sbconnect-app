@@ -65,41 +65,54 @@ export default function Profiles() {
       ) : (
         <StaggerList className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {filtered.map((p) => (
-            <StaggerItem key={p.uid}>
-            <Link to={`/profile/${p.uid}`}>
-              <TiltCard>
+            <StaggerItem key={p.uid} className="h-full">
+            <Link to={`/profile/${p.uid}`} className="block h-full">
+              <TiltCard className="h-full">
               <Card className="hover:shadow-card-hover transition-all duration-300 cursor-pointer h-full hover:-translate-y-0.5">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-11 h-11 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold">
-                      {p.companyName.charAt(0)}
+                <CardContent className="p-6 flex flex-col">
+                  <div>
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="w-11 h-11 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold">
+                        {p.companyName.charAt(0)}
+                      </div>
+                      <Badge variant={p.membershipStatus === 'active' ? 'success' : 'neutral'}>
+                        {p.membershipStatus === 'active' ? 'Active' : 'Inactive'}
+                      </Badge>
                     </div>
-                    <Badge variant={p.membershipStatus === 'active' ? 'success' : 'neutral'}>
-                      {p.membershipStatus === 'active' ? 'Active' : 'Inactive'}
-                    </Badge>
+                    <h3 className="font-semibold text-charcoal tracking-tight">{p.companyName}</h3>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {p.verified ? (
+                        <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-success-light text-success border border-success/20">Verified</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-warning-light text-warning border border-warning/20">Pending</span>
+                      )}
+                    </div>
                   </div>
-                  <h3 className="font-semibold text-charcoal tracking-tight">{p.companyName}</h3>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    {p.verified ? (
-                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-success-light text-success border border-success/20">Verified</span>
-                    ) : (
-                      <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-warning-light text-warning border border-warning/20">Pending</span>
+                  <div className="mt-auto pt-3 space-y-1.5">
+                    <div className="flex flex-wrap gap-1">
+                      {(p.categories ?? []).slice(0, 2).map((cat) => (
+                        <span key={cat} className="px-2 py-0.5 text-[10px] font-medium rounded-lg bg-primary-light text-primary border border-primary/20">
+                          {cat}
+                        </span>
+                      ))}
+                      {(p.categories ?? []).length > 2 && (
+                        <span className="text-[10px] text-muted font-mono">+{p.categories.length - 2}</span>
+                      )}
+                    </div>
+                    {(p.keywords ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {(p.keywords ?? []).slice(0, 2).map((kw) => (
+                          <span key={kw} className="px-2 py-0.5 text-[10px] font-medium rounded-lg bg-canvas text-muted border border-border">
+                            {kw}
+                          </span>
+                        ))}
+                        {(p.keywords ?? []).length > 2 && (
+                          <span className="text-[10px] text-muted font-mono">+{p.keywords.length - 2}</span>
+                        )}
+                      </div>
                     )}
+                    <p className="text-sm text-steel pt-0.5 border-t border-border/40">{p.location}</p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {(p.categories ?? []).slice(0, 3).map((cat) => (
-                      <span
-                        key={cat}
-                        className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-primary-light text-primary border border-primary/20"
-                      >
-                        {cat}
-                      </span>
-                    ))}
-                    {(p.categories ?? []).length > 3 && (
-                      <span className="text-[11px] text-muted font-mono">+{p.categories.length - 3}</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-steel mt-1.5">{p.location}</p>
                 </CardContent>
               </Card>
               </TiltCard>

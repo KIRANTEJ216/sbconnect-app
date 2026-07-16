@@ -17,19 +17,24 @@ export function StrikeWarning({ uid, compact }: StrikeWarningProps) {
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-danger-light text-danger border border-danger/20 text-sm">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-          <line x1="12" y1="9" x2="12" y2="13" />
-          <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
-        <span>Attendance warning: {missing} more meeting{missing > 1 ? 's' : ''} required in 6-month window.</span>
+      <div className="px-4 py-3 rounded-xl bg-danger-light border border-danger/20 text-sm space-y-1.5 text-center">
+        <div className="flex items-center justify-center gap-2 text-danger">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <span>Attendance warning: {missing} more meeting{missing > 1 ? 's' : ''} required in 6-month window.</span>
+        </div>
+        <p className="text-xs text-steel">
+          If you do not meet this requirement, you will need to <strong>renew your membership for ₹1,000</strong> to rejoin the community.
+        </p>
       </div>
     );
   }
 
   return (
-    <Card>
+    <Card className="stat-accent-top">
       <CardContent className="p-6">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 bg-danger-light rounded-2xl flex items-center justify-center shrink-0">
@@ -48,7 +53,7 @@ export function StrikeWarning({ uid, compact }: StrikeWarningProps) {
               )}
             </p>
             <p className="text-sm text-steel mt-2">
-              If you do not meet this requirement, you will need to <strong>renew your membership for ₹1,000</strong> to rejoin the community.
+              If you do not meet this requirement, you will need to <strong>renew your membership for 1,000</strong> to rejoin the community.
             </p>
           </div>
         </div>

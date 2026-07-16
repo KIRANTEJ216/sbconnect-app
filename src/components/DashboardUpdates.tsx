@@ -48,10 +48,9 @@ export function DashboardUpdates() {
   }).slice(0, 3);
 
   return (
-    <Card>
-      <div className="stat-accent-top">
-        <CardContent className="p-3">
-          <h3 className="font-semibold text-charcoal tracking-tight text-sm mb-2 flex items-center gap-1.5">
+    <Card className="stat-accent-top">
+      <CardContent className="p-3">
+        <h3 className="font-semibold text-charcoal tracking-tight text-sm mb-2 flex items-center gap-1.5">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
               <line x1="16" y1="2" x2="16" y2="6" />
@@ -75,7 +74,7 @@ export function DashboardUpdates() {
                   {current === 'yes' ? (
                     <div className="flex items-center gap-1">
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-success-light text-success">
-                        Going{guestMap[m.id] ? ` +${guestMap[m.id]}` : ''}
+                        Attend{guestMap[m.id] ? ` +${guestMap[m.id]}` : ''}
                       </span>
                       <button
                         onClick={() => setEditingGuest(editingGuest === m.id ? null : m.id)}
@@ -145,7 +144,6 @@ export function DashboardUpdates() {
             )})}
           </div>
         </CardContent>
-      </div>
-    </Card>
+      </Card>
   );
 }

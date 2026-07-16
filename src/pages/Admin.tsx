@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig } from '../lib/firestore';
+import type { LoginLog, ImportProfileEntry } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
-import type { LoginLog } from '../lib/firestore';
 import { useAllRsvpsByMeeting } from '../hooks/useFirebaseQuery';
-import { formatDate, formatTime, formatCurrency } from '../lib/format';
+import { formatDate, formatTime, formatCurrency, getFinancialYear } from '../lib/format';
 import { isSuperAdmin } from '../lib/admin';
-import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request, IssueReport } from '../types';
+import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request, IssueReport, Deal, LeaderboardEntry, RevenueConfig } from '../types';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -72,6 +73,7 @@ export default function Admin() {
   const { user, profile } = useAuth();
   const canWrite = isSuperAdmin(user?.email, profile?.role);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [pending, setPending] = useState<BusinessProfile[]>([]);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [approving, setApproving] = useState<string | null>(null);
@@ -105,12 +107,19 @@ export default function Admin() {
 
   const [requests, setRequests] = useState<Request[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [allLeaderboard, setAllLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [dealsLoading, setDealsLoading] = useState(false);
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
   const [closingRequestId, setClosingRequestId] = useState<string | null>(null);
   const [awardingRequest, setAwardingRequest] = useState<Request | null>(null);
   const [awardAmount, setAwardAmount] = useState('');
   const [awardingTo, setAwardingTo] = useState('');
   const [awardingLoading, setAwardingLoading] = useState(false);
+  const [revenueConfig, setRevenueConfig] = useState<RevenueConfig | null>(null);
+  const [revTargetInput, setRevTargetInput] = useState('');
+  const [revSaving, setRevSaving] = useState(false);
+  const [revMsg, setRevMsg] = useState('');
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
 
@@ -152,6 +161,7 @@ export default function Admin() {
     loadRequests();
     loadIssueReports();
     loadWebhookUrl();
+    loadDeals();
     if (isSuper) loadAdmins();
   }, [isSuper]);
 
@@ -197,6 +207,20 @@ export default function Admin() {
     try { setLogs(await getLoginLogs()); }
     catch (e) { console.error(e); }
     setLogsLoading(false);
+  }
+
+  async function loadDeals() {
+    setDealsLoading(true);
+    try {
+      const [d, lb, rc] = await Promise.all([getDeals(), getLeaderboard(), getRevenueConfig()]);
+      setDeals(d);
+      setAllLeaderboard(lb);
+      if (rc) {
+        setRevenueConfig(rc);
+        setRevTargetInput(String(rc.target));
+      }
+    } catch (e) { console.error(e); }
+    setDealsLoading(false);
   }
 
   async function loadRequests() {
@@ -390,6 +414,24 @@ export default function Admin() {
     setWebhookSyncing(false);
   };
 
+  const handleSaveRevenue = async () => {
+    if (!canWrite || !user) return;
+    setRevSaving(true);
+    setRevMsg('');
+    try {
+      const target = parseFloat(revTargetInput.replace(/[^0-9.]/g, ''));
+      if (isNaN(target) || target <= 0) { setRevMsg('Enter a valid target amount.'); setRevSaving(false); return; }
+      const fy = getFinancialYear().fyLabel;
+      await setRevenueConfig(target, fy, user.uid);
+      setRevenueConfig({ target, financialYear: fy, updatedBy: user.uid, updatedAt: Date.now() });
+      queryClient.invalidateQueries({ queryKey: ['revenueConfig'] });
+      setRevMsg('Revenue target saved.');
+    } catch (e) {
+      setRevMsg('Failed to save: ' + (e instanceof Error ? e.message : e));
+    }
+    setRevSaving(false);
+  };
+
   const tabs = [
     { id: 'members', label: 'Members', icon: '👥' },
     { id: 'meetings', label: 'Meetings', icon: '📅' },
@@ -398,6 +440,8 @@ export default function Admin() {
     { id: 'reports', label: 'Reports', icon: '📊' },
     { id: 'security', label: 'Security', icon: '🔑' },
     { id: 'referrals', label: 'Referrals', icon: '📢' },
+    { id: 'deals', label: 'Deals', icon: '📈' },
+    { id: 'import', label: 'Import', icon: '📥' },
   ] as const;
 
   return (
@@ -547,6 +591,11 @@ export default function Admin() {
                             {canWrite && !p.paidDate && (
                               <Button size="sm" variant="primary" onClick={() => { setPaidDialogUid(p.uid); setPaidDateValue(new Date().toISOString().split('T')[0]); }}>
                                 Set Paid
+                              </Button>
+                            )}
+                            {canWrite && (
+                              <Button size="sm" variant="danger" onClick={async () => { if (!confirm(`Delete business profile for "${p.companyName}"? This cannot be undone.`)) return; try { await deleteBusinessProfile(p.uid); loadProfiles(); } catch (e) { alert('Failed: ' + (e instanceof Error ? e.message : e)); } }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                               </Button>
                             )}
                             </div>
@@ -1553,6 +1602,121 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ── Deals Tab ── */}
+      {activeTab === 'deals' && (
+        <div className="space-y-6">
+          {/* Revenue Target Config (super admin) */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-charcoal tracking-tight">🎯 Revenue Target</h3>
+            </CardHeader>
+            <CardContent className="p-5 space-y-3">
+              {revenueConfig && (
+                <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
+                  <div>
+                    <p className="text-xs text-muted">Current Target · {getFinancialYear().fyLabel}</p>
+                    <p className="text-lg font-bold text-charcoal">{formatCurrency(String(revenueConfig.target))}</p>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-charcoal mb-1">Target Amount (₹)</label>
+                <input type="text" value={revTargetInput} onChange={(e) => setRevTargetInput(e.target.value)} placeholder="350000000" className="w-full rounded-xl border border-border px-3 py-2 text-sm" />
+              </div>
+              <div className="flex items-center gap-3">
+                {canWrite && <Button onClick={handleSaveRevenue} loading={revSaving}>Save Target</Button>}
+                {revMsg && <span className={`text-xs ${revMsg.includes('saved') ? 'text-success' : 'text-danger'}`}>{revMsg}</span>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Full Leaderboard */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-charcoal tracking-tight">📊 Full Leaderboard ({allLeaderboard.length})</h3>
+            </CardHeader>
+            <CardContent>
+              {dealsLoading ? (
+                <div className="skeleton h-48 rounded-xl" />
+              ) : allLeaderboard.length === 0 ? (
+                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">#</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Company</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Owner</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Revenue</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Deals</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {allLeaderboard.map((entry, i) => (
+                        <tr key={entry.uid} className="hover:bg-canvas/50 transition-colors">
+                          <td className="px-4 py-2.5 text-xs text-muted">{i + 1}</td>
+                          <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{entry.companyName}</td>
+                          <td className="px-4 py-2.5 text-xs text-steel">{entry.ownerName || '—'}</td>
+                          <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{formatCurrency(String(entry.totalRevenue))}</td>
+                          <td className="px-4 py-2.5 text-xs text-right">
+                            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1.5 rounded-full bg-primary-light text-primary text-[10px] font-semibold">{entry.dealCount}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* All Deals */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-charcoal tracking-tight">📝 All Deals ({deals.length})</h3>
+            </CardHeader>
+            <CardContent>
+              {dealsLoading ? (
+                <div className="skeleton h-48 rounded-xl" />
+              ) : deals.length === 0 ? (
+                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Date</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Giver</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Receiver</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Request</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {deals.sort((a, b) => b.createdAt - a.createdAt).map((d) => (
+                        <tr key={d.id} className="hover:bg-canvas/50 transition-colors">
+                          <td className="px-4 py-2.5 text-xs text-muted font-mono whitespace-nowrap">{formatDate(d.createdAt)}</td>
+                          <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{d.giverCompanyName}</td>
+                          <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{d.receiverCompanyName}</td>
+                          <td className="px-4 py-2.5 text-xs text-steel max-w-[160px] truncate" title={d.requestTitle}>{d.requestTitle}</td>
+                          <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{formatCurrency(d.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Import Tab ── */}
+      {activeTab === 'import' && (
+        <ImportProfiles />
+      )}
+
       {/* ── Award Deal Modal (always visible) ── */}
       {awardingRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAwardingRequest(null)}>
@@ -1575,7 +1739,7 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-charcoal mb-1">Deal amount</label>
-                  <input type="text" value={awardAmount} onChange={(e) => setAwardAmount(e.target.value)} placeholder="₹ 0" className="w-full rounded-xl border border-border px-3 py-2 text-sm" />
+                  <input type="text" value={awardAmount} onChange={(e) => setAwardAmount(e.target.value)} placeholder="0" className="w-full rounded-xl border border-border px-3 py-2 text-sm" />
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" className="flex-1" onClick={() => setAwardingRequest(null)}>Cancel</Button>
@@ -1588,5 +1752,237 @@ export default function Admin() {
       )}
     </div>
     </AnimatedPage>
+  );
+}
+
+function ImportProfiles() {
+  const [file, setFile] = useState<File | null>(null);
+  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ success: number; errors: string[] } | null>(null);
+
+  const profileFields = [
+    { value: 'ownerName', label: 'Owner Name *' },
+    { value: 'ownerSurname', label: 'Owner Surname' },
+    { value: 'phone', label: 'Phone *' },
+    { value: 'companyName', label: 'Company Name *' },
+    { value: 'contactEmail', label: 'Email' },
+    { value: 'location', label: 'Location' },
+    { value: 'website', label: 'Website' },
+    { value: 'description', label: 'Description' },
+    { value: 'categories', label: 'Categories (comma-separated)' },
+    { value: 'companySize', label: 'Company Size' },
+    { value: 'membershipStatus', label: 'Membership Status' },
+    { value: 'countryCode', label: 'Country Code' },
+    { value: '__skip', label: '— Skip this column —' },
+  ];
+
+  function parseCSVLine(line: string): string[] {
+    const out: string[] = [];
+    let cur = '', q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (q && line[i + 1] === '"') { cur += '"'; i++; }
+        else q = !q;
+      } else if (c === ',' && !q) { out.push(cur.trim()); cur = ''; }
+      else cur += c;
+    }
+    out.push(cur.trim());
+    return out;
+  }
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.name.endsWith('.csv')) {
+      setResult({ success: 0, errors: ['Only CSV files are supported. Please convert your Excel file to CSV first.'] });
+      return;
+    }
+    setFile(f);
+    setResult(null);
+
+    const text = await f.text();
+    const lines = text.split('\n').filter((l) => l.trim());
+    if (lines.length < 2) { setResult({ success: 0, errors: ['CSV file is empty or has no data rows.'] }); return; }
+    const headers = parseCSVLine(lines[0]);
+    const data: Record<string, string>[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVLine(lines[i]);
+      const row: Record<string, string> = {};
+      headers.forEach((h, j) => { row[h] = values[j] ?? ''; });
+      data.push(row);
+    }
+    setRows(data);
+
+    const keys = data.length > 0 ? Object.keys(data[0]) : [];
+    const auto: Record<string, string> = {};
+    for (const h of keys) {
+      const hl = h.toLowerCase().replace(/[\s_-]/g, '');
+      if (hl.includes('ownername') || hl.includes('ownerfirst') || hl.includes('firstname') || hl.includes('firstName')) auto[h] = 'ownerName';
+      else if (hl.includes('ownersurname') || hl.includes('ownerlast') || hl.includes('lastname') || hl.includes('surname')) auto[h] = 'ownerSurname';
+      else if (hl.includes('companyname') || hl.includes('businessname') || hl.includes('businessName') || hl.includes('companyName')) auto[h] = 'companyName';
+      else if (hl.includes('phone') || hl.includes('mobile') || hl.includes('contactno') || hl.includes('contactNo')) auto[h] = 'phone';
+      else if (hl.includes('email') || hl.includes('contactemail') || hl.includes('e-mail')) auto[h] = 'contactEmail';
+      else if (hl.includes('location') || hl.includes('city') || hl.includes('address')) auto[h] = 'location';
+      else if (hl.includes('website') || hl.includes('web') || hl.includes('url')) auto[h] = 'website';
+      else if (hl.includes('description') || hl.includes('desc') || hl.includes('about')) auto[h] = 'description';
+      else if (hl.includes('categor') || hl.includes('industry') || hl.includes('sector')) auto[h] = 'categories';
+      else if (hl.includes('companysize') || hl.includes('size') || hl.includes('employees')) auto[h] = 'companySize';
+      else if (hl.includes('membershipstatus') || hl.includes('status')) auto[h] = 'membershipStatus';
+      else if (hl.includes('countrycode') || hl.includes('countryCode') || hl.includes('country')) auto[h] = 'countryCode';
+      else auto[h] = '__skip';
+    }
+    setMapping(auto);
+  };
+
+  const handleImport = async () => {
+    if (!rows.length) return;
+    setImporting(true);
+    setResult(null);
+    const fieldToColumn = Object.entries(mapping).reduce((acc, [col, field]) => {
+      if (field !== '__skip') acc[field] = col;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const entries: ImportProfileEntry[] = rows.map((row) => {
+      const get = (field: string) => row[fieldToColumn[field]] ?? '';
+
+      let categories: string[] | undefined;
+      const rawCat = get('categories');
+      if (rawCat) categories = rawCat.split(',').map((s) => s.trim()).filter(Boolean);
+
+      let membershipExpiry: number | undefined;
+      const rawExpiry = row[fieldToColumn['membershipExpiry'] ?? ''];
+      if (rawExpiry) {
+        const parsed = Date.parse(rawExpiry);
+        if (!isNaN(parsed)) membershipExpiry = parsed;
+      }
+
+      return {
+        ownerName: get('ownerName'),
+        ownerSurname: get('ownerSurname') || undefined,
+        phone: get('phone'),
+        companyName: get('companyName'),
+        contactEmail: get('contactEmail') || undefined,
+        location: get('location') || undefined,
+        website: get('website') || undefined,
+        description: get('description') || undefined,
+        categories,
+        companySize: get('companySize') || undefined,
+        membershipStatus: (get('membershipStatus') || 'inactive') as 'active' | 'inactive' | 'expired',
+        membershipExpiry,
+        countryCode: get('countryCode') || undefined,
+      };
+    });
+
+    const res = await bulkImportProfiles(entries);
+    setResult(res);
+    setImporting(false);
+  };
+
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <h3 className="font-semibold text-charcoal tracking-tight">📥 Import Business Profiles</h3>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <p className="text-sm text-steel">
+            Upload a CSV file to bulk-import business profiles.
+            Required columns: <strong>Owner Name</strong>, <strong>Phone</strong>, <strong>Company Name</strong>. For Excel files, export as CSV first.
+          </p>
+          <label className="flex items-center justify-center w-full h-28 border-2 border-dashed border-border rounded-xl bg-canvas/30 hover:bg-canvas/50 cursor-pointer transition-colors">
+            <div className="text-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-1 text-muted">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <p className="text-xs text-muted">{file ? file.name : 'Click to select file'}</p>
+            </div>
+            <input type="file" accept=".csv" onChange={handleFile} className="hidden" />
+          </label>
+
+          {rows.length > 0 && (
+            <>
+              <div>
+                <h4 className="text-sm font-semibold text-charcoal mb-2">Column Mapping ({rows.length} rows)</h4>
+                <div className="space-y-2">
+                  {headers.map((h) => (
+                    <div key={h} className="flex items-center gap-3 text-sm">
+                      <span className="w-1/3 text-xs text-steel font-medium truncate" title={h}>{h}</span>
+                      <select
+                        value={mapping[h] ?? '__skip'}
+                        onChange={(e) => setMapping((prev) => ({ ...prev, [h]: e.target.value }))}
+                        className="flex-1 rounded-lg border border-border px-3 py-1.5 text-xs bg-white"
+                      >
+                        {profileFields.map((f) => (
+                          <option key={f.value} value={f.value}>{f.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-charcoal mb-2">Preview (first 5 rows)</h4>
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted-bg border-b border-border">
+                        {headers.map((h) => (
+                          <th key={h} className="px-3 py-2 text-left font-medium text-muted whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {rows.slice(0, 5).map((row, i) => (
+                        <tr key={i}>
+                          {headers.map((h) => (
+                            <td key={h} className="px-3 py-2 text-steel whitespace-nowrap max-w-[150px] truncate" title={row[h]}>{row[h]}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  variant="primary"
+                  onClick={handleImport}
+                  loading={importing}
+                  disabled={importing || !rows.length}
+                >
+                  Import {rows.length} Profile{rows.length !== 1 ? 's' : ''}
+                </Button>
+                <Button variant="outline" onClick={() => { setFile(null); setRows([]); setMapping({}); setResult(null); }}>
+                  Clear
+                </Button>
+              </div>
+            </>
+          )}
+
+          {result && (
+            <div className={`p-4 rounded-xl ${result.errors.length === 0 ? 'bg-success-light/20 border border-success/20' : 'bg-warning-light/20 border border-warning/20'}`}>
+              <p className="text-sm font-semibold text-charcoal">
+                {result.success > 0 ? `✓ ${result.success} profile${result.success !== 1 ? 's' : ''} imported successfully.` : 'No profiles imported.'}
+              </p>
+              {result.errors.length > 0 && (
+                <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
+                  {result.errors.map((err, i) => (
+                    <p key={i} className="text-xs text-danger">{err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

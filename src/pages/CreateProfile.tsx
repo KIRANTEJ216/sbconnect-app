@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone } from '../lib/firestore';
-import { uploadProfilePhoto, uploadCatalogFiles } from '../lib/storage';
+import { uploadProfilePhoto, uploadCatalogFiles, compressImage } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
@@ -11,6 +11,7 @@ import { INDUSTRIES, COMPANY_SIZES, LOCATIONS } from '../types';
 import type { BusinessProfile } from '../types';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { ProfileSuggestions } from '../components/profile/ProfileSuggestions';
+import { CameraCapture } from '../components/CameraCapture';
 
 export default function CreateProfile() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function CreateProfile() {
   const [error, setError] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [catalogFiles, setCatalogFiles] = useState<File[]>([]);
   const photoRef = useRef<HTMLInputElement>(null);
   const catalogRef = useRef<HTMLInputElement>(null);
@@ -68,7 +70,7 @@ export default function CreateProfile() {
   const handleKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      addKeyword(keywordInput);
+      addKeyword(keywordInput.replace(/,+$/, '').trim());
       setKeywordInput('');
     }
   };
@@ -106,26 +108,42 @@ export default function CreateProfile() {
     }));
   };
 
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      setError('Photo must be under 5MB.');
-      return;
-    }
     if (!file.type.startsWith('image/')) {
       setError('Only image files (JPG, PNG, WebP) are allowed.');
       return;
     }
+    try {
+      const compressed = await compressImage(file, 400, 0.75);
+      const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      setPhotoFile(compressedFile);
+      setError('');
+      const reader = new FileReader();
+      reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
+      reader.readAsDataURL(compressedFile);
+    } catch {
+      setError('Failed to compress image. Try a different file.');
+    }
+  };
+
+  const handleCameraCapture = (blob: Blob) => {
+    const file = new File([blob], 'camera_photo.jpg', { type: 'image/jpeg' });
     setPhotoFile(file);
     setError('');
     const reader = new FileReader();
     reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
     reader.readAsDataURL(file);
+    setCameraOpen(false);
   };
 
-  const handleCatalog = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryInstead = () => {
+    setCameraOpen(false);
+    setTimeout(() => photoRef.current?.click(), 100);
+  };
+
+  const handleCatalog = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     const total = catalogFiles.length + files.length;
@@ -139,7 +157,12 @@ export default function CreateProfile() {
       if (f.size > maxSize) { setError(`"${f.name}" exceeds 10MB limit.`); return; }
       if (!allowed.includes(f.type)) { setError(`"${f.name}" must be JPG, PNG, WebP or PDF.`); return; }
     }
-    setCatalogFiles((prev) => [...prev, ...files]);
+    const compressed = await Promise.all(files.map(async (f) => {
+      if (f.type === 'application/pdf') return f;
+      const blob = await compressImage(f, 1200, 0.8);
+      return new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+    }));
+    setCatalogFiles((prev) => [...prev, ...compressed]);
     setError('');
   };
 
@@ -379,7 +402,7 @@ export default function CreateProfile() {
                         <button
                           key={loc}
                           type="button"
-                          onMouseDown={() => { update('location', loc); setShowLocationDropdown(false); }}
+                          onMouseDown={(e) => { e.preventDefault(); update('location', loc); setShowLocationDropdown(false); }}
                           className="w-full text-left px-4 py-2 text-sm text-charcoal hover:bg-primary-light transition-colors cursor-pointer"
                         >
                           {loc}
@@ -436,12 +459,20 @@ export default function CreateProfile() {
                           ref={photoRef}
                           type="file"
                           accept="image/*"
+                          capture="environment"
                           onChange={handlePhoto}
                           className="hidden"
                         />
-                        <Button type="button" variant="outline" size="sm" onClick={() => photoRef.current?.click()}>
-                          {photoPreview ? 'Change Photo' : 'Upload Photo'}
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => photoRef.current?.click()}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                            {photoPreview ? 'Change' : 'Gallery'}
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setCameraOpen(true)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                            Camera
+                          </Button>
+                        </div>
                         {photoPreview && (
                           <button
                             type="button"
@@ -472,7 +503,7 @@ export default function CreateProfile() {
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                           <polyline points="14 2 14 8 20 8" />
                         </svg>
-                        {catalogFiles.length > 0 ? `${catalogFiles.length} file${catalogFiles.length > 1 ? 's' : ''} selected` : 'Upload Files'}
+                        Upload Catalog
                       </Button>
                     </div>
                     {catalogFiles.length > 0 && (
@@ -584,6 +615,7 @@ export default function CreateProfile() {
         </div>
       </div>
     </div>
+      {cameraOpen && <CameraCapture onCapture={handleCameraCapture} onClose={() => setCameraOpen(false)} onGallery={handleGalleryInstead} />}
     </AnimatedPage>
   );
 }

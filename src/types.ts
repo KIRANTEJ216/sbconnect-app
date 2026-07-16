@@ -174,7 +174,7 @@ export interface AppNotification {
 export interface UserNotification {
   id: string;
   uid: string;
-  type: 'issue_resolved' | 'admin_message' | 'issue_reply';
+  type: 'issue_resolved' | 'admin_message' | 'issue_reply' | 'deal_won' | 'deal_thanks';
   title: string;
   message: string;
   relatedId: string;
@@ -330,3 +330,10 @@ export const INDUSTRIES = [
   'Transportation',
   'Other',
 ] as const;
+
+export interface RevenueConfig {
+  target: number;
+  financialYear: string;
+  updatedBy: string;
+  updatedAt: number;
+}

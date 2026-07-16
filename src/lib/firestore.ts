@@ -1,7 +1,7 @@
 import {
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   collection, query, where, orderBy, limit, arrayUnion,
-  addDoc, onSnapshot, runTransaction, writeBatch,
+  addDoc, onSnapshot, runTransaction, writeBatch, increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { getAuth } from 'firebase/auth';
@@ -36,7 +36,7 @@ async function requireSuperAdmin(): Promise<string> {
 import type {
   BusinessProfile, Request, Conversation, Message,
   Interest, Deal, LeaderboardEntry, UserProfile,
-  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport, IssueReply, UserNotification,
+  Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport, IssueReply, UserNotification, RevenueConfig,
 } from '../types';
 
 export async function createBusinessProfile(
@@ -217,6 +217,11 @@ export async function getUserRequests(uid: string): Promise<Request[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Request));
 }
 
+export async function getAwardedRequests(uid: string): Promise<Request[]> {
+  const all = await getUserRequests(uid);
+  return all.filter((r) => r.awardedTo).sort((a, b) => b.createdAt - a.createdAt);
+}
+
 // ─── Interest & Deals ───
 
 export async function expressInterest(requestId: string, uid: string, companyName: string, phone: string, message: string) {
@@ -273,6 +278,8 @@ export async function awardDeal(
     createdAt: Date.now(),
   });
   await updateDoc(doc(db, 'requests', requestId), { status: 'closed', awardedTo: receiverUid });
+  sendUserNotification(receiverUid, 'deal_won', '🎉 You Won!', `Your pitch for "${requestTitle}" was selected by ${giverCompanyName}!`, requestId).catch(() => {});
+  sendUserNotification(giverUid, 'deal_thanks', '🙏 Thank You!', `${receiverCompanyName} sends their thanks for awarding "${requestTitle}" to them.`, requestId).catch(() => {});
   return dealRef.id;
 }
 
@@ -294,17 +301,37 @@ export async function recordDeal(
     amount,
     createdAt: Date.now(),
   });
+  const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
+  if (parsed > 0) {
+    await runTransaction(db, async (tx) => {
+      const statsRef = doc(db, 'stats', 'deals');
+      const snap = await tx.get(statsRef);
+      if (snap.exists()) {
+        tx.update(statsRef, { totalValue: increment(parsed), updatedAt: Date.now() });
+      } else {
+        tx.set(statsRef, { totalValue: parsed, updatedAt: Date.now() });
+      }
+    });
+  }
   return ref.id;
 }
 
-export async function getTotalBusinessValue(): Promise<number> {
-  const snap = await getDocs(collection(db, 'deals'));
+export async function ensureDealStats(): Promise<void> {
+  const ref = doc(db, 'stats', 'deals');
+  const snap = await getDoc(ref);
+  if (snap.exists()) return;
+  const dealsSnap = await getDocs(collection(db, 'deals'));
   let total = 0;
-  for (const d of snap.docs) {
-    const amount = parseFloat(String(d.data().amount || '0').replace(/[^0-9.]/g, '')) || 0;
-    total += amount;
+  for (const d of dealsSnap.docs) {
+    total += parseFloat(String(d.data().amount || '0').replace(/[^0-9.]/g, '')) || 0;
   }
-  return total;
+  await setDoc(ref, { totalValue: total, updatedAt: Date.now() });
+}
+
+export async function getTotalBusinessValue(): Promise<number> {
+  await ensureDealStats();
+  const snap = await getDoc(doc(db, 'stats', 'deals'));
+  return (snap.data()?.totalValue as number) || 0;
 }
 
 export async function getUserDealStats(uid: string): Promise<{ given: number; got: number; givenCount: number; gotCount: number }> {
@@ -356,6 +383,21 @@ export async function getUserDeals(uid: string): Promise<Deal[]> {
     ...giverSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal)),
     ...receiverSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal)),
   ];
+}
+
+export async function getRevenueConfig(): Promise<RevenueConfig | null> {
+  const snap = await getDoc(doc(db, 'settings', 'revenue'));
+  if (!snap.exists()) return null;
+  return snap.data() as RevenueConfig;
+}
+
+export async function setRevenueConfig(target: number, financialYear: string, updatedBy: string): Promise<void> {
+  await setDoc(doc(db, 'settings', 'revenue'), {
+    target,
+    financialYear,
+    updatedBy,
+    updatedAt: Date.now(),
+  });
 }
 
 // ─── Chat ───
@@ -512,6 +554,11 @@ export async function getProfileByPhone(phone: string): Promise<BusinessProfile 
 export async function verifyBusinessProfile(uid: string) {
   await requireSuperAdmin();
   await updateDoc(doc(db, 'profiles', uid), { verified: true });
+}
+
+export async function deleteBusinessProfile(uid: string) {
+  await requireSuperAdmin();
+  await deleteDoc(doc(db, 'profiles', uid));
 }
 
 export async function getUnverifiedProfiles(): Promise<BusinessProfile[]> {
@@ -855,4 +902,92 @@ export async function getMyNotifications(): Promise<UserNotification[]> {
 
 export async function markNotificationRead(id: string) {
   await updateDoc(doc(db, 'userNotifications', id), { read: true });
+}
+
+export interface ImportProfileEntry {
+  ownerName: string;
+  ownerSurname?: string;
+  phone: string;
+  companyName: string;
+  categories?: string[];
+  companySize?: string;
+  location?: string;
+  contactEmail?: string;
+  website?: string;
+  description?: string;
+  membershipStatus?: 'active' | 'inactive' | 'expired';
+  membershipExpiry?: number;
+  countryCode?: string;
+}
+
+export async function bulkImportProfiles(entries: ImportProfileEntry[]): Promise<{ success: number; errors: string[] }> {
+  const errors: string[] = [];
+  let success = 0;
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    try {
+      if (!entry.phone || !entry.ownerName || !entry.companyName) {
+        errors.push(`Row ${i + 1}: Missing required fields (phone, ownerName, companyName)`);
+        continue;
+      }
+      const uid = entry.phone.replace(/\D/g, '');
+      const exists = await getDoc(doc(db, 'profiles', uid));
+      if (exists.exists()) {
+        errors.push(`Row ${i + 1}: Phone ${entry.phone} already exists (uid: ${uid})`);
+        continue;
+      }
+      await setDoc(doc(db, 'profiles', uid), {
+        uid,
+        ownerName: entry.ownerName,
+        ownerSurname: entry.ownerSurname || '',
+        phone: entry.phone.replace(/^\+91[-\s]?/, ''),
+        countryCode: entry.countryCode || '+91',
+        companyName: entry.companyName,
+        categories: entry.categories || [],
+        companySize: entry.companySize || '',
+        location: entry.location || '',
+        contactEmail: entry.contactEmail || '',
+        website: entry.website || '',
+        description: entry.description || '',
+        photoURL: '',
+        keywords: [],
+        catalogURLs: [],
+        qrCodeURL: `${window.location.origin}/profile/${uid}`,
+        verified: false,
+        membershipStatus: entry.membershipStatus || 'inactive',
+        membershipExpiry: entry.membershipExpiry || 0,
+        membershipDate: 0,
+        paidDate: 0,
+        dripSentDays: [],
+        editCount: 0,
+        locked: false,
+        lastRequestsViewedAt: 0,
+        referredByPhone: '',
+        referredByName: '',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      success++;
+    } catch (e) {
+      errors.push(`Row ${i + 1}: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  return { success, errors };
+}
+
+export async function ensureOnlineStats(): Promise<void> {
+  const ref = doc(db, 'stats', 'online');
+  const snap = await getDoc(ref);
+  if (snap.exists()) return;
+  const q = query(collection(db, 'users'), where('onlineStatus', '==', 'online'));
+  const usersSnap = await getDocs(q);
+  await setDoc(ref, { count: usersSnap.size });
+}
+
+export async function getOnlineUsersCount(): Promise<number> {
+  await ensureOnlineStats();
+  const snap = await getDoc(doc(db, 'stats', 'online'));
+  return (snap.data()?.count as number) || 0;
 }
