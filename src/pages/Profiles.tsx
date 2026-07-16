@@ -22,10 +22,10 @@ export default function Profiles() {
 
   const filtered = profiles.filter(
     (p) =>
-      p.companyName.toLowerCase().includes(search.toLowerCase()) ||
-      p.categories.some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
+      (p.companyName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.categories || []).some((c) => c.toLowerCase().includes(search.toLowerCase())) ||
       (p.keywords ?? []).some((k) => k.toLowerCase().includes(search.toLowerCase())) ||
-      p.location.toLowerCase().includes(search.toLowerCase()),
+      (p.location || '').toLowerCase().includes(search.toLowerCase()),
   );
 
   if (loading) {
@@ -73,7 +73,7 @@ export default function Profiles() {
                   <div>
                     <div className="flex items-start justify-between mb-4">
                       <div className="w-11 h-11 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold">
-                        {p.companyName.charAt(0)}
+                        {(p.companyName || '?').charAt(0)}
                       </div>
                       <Badge variant={p.membershipStatus === 'active' ? 'success' : 'neutral'}>
                         {p.membershipStatus === 'active' ? 'Active' : 'Inactive'}
