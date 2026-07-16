@@ -75,16 +75,10 @@ export async function setUserOnline(uid: string) {
     const userRef = doc(db, 'users', uid);
     const userSnap = await tx.get(userRef);
     const wasOffline = userSnap.exists() && userSnap.data().onlineStatus !== 'online';
-
-    let statsSnap;
+    tx.set(userRef, { onlineStatus: 'online', lastSeen: Date.now() }, { merge: true });
     if (wasOffline) {
       const statsRef = doc(db, 'stats', 'online');
-      statsSnap = await tx.get(statsRef);
-    }
-
-    tx.set(userRef, { onlineStatus: 'online', lastSeen: Date.now() }, { merge: true });
-    if (wasOffline && statsSnap) {
-      const statsRef = doc(db, 'stats', 'online');
+      const statsSnap = await tx.get(statsRef);
       if (statsSnap.exists()) {
         tx.update(statsRef, { count: increment(1) });
       } else {
@@ -99,16 +93,10 @@ export async function setUserOffline(uid: string) {
     const userRef = doc(db, 'users', uid);
     const userSnap = await tx.get(userRef);
     const wasOnline = userSnap.exists() && userSnap.data().onlineStatus === 'online';
-
-    let statsSnap;
+    tx.set(userRef, { onlineStatus: 'offline', lastSeen: Date.now() }, { merge: true });
     if (wasOnline) {
       const statsRef = doc(db, 'stats', 'online');
-      statsSnap = await tx.get(statsRef);
-    }
-
-    tx.set(userRef, { onlineStatus: 'offline', lastSeen: Date.now() }, { merge: true });
-    if (wasOnline && statsSnap) {
-      const statsRef = doc(db, 'stats', 'online');
+      const statsSnap = await tx.get(statsRef);
       if (statsSnap.exists() && (statsSnap.data().count ?? 0) > 0) {
         tx.update(statsRef, { count: increment(-1) });
       }

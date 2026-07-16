@@ -117,20 +117,20 @@ export async function getBusinessProfile(uid: string): Promise<BusinessProfile |
 }
 
 export async function updateBusinessProfile(uid: string, data: Partial<BusinessProfile>) {
-  await setDoc(doc(db, 'profiles', uid), { ...data, updatedAt: Date.now() }, { merge: true });
+  await updateDoc(doc(db, 'profiles', uid), { ...data, updatedAt: Date.now() });
 }
 
 export async function updateMembershipDates(uid: string, paidDate: number) {
   await requireSuperAdmin();
   const expiry = paidDate + 364 * 24 * 60 * 60 * 1000;
-  await setDoc(doc(db, 'profiles', uid), {
+  await updateDoc(doc(db, 'profiles', uid), {
     paidDate,
     membershipDate: paidDate,
     membershipStatus: 'active',
     membershipExpiry: expiry,
     dripSentDays: [],
     updatedAt: Date.now(),
-  }, { merge: true });
+  });
 }
 
 export async function getProfilesForReferral(limitCount = 5): Promise<Pick<BusinessProfile, 'uid' | 'ownerName' | 'ownerSurname' | 'phone' | 'companyName'>[]> {
@@ -578,7 +578,7 @@ export async function getProfileByPhone(phone: string): Promise<BusinessProfile 
 
 export async function verifyBusinessProfile(uid: string) {
   await requireSuperAdmin();
-  await setDoc(doc(db, 'profiles', uid), { verified: true }, { merge: true });
+  await updateDoc(doc(db, 'profiles', uid), { verified: true });
 }
 
 export async function deleteBusinessProfile(uid: string) {
