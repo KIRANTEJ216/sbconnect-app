@@ -217,10 +217,10 @@ export default function Dashboard() {
             <div className="flex items-center justify-between gap-3 mb-2">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-muted tracking-tight uppercase">
-                  {hasTarget ? `${fy.fyLabel} · Remaining` : fy.fyLabel}
+                  {hasTarget ? `${fy.fyLabel} · Raised` : fy.fyLabel}
                 </p>
                 <p className="text-lg sm:text-xl font-bold gradient-text mt-0.5 tracking-tight">
-                  ₹ {(hasTarget ? remaining : 0).toLocaleString('en-IN')}
+                  ₹ {totalBusinessValue.toLocaleString('en-IN')}
                 </p>
               </div>
               {hasTarget && (
