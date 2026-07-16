@@ -45,7 +45,6 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   const fy = getFinancialYear();
   const target = revenueConfig?.target || 0;
   const remaining = Math.max(0, target - total);
-  const revPct = target > 0 ? Math.min((total / target) * 100, 100) : 0;
   const achieved = target > 0 && total >= target;
   const hasTarget = target > 0;
   const urgency = fy.timeProgress;

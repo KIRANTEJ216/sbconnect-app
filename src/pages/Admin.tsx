@@ -116,7 +116,7 @@ export default function Admin() {
   const [awardAmount, setAwardAmount] = useState('');
   const [awardingTo, setAwardingTo] = useState('');
   const [awardingLoading, setAwardingLoading] = useState(false);
-  const [revenueConfig, setRevenueConfig] = useState<RevenueConfig | null>(null);
+  const [revenueConfig, setRevenueConfigState] = useState<RevenueConfig | null>(null);
   const [revTargetInput, setRevTargetInput] = useState('');
   const [revSaving, setRevSaving] = useState(false);
   const [revMsg, setRevMsg] = useState('');
@@ -216,7 +216,7 @@ export default function Admin() {
       setDeals(d);
       setAllLeaderboard(lb);
       if (rc) {
-        setRevenueConfig(rc);
+        setRevenueConfigState(rc);
         setRevTargetInput(String(rc.target));
       }
     } catch (e) { console.error(e); }
@@ -423,7 +423,7 @@ export default function Admin() {
       if (isNaN(target) || target <= 0) { setRevMsg('Enter a valid target amount.'); setRevSaving(false); return; }
       const fy = getFinancialYear().fyLabel;
       await setRevenueConfig(target, fy, user.uid);
-      setRevenueConfig({ target, financialYear: fy, updatedBy: user.uid, updatedAt: Date.now() });
+      setRevenueConfigState({ target, financialYear: fy, updatedBy: user.uid, updatedAt: Date.now() });
       queryClient.invalidateQueries({ queryKey: ['revenueConfig'] });
       setRevMsg('Revenue target saved.');
     } catch (e) {
