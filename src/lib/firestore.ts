@@ -991,3 +991,8 @@ export async function getOnlineUsersCount(): Promise<number> {
   const snap = await getDoc(doc(db, 'stats', 'online'));
   return (snap.data()?.count as number) || 0;
 }
+
+export async function getOnlineUsers(): Promise<UserProfile[]> {
+  const snap = await getDocs(query(collection(db, 'users'), where('onlineStatus', '==', 'online')));
+  return snap.docs.map((d) => ({ uid: d.id, ...d.data() } as UserProfile));
+}

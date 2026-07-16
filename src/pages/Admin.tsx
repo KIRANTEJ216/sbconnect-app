@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig, getOnlineUsers } from '../lib/firestore';
 import type { LoginLog, ImportProfileEntry } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
@@ -123,6 +123,11 @@ export default function Admin() {
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
   const { data: onlineCount = 0 } = useOnlineUsersCount();
+  const [onlineUsers, setOnlineUsers] = useState<UserProfile[]>([]);
+
+  useEffect(() => {
+    getOnlineUsers().then(setOnlineUsers).catch(() => {});
+  }, []);
 
   const [superEmail, setSuperEmail] = useState('');
   const [superSearching, setSuperSearching] = useState(false);
@@ -1636,7 +1641,7 @@ export default function Admin() {
             <CardHeader>
               <h3 className="font-semibold text-charcoal tracking-tight">🟢 Live Users</h3>
             </CardHeader>
-            <CardContent className="p-5">
+            <CardContent className="p-5 space-y-3">
               <div className="flex items-center gap-3">
                 <div className="relative flex w-4 h-4">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-40" />
@@ -1647,6 +1652,16 @@ export default function Admin() {
                   <span className="text-sm text-muted ml-2">currently online</span>
                 </div>
               </div>
+              {onlineUsers.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-1.5">
+                  {onlineUsers.map((u) => (
+                    <div key={u.uid} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-muted-bg/50 text-xs">
+                      <span className="font-medium text-charcoal truncate">{u.displayName}</span>
+                      <span className="text-muted shrink-0">{u.role === 'super_admin' ? 'Admin' : 'Member'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
