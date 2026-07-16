@@ -448,11 +448,12 @@ export default function Admin() {
     setResetMsg('');
     try {
       await resetProductionData(user.uid);
-      setResetMsg('All deals, requests, and revenue data have been reset.');
+      setResetMsg('All deals, requests, profiles, and revenue data have been reset for production launch.');
       setResetConfirm(false);
       queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
       queryClient.invalidateQueries({ queryKey: ['revenueConfig'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
       loadDeals();
     } catch (e) {
       setResetMsg('Reset failed: ' + (e instanceof Error ? e.message : e));

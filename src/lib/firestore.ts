@@ -419,6 +419,7 @@ export async function resetProductionData(adminUid: string): Promise<void> {
 
   await deleteCollection('deals');
   await deleteCollection('requests');
+  await deleteCollection('profiles');
   const fy = new Date().getFullYear() + (new Date().getMonth() >= 3 ? 0 : -1);
   await setDoc(doc(db, 'stats', 'deals'), { totalValue: 0, updatedAt: Date.now() });
   await setDoc(doc(db, 'settings', 'revenue'), { target: 0, financialYear: `FY ${String(fy).slice(-2)}-${String(fy + 1).slice(-2)}`, updatedBy: adminUid, updatedAt: Date.now(), createdAt: Date.now() });
