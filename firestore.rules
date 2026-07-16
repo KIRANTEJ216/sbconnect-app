@@ -99,7 +99,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
 
       match /messages/{message} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.participants;
         allow create: if request.auth != null;
         allow update: if request.auth != null && request.auth.uid == resource.data.senderId;
         allow delete: if isSuperAdmin();

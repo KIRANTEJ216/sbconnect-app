@@ -6,6 +6,7 @@ import { beforeUserCreated } from 'firebase-functions/v2/identity';
 import * as admin from 'firebase-admin';
 import { v1 } from '@google-cloud/firestore';
 import { Resend } from 'resend';
+import { randomInt } from 'crypto';
 
 admin.initializeApp();
 
@@ -85,7 +86,7 @@ interface BusinessProfile {
 }
 
 function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 async function sendEmail(resend: Resend, to: string, subject: string, html: string) {

@@ -42,6 +42,7 @@ const identity_1 = require("firebase-functions/v2/identity");
 const admin = __importStar(require("firebase-admin"));
 const firestore_2 = require("@google-cloud/firestore");
 const resend_1 = require("resend");
+const crypto_1 = require("crypto");
 admin.initializeApp();
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
@@ -104,7 +105,7 @@ function dripWelcomeBody(companyName, paidDate, expiry) {
   `;
 }
 function generateCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return (0, crypto_1.randomInt)(100000, 1000000).toString();
 }
 async function sendEmail(resend, to, subject, html) {
     await resend.emails.send({
