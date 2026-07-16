@@ -19,6 +19,8 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
     if (user) navigate('/create-profile', { replace: true });
@@ -34,6 +36,10 @@ export default function Register() {
     }
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (!termsAccepted) {
+      setError('You must accept the Terms & Conditions to create an account.');
       return;
     }
 
@@ -121,7 +127,36 @@ export default function Register() {
               <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl">{error}</p>
             )}
 
-            <Button type="submit" loading={loading} className="w-full">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary/30 accent-primary shrink-0"
+              />
+              <span className="text-xs text-steel leading-relaxed select-none">
+                I consent to SB Connect collecting my name, phone number, and email for the purpose of community networking, event participation, and connecting with other members.{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowTerms(!showTerms)}
+                  className="text-primary hover:text-primary-hover font-medium underline underline-offset-2 transition-colors cursor-pointer"
+                >
+                  {showTerms ? 'Hide' : 'View'} Terms &amp; Conditions
+                </button>
+              </span>
+            </label>
+
+            {showTerms && (
+              <div className="text-xs text-steel bg-muted-bg rounded-xl p-4 space-y-2 leading-relaxed border border-border">
+                <p className="font-semibold text-charcoal">Terms &amp; Conditions</p>
+                <p><strong>1. Information We Collect</strong> — When you register, we collect your full name, phone number, and email address. You may optionally add a business profile with additional details such as company name, location, website, and business category.</p>
+                <p><strong>2. How We Use Your Information</strong> — Your name and business profile are visible to other members in the directory for networking purposes. Your email and phone are used for event RSVPs, meeting coordination, and community communication. We do not share your data with third parties outside this platform.</p>
+                <p><strong>3. Your Rights</strong> — You may request deletion of your account and associated data by contacting the admin. Profile information can be edited at any time from your profile page.</p>
+                <p><strong>4. Acceptance</strong> — By checking the consent box and creating an account, you agree to these terms. If you do not agree, please do not register.</p>
+              </div>
+            )}
+
+            <Button type="submit" loading={loading} className="w-full" disabled={!termsAccepted}>
               Create Account
             </Button>
           </form>
