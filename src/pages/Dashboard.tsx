@@ -565,43 +565,44 @@ export default function Dashboard() {
           </div>
 
           {/* Business Profile */}
+          {myProfile && (
           <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Your Business Profile</h3>
             <div className="flex items-start gap-3">
               {myProfile.photoURL ? (
                 <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-border">
-                  <img src={myProfile.photoURL} alt={myProfile.companyName} className="w-full h-full object-cover aspect-square" />
+                  <img src={myProfile.photoURL} alt={myProfile.companyName || ''} className="w-full h-full object-cover aspect-square" />
                 </div>
               ) : (
                 <div className="w-10 h-10 rounded-lg bg-primary-light flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                  {myProfile.companyName.charAt(0)}
+                  {(myProfile.companyName || '?').charAt(0)}
                 </div>
               )}
               <div className="min-w-0 space-y-0.5">
-                <p className="font-semibold text-charcoal tracking-tight text-sm leading-tight">{myProfile.companyName}</p>
-                <p className="text-xs text-steel leading-tight">{`${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() || '—'}</p>
+                <p className="font-semibold text-charcoal tracking-tight text-sm leading-tight">{myProfile.companyName || '—'}</p>
+                <p className="text-xs text-steel leading-tight">{`${myProfile.ownerName || ''} ${myProfile.ownerSurname || ''}`.trim() || '—'}</p>
                 <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                   {myProfile.verified ? (
                     <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-success-light text-success border border-success/20">Verified</span>
                   ) : (
                     <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-warning-light text-warning border border-warning/20">Pending</span>
                   )}
-                  {myProfile.membershipStatus !== 'expired' && (
+                  {myProfile.membershipStatus && myProfile.membershipStatus !== 'expired' && (
                     <Badge variant={myProfile.membershipStatus === 'active' ? 'success' : 'neutral'}>
-                      {myProfile.membershipStatus.charAt(0).toUpperCase() + myProfile.membershipStatus.slice(1)}
+                      {(myProfile.membershipStatus || '').charAt(0).toUpperCase() + (myProfile.membershipStatus || '').slice(1)}
                     </Badge>
                   )}
                 </div>
               </div>
             </div>
             {myProfile.membershipExpiry > 0 && myProfile.membershipStatus === 'expired' ? (
-              <div className="mt-2 px-3 py-2 rounded-lg bg-danger-light/50 border border-danger/20">
+              <div className="mt-2 px-3 py-2 rounded-lg bg-danger-light/50 border border-border">
                 <p className="text-xs font-medium text-danger">Expired Membership — {Math.floor((Date.now() - myProfile.membershipExpiry) / 86400000)} days ago</p>
               </div>
-            ) : myProfile.membershipExpiry > 0 && (
+            ) : (myProfile.membershipExpiry || 0) > 0 && (
               <div className="mt-2"><MembershipCountdown membershipExpiry={myProfile.membershipExpiry} /></div>
             )}
-          </div>
+          </div>)}
 
           {/* Leaderboard + Upcoming Meetings */}
           <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
