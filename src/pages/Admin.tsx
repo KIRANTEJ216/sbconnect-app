@@ -7,7 +7,7 @@ import type { LoginLog, ImportProfileEntry } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
-import { useAllRsvpsByMeeting } from '../hooks/useFirebaseQuery';
+import { useAllRsvpsByMeeting, useOnlineUsersCount } from '../hooks/useFirebaseQuery';
 import { formatDate, formatTime, formatCurrency, getFinancialYear } from '../lib/format';
 import { isSuperAdmin } from '../lib/admin';
 import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request, IssueReport, Deal, LeaderboardEntry, RevenueConfig } from '../types';
@@ -122,6 +122,7 @@ export default function Admin() {
   const [revMsg, setRevMsg] = useState('');
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
+  const { data: onlineCount = 0 } = useOnlineUsersCount();
 
   const [superEmail, setSuperEmail] = useState('');
   const [superSearching, setSuperSearching] = useState(false);
@@ -1626,6 +1627,25 @@ export default function Admin() {
               <div className="flex items-center gap-3">
                 {canWrite && <Button onClick={handleSaveRevenue} loading={revSaving}>Save Target</Button>}
                 {revMsg && <span className={`text-xs ${revMsg.includes('saved') ? 'text-success' : 'text-danger'}`}>{revMsg}</span>}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Live Users */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-charcoal tracking-tight">🟢 Live Users</h3>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="relative flex w-4 h-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-40" />
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-success" />
+                </div>
+                <div>
+                  <span className="text-2xl font-bold text-charcoal tracking-tight">{onlineCount}</span>
+                  <span className="text-sm text-muted ml-2">currently online</span>
+                </div>
               </div>
             </CardContent>
           </Card>

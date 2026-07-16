@@ -106,6 +106,18 @@ service cloud.firestore {
       }
     }
 
+    // Settings: super_admin read/write
+    match /settings/{key} {
+      allow read: if isAdminOrSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // Stats: members can read; super_admin write
+    match /stats/{key} {
+      allow read: if request.auth != null;
+      allow write: if isSuperAdmin();
+    }
+
     // Login logs: super_admin read/create; admin read-only
     match /loginLogs/{id} {
       allow read: if isAdminOrSuperAdmin();

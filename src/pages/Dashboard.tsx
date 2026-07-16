@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserRequests, recordDeal, getMyNotifications, getUserIssueReports, addIssueReply, getAwardedRequests } from '../lib/firestore';
-import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useOnlineUsersCount, useRevenueConfig } from '../hooks/useFirebaseQuery';
+import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig } from '../hooks/useFirebaseQuery';
 import type { UserNotification, IssueReport, Request as BusinessRequest } from '../types';
 import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
 import confetti from 'canvas-confetti';
@@ -45,7 +45,6 @@ export default function Dashboard() {
   const [replyingId, setReplyingId] = useState<string | null>(null);
   const { data: totalBusinessValue = 0 } = useTotalBusinessValue();
   const { data: revenueConfig } = useRevenueConfig();
-  const { data: onlineCount = 0 } = useOnlineUsersCount();
 
   useEffect(() => {
     if (!user) return;
@@ -367,26 +366,6 @@ export default function Dashboard() {
           );
         })}
       </div>
-
-      {isSuperAdmin(user?.email, profile?.role) && (
-        <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-success/8 flex items-center justify-center">
-                <div className="relative flex w-3 h-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-40" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-success" />
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-charcoal tracking-tight leading-tight">Live Users</p>
-                <p className="text-[10px] text-steel">Currently online</p>
-              </div>
-            </div>
-            <span className="text-xl font-bold text-success tracking-tight">{onlineCount}</span>
-          </div>
-        </div>
-      )}
 
       {myNotifications.filter((n) => !n.read).length > 0 && (
         <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
