@@ -8,10 +8,10 @@ import {
 } from '../lib/firestore';
 import type { MeetingRSVP } from '../types';
 
-export function useProfiles(max = 999) {
+export function useProfiles(max = 200) {
   return useQuery({
-    queryKey: ['profiles', max],
-    queryFn: () => getAllProfiles(max),
+    queryKey: ['profiles', max, 'verified'],
+    queryFn: () => getAllProfiles(max, true),
     staleTime: 1000 * 60 * 5,
   });
 }

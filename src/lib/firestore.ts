@@ -134,7 +134,7 @@ export async function updateMembershipDates(uid: string, paidDate: number) {
 }
 
 export async function getProfilesForReferral(limitCount = 5): Promise<Pick<BusinessProfile, 'uid' | 'ownerName' | 'ownerSurname' | 'phone' | 'companyName'>[]> {
-  const q = query(collection(db, 'profiles'), orderBy('createdAt', 'desc'), limit(limitCount));
+  const q = query(collection(db, 'profiles'), orderBy('createdAt', 'desc'), where('verified', '==', true), limit(limitCount));
   const snap = await getDocs(q);
   return snap.docs.map((d) => {
     const data = d.data();
@@ -148,8 +148,10 @@ export async function getProfilesForReferral(limitCount = 5): Promise<Pick<Busin
   });
 }
 
-export async function getAllProfiles(max = 999): Promise<BusinessProfile[]> {
-  const q = query(collection(db, 'profiles'), limit(max));
+export async function getAllProfiles(max = 999, verifiedOnly = false): Promise<BusinessProfile[]> {
+  const constraints: (ReturnType<typeof where> | ReturnType<typeof limit>)[] = [limit(max)];
+  if (verifiedOnly) constraints.push(where('verified', '==', true));
+  const q = query(collection(db, 'profiles'), ...constraints);
   const snap = await getDocs(q);
   return snap.docs.map((d) => fillDefaults(d.data()));
 }

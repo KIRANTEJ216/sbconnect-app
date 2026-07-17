@@ -15,7 +15,7 @@ export default function Profiles() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAllProfiles()
+    getAllProfiles(999, true)
       .then(setProfiles)
       .finally(() => setLoading(false));
   }, []);
