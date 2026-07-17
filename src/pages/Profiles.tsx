@@ -76,7 +76,7 @@ export default function Profiles() {
                         {(p.companyName || '?').charAt(0)}
                       </div>
                       <Badge variant={p.membershipStatus === 'active' ? 'success' : 'neutral'}>
-                        {p.membershipStatus === 'active' ? 'Active' : 'Inactive'}
+                        {p.membershipStatus === 'active' ? 'Active' : 'Pending'}
                       </Badge>
                     </div>
                     <h3 className="font-semibold text-charcoal tracking-tight">{p.companyName}</h3>

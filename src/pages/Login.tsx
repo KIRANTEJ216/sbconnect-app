@@ -80,7 +80,7 @@ export default function Login() {
             alt="SB Connect"
             className="w-72 h-auto object-contain drop-shadow-lg animate-[float_6s_ease-in-out_infinite]"
           />
-          <p className="text-steel/80 text-sm font-mono tracking-tight mt-6 animate-[fade-in_1s_ease-out_0.3s_both]">No Politics Only Business</p>
+          <p className="text-steel/80 text-sm font-bold tracking-tight mt-6 animate-[fade-in_1s_ease-out_0.3s_both]">Only Business No Politics</p>
         </div>
       </div>
       <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8">
@@ -142,7 +142,7 @@ export default function Login() {
               </div>
             </CardContent>
           </Card>
-          <p className="text-center text-xs text-muted mt-6 lg:hidden">No Politics Only Business</p>
+          <p className="text-center text-xs text-muted font-bold mt-6 lg:hidden">Only Business No Politics</p>
         </div>
       </div>
     </div>

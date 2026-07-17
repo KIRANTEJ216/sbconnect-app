@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
 import { isAdmin, isSuperAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
-import { replaceProfilePhoto, uploadCatalogFiles, downloadCatalogFile, compressImage } from '../lib/storage';
+import { replaceProfilePhoto, uploadCatalogFiles, downloadCatalogFile, compressImage, compressProfilePhoto } from '../lib/storage';
 import { formatDate } from '../lib/format';
 import type { BusinessProfile, UserProfile } from '../types';
 import { INDUSTRIES, COMPANY_SIZES, LOCATIONS } from '../types';
@@ -170,7 +170,7 @@ export default function Profile() {
       return;
     }
     try {
-      const compressed = await compressImage(file, 400, 0.75);
+      const compressed = await compressProfilePhoto(file, 400, 0.75);
       const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
       setPhotoFile(compressedFile);
       setError('');
@@ -617,8 +617,8 @@ export default function Profile() {
                     Keywords <span className="text-muted font-normal">(sub-business categories)</span>
                   </label>
                   <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-                    {form.keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-light text-primary">
+                    {form.keywords.map((kw, i) => (
+                      <span key={`${kw}-${i}`} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-light text-primary">
                         {kw}
                         <button type="button" onClick={() => removeKeyword(kw)} className="hover:text-danger transition-colors cursor-pointer">&times;</button>
                       </span>
@@ -847,8 +847,8 @@ export default function Profile() {
                   </p>
                   {(profile.keywords ?? []).length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-border">
-                      {(profile.keywords ?? []).map((kw) => (
-                        <span key={kw} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
+                      {(profile.keywords ?? []).map((kw, i) => (
+                        <span key={`${kw}-${i}`} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
                       ))}
                     </div>
                   )}

@@ -138,7 +138,7 @@ export default function Dashboard() {
       label: 'Membership Status',
       value: myProfile?.membershipStatus === 'active'
         ? `Member since ${formatDate(myProfile.createdAt)}`
-        : myProfile?.membershipStatus === 'expired' ? 'EXPIRED' : myProfile?.membershipStatus ?? 'Inactive',
+        : myProfile?.membershipStatus === 'expired' ? 'EXPIRED' : myProfile?.membershipStatus ?? 'Pending',
       variant: myProfile?.membershipStatus === 'active' ? 'success' : myProfile?.membershipStatus === 'expired' ? 'danger' : 'neutral',
       sub: profile?.onlineStatus === 'online' ? 'Online' : 'Offline',
     },

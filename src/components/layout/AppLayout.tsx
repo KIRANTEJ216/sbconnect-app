@@ -57,7 +57,7 @@ export function AppLayout() {
           </div>
         </main>
         <footer className="hidden sm:block px-8 py-3 border-t border-border text-center text-[11px] text-muted space-y-0.5 bg-surface shrink-0">
-          <p>SB Connect &mdash; No Politics Only Business</p>
+          <p>SB Connect &mdash; Only Business No Politics</p>
           <p>
             Developed by{' '}
             <a href="https://flologixautomations.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover transition-colors">

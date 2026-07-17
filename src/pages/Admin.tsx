@@ -690,7 +690,7 @@ export default function Admin() {
                                 {isExpired ? 'Expired' : hasMembership ? days : '—'}
                               </span>
                             </td>
-                            <td className="px-4 py-3"><Badge variant={isExpired ? 'danger' : isWarning ? 'neutral' : 'success'}>{hasMembership ? (isExpired ? 'Expired' : p.membershipStatus) : 'Inactive'}</Badge></td>
+                            <td className="px-4 py-3"><Badge variant={isExpired ? 'danger' : isWarning ? 'neutral' : 'success'}>{hasMembership ? (isExpired ? 'Expired' : p.membershipStatus) : 'Pending'}</Badge></td>
                           </tr>
                         );
                       })}
@@ -753,7 +753,7 @@ export default function Admin() {
                           <p className="text-xs text-muted font-mono">{m.date}{m.location ? ` · ${m.location}` : ''}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge variant={m.active ? 'success' : 'neutral'}>{m.active ? 'Active' : 'Inactive'}</Badge>
+                          <Badge variant={m.active ? 'success' : 'neutral'}>{m.active ? 'Active' : 'Pending'}</Badge>
                           <Button size="sm" variant="outline" onClick={() => handleViewMeeting(m.id)} loading={attLoading && selectedMeeting === m.id}>View</Button>
                           {canWrite && <Button size="sm" variant="danger" onClick={async () => { if (!confirm(`Delete "${m.label}"?`)) return; try { await deleteMeeting(m.id); loadMeetings(); } catch (e) { alert('Failed to delete: ' + (e instanceof Error ? e.message : e)); } }}>Delete</Button>}
                         </div>

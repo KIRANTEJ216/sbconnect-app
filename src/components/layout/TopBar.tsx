@@ -62,13 +62,20 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <div className="hidden sm:block leading-tight">
-          <p className="text-sm text-muted font-mono tracking-tight leading-tight">
-            {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
-          <p className="text-sm font-semibold tracking-tight leading-tight mt-[1px] text-primary">
-            {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-          </p>
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/sbconnect-logo.png"
+            alt="SB Connect"
+            className="h-10 w-auto object-contain shrink-0"
+          />
+          <div className="hidden sm:block leading-tight">
+            <p className="text-sm text-muted font-mono tracking-tight leading-tight">
+              {now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+            <p className="text-sm font-semibold tracking-tight leading-tight mt-[1px] text-primary">
+              {now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+            </p>
+          </div>
         </div>
       </div>
 

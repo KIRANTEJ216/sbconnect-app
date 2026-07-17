@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone } from '../lib/firestore';
-import { uploadProfilePhoto, uploadCatalogFiles, compressImage } from '../lib/storage';
+import { uploadProfilePhoto, uploadCatalogFiles, compressImage, compressProfilePhoto } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
@@ -118,7 +118,7 @@ export default function CreateProfile() {
       return;
     }
     try {
-      const compressed = await compressImage(file, 400, 0.75);
+      const compressed = await compressProfilePhoto(file, 400, 0.75);
       const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
       setPhotoFile(compressedFile);
       setError('');
@@ -420,8 +420,8 @@ export default function CreateProfile() {
                     Keywords <span className="text-muted font-normal">(sub-business categories)</span>
                   </label>
                   <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-                    {form.keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-light text-primary">
+                    {form.keywords.map((kw, i) => (
+                      <span key={`${kw}-${i}`} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-light text-primary">
                         {kw}
                         <button type="button" onClick={() => removeKeyword(kw)} className="hover:text-danger transition-colors cursor-pointer">&times;</button>
                       </span>
