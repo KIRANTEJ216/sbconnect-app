@@ -112,10 +112,10 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
-    // Stats: members can read; super_admin write
+    // Stats: members can read; any authenticated user can write (online counting)
     match /stats/{key} {
       allow read: if request.auth != null;
-      allow write: if isSuperAdmin();
+      allow write: if request.auth != null;
     }
 
     // Login logs: super_admin read/create; admin read-only

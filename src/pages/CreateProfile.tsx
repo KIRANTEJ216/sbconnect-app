@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone } from '../lib/firestore';
+import { createBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone, getBusinessProfile } from '../lib/firestore';
 import { uploadProfilePhoto, uploadCatalogFiles, compressImage, compressProfilePhoto } from '../lib/storage';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -41,6 +41,14 @@ export default function CreateProfile() {
     description: '',
     referredByPhone: '',
   });
+
+  useEffect(() => {
+    if (user) {
+      getBusinessProfile(user.uid).then(profile => {
+        if (profile) navigate('/dashboard', { replace: true });
+      });
+    }
+  }, [user, navigate]);
 
   const [keywordInput, setKeywordInput] = useState('');
   const [customCategory, setCustomCategory] = useState('');

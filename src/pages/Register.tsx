@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signUp } from '../lib/auth';
+import { getBusinessProfile } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -23,7 +24,15 @@ export default function Register() {
   const [showTerms, setShowTerms] = useState(false);
 
   useEffect(() => {
-    if (user) navigate('/create-profile', { replace: true });
+    if (user) {
+      getBusinessProfile(user.uid).then(profile => {
+        if (profile) {
+          navigate('/dashboard', { replace: true });
+        } else {
+          navigate('/create-profile', { replace: true });
+        }
+      });
+    }
   }, [user, navigate]);
 
   const handleSubmit = async (e: FormEvent) => {
