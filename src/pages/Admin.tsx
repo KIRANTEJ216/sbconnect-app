@@ -9,7 +9,7 @@ import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
 import { useAllRsvpsByMeeting, useOnlineUsersCount } from '../hooks/useFirebaseQuery';
 import { formatDate, formatTime, formatCurrency, getFinancialYear } from '../lib/format';
-import { isSuperAdmin, isAdmin } from '../lib/admin';
+import { isSuperAdmin } from '../lib/admin';
 import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request, IssueReport, Deal, LeaderboardEntry, RevenueConfig } from '../types';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -589,8 +589,8 @@ export default function Admin() {
                     Export CSV
                   </Button>
                 </div>
-                  <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-80 overflow-y-auto">
-                  <table className="w-full text-sm min-w-[600px]">
+                  <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                  <table className="w-full text-sm min-w-[400px] sm:min-w-[600px]">
                     <thead>
                       <tr className="border-b border-border text-left">
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Company</th>

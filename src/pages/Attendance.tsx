@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getBusinessProfile, getUserAttendance, getMeetings, getActiveMeeting, markAttendance } from '../lib/firestore';
 import { formatDate } from '../lib/format';
 import type { Meeting, Attendance as AttendanceType } from '../types';
-import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { TiltCard } from '../components/motion/TiltCard';

@@ -44,6 +44,9 @@ export function AppLayout() {
 
   return (
     <div className="h-[100dvh] flex overflow-hidden">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-white focus:rounded-[0.75rem] focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none">
+        Skip to content
+      </a>
       <div className="hidden lg:block">
         <Sidebar />
       </div>
@@ -51,7 +54,7 @@ export function AppLayout() {
         <MobileSidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
         <TopBar onMenuToggle={() => setMobileMenuOpen((v) => !v)} />
         <MarqueeBar />
-        <main className="flex-1 p-3 sm:p-5 lg:p-8 pb-20 lg:pb-4 overflow-y-auto bg-canvas min-h-0">
+        <main id="main-content" className="flex-1 p-3 sm:p-5 lg:p-8 pb-20 lg:pb-4 overflow-y-auto bg-canvas min-h-0">
           <div className="min-h-0">
             <Outlet />
           </div>

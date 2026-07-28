@@ -10,6 +10,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['sbconnect-logo.png'],
+      workbox: {
+        cleanupOutdatedCaches: true,
+        globPatterns: ['**/*.{js,css,html,json,png,svg,ico,woff2}'],
+      },
       manifest: {
         name: 'SB Connect',
         short_name: 'SB Connect',

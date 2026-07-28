@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { submitRSVP } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { useMeetings, useUserRSVPs, useBusinessProfile, useAttendanceCompliance } from '../hooks/useFirebaseQuery';
+import { useMeetings, useUserRSVPs, useBusinessProfile } from '../hooks/useFirebaseQuery';
 import { Card, CardContent } from './ui/Card';
 import { StrikeWarning } from './StrikeWarning';
 

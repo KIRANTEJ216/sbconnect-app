@@ -22,7 +22,7 @@ export default function Requests() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [pitching, setPitching] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [error, setError] = useState('');
+  const [, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);

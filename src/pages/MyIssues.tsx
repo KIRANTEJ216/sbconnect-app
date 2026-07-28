@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { addIssueReply } from '../lib/firestore';
 import type { IssueReport } from '../types';
-import { Card, CardContent } from '../components/ui/Card';
+import { CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { AnimatedPage } from '../components/motion/AnimatedPage';

@@ -23,7 +23,7 @@ export default function Profile() {
   const queryClient = useQueryClient();
   const { user, profile: authProfile } = useAuth();
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);

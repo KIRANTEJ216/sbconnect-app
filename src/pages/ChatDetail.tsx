@@ -50,7 +50,7 @@ export default function ChatDetail() {
 
   return (
     <AnimatedPage>
-    <div className="max-w-4xl mx-auto h-[calc(100dvh-10rem)] flex flex-col">
+    <div className="max-w-4xl mx-auto h-[calc(100dvh-10rem)] flex flex-col pb-14 lg:pb-0">
       <Link to="/chat" className="text-sm text-primary hover:text-primary-hover mb-4 inline-block transition-colors">
         &larr; Back to Messages
       </Link>

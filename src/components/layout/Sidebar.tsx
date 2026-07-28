@@ -120,7 +120,7 @@ export function Sidebar() {
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
               {pendingCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-2 h-2 bg-warning rounded-full" />
+                <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-warning rounded-full" />
               )}
             </div>
           </NavItem>

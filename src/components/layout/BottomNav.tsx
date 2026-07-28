@@ -10,7 +10,7 @@ function NavBtn({ to, label, children }: { to: string; label: string; children: 
   return (
     <button
       onClick={() => navigate(to)}
-      className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-[10px] font-medium cursor-pointer ${
+      className={`flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium cursor-pointer min-h-[48px] ${
         isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
       }`}
     >
@@ -77,7 +77,7 @@ export function BottomNav() {
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
               {pendingCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-2 h-2 bg-warning rounded-full" />
+                <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-warning rounded-full" />
               )}
             </div>
           </NavBtn>
