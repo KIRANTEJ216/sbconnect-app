@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { getBusinessProfile, updateBusinessProfile, getOrCreateConversation, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
+import { getBusinessProfile, updateBusinessProfile, getProfileByContactEmail, getProfileByPhone, getProfilesForReferral } from '../lib/firestore';
 import { isAdmin, isSuperAdmin } from '../lib/admin';
 import { getUserProfile } from '../lib/auth';
 import { replaceProfilePhoto, uploadCatalogFiles, downloadCatalogFile, compressImage, compressProfilePhoto } from '../lib/storage';
@@ -25,7 +25,6 @@ export default function Profile() {
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [chatLoading, setChatLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -104,13 +103,6 @@ export default function Profile() {
     }).catch(() => {});
   }, [id]);
 
-  const handleChat = async () => {
-    if (!user || !id) return;
-    setChatLoading(true);
-    const convId = await getOrCreateConversation(user.uid, id);
-    window.location.href = `/chat/${convId}`;
-  };
-
   const startEditing = () => {
     if (!profile) return;
     setError('');
@@ -170,7 +162,7 @@ export default function Profile() {
       return;
     }
     try {
-      const compressed = await compressProfilePhoto(file, 400, 0.75);
+      const compressed = await compressProfilePhoto(file, 800, 0.85);
       const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
       setPhotoFile(compressedFile);
       setError('');
@@ -182,13 +174,18 @@ export default function Profile() {
     }
   };
 
-  const handleCameraCapture = (blob: Blob) => {
-    const file = new File([blob], 'camera_photo.jpg', { type: 'image/jpeg' });
-    setPhotoFile(file);
-    setError('');
-    const reader = new FileReader();
-    reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+  const handleCameraCapture = async (blob: Blob) => {
+    try {
+      const compressed = await compressProfilePhoto(new File([blob], 'camera_photo.jpg', { type: 'image/jpeg' }), 800, 0.85);
+      const file = new File([compressed], 'camera_photo.jpg', { type: 'image/jpeg' });
+      setPhotoFile(file);
+      setError('');
+      const reader = new FileReader();
+      reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } catch {
+      setError('Failed to process camera photo.');
+    }
     setCameraOpen(false);
   };
 
@@ -206,7 +203,7 @@ export default function Profile() {
       return;
     }
     const maxSize = 10 * 1024 * 1024;
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     for (const f of files) {
       if (f.size > maxSize) { setError(`"${f.name}" exceeds 10MB limit.`); return; }
       if (!allowed.includes(f.type)) { setError(`"${f.name}" must be JPG, PNG, WebP or PDF.`); return; }
@@ -263,15 +260,15 @@ export default function Profile() {
       getProfileByContactEmail(cleanEmail),
       getProfileByPhone(normalizedPhone),
     ]);
-    if (existingEmail && existingEmail.uid !== user.uid) { setError('This email is already registered to another business.'); setSaving(false); return; }
-    if (existingPhone && existingPhone.uid !== user.uid) { setError('This phone number is already registered to another business.'); setSaving(false); return; }
+    if (existingEmail && existingEmail.uid !== user.uid && existingEmail.uid !== profile?.uid) { setError('This email is already registered to another business.'); setSaving(false); return; }
+    if (existingPhone && existingPhone.uid !== user.uid && existingPhone.uid !== profile?.uid) { setError('This phone number is already registered to another business.'); setSaving(false); return; }
 
     setSaving(true);
     try {
       let photoURL = profile.photoURL || '';
       let catalogURLs = [...(profile.catalogURLs || [])];
-      const newEditCount = isSuperAdminUser ? (profile.editCount || 0) : (profile.editCount || 0) + 1;
-      const locked = isSuperAdminUser ? profile.locked : newEditCount >= 3;
+      const newEditCount = isAdminViewer ? (profile.editCount || 0) : (profile.editCount || 0) + 1;
+      const locked = isAdminViewer ? profile.locked : newEditCount >= 3;
 
       if (photoFile) {
         photoURL = await replaceProfilePhoto(user.uid, photoFile, profile.photoURL || '');
@@ -400,8 +397,8 @@ export default function Profile() {
   };
 
   const isOwnProfile = user?.uid === id;
-  const isAdminViewer = isAdmin(user?.email, authProfile?.role);
-  const isSuperAdminUser = isSuperAdmin(user?.email, authProfile?.role);
+  const isAdminViewer = isAdmin(authProfile?.role);
+  const isSuperAdminUser = isSuperAdmin(authProfile?.role);
   const canEdit = isOwnProfile || isSuperAdminUser;
 
   if (loading) {
@@ -444,44 +441,60 @@ export default function Profile() {
 
   return (
     <AnimatedPage>
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Business Profile</h1>
-        <div className="flex gap-2">
+    <div className="max-w-4xl mx-auto space-y-3">
+      <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+        <div className="flex items-center justify-center gap-2">
+          <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">
+            {profile.companyName || 'Business Profile'}
+          </h1>
+          {profile.verified ? (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-success-light text-success border border-success/20">Verified</span>
+          ) : (
+            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-warning-light text-warning border border-warning/20">Pending</span>
+          )}
+        </div>
+        <p className="text-steel text-sm">{profile.ownerName} {profile.ownerSurname} · {profile.location}</p>
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Member Since</p>
+            <p className="text-sm font-bold text-charcoal">{profile.membershipDate ? formatDate(profile.membershipDate) : '—'}</p>
+          </div>
+          <div className="w-px h-6 bg-border" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Status</p>
+            <p className={`text-sm font-bold capitalize ${profile.membershipStatus === 'active' ? 'text-success' : profile.membershipStatus === 'expired' ? 'text-danger' : 'text-muted'}`}>{profile.membershipStatus || '—'}</p>
+          </div>
+          <div className="w-px h-6 bg-border" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Size</p>
+            <p className="text-sm font-bold text-primary">{profile.companySize || '—'}</p>
+          </div>
+        </div>
+        {profile.locked && (
+          <p className="text-[10px] text-danger mt-1">Profile locked — max 3 edits reached</p>
+        )}
+        {isOwnProfile && !profile.locked && (
+          <p className="text-[10px] text-muted mt-1">Edits remaining: {Math.max(0, 3 - (profile.editCount || 0))} of 3</p>
+        )}
+        <div className="flex items-center justify-center gap-2 mt-2">
           {canEdit && !editing && (
-            <Button size="sm" variant="outline" onClick={startEditing}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+            <Button size="xs" variant="outline" onClick={startEditing}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
               </svg>
               Edit Profile
             </Button>
           )}
-          {user?.uid !== id && (
-            <Button onClick={handleChat} loading={chatLoading} size="sm">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              Send Message
-            </Button>
+          {isOwnProfile && (
+            <Link to="/my-issues" className="text-xs text-primary hover:text-primary-hover">My Issues</Link>
           )}
         </div>
       </div>
 
-      {profile.locked && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-danger-light text-danger border border-danger/20 text-sm">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          Profile locked — maximum 3 edits reached. Contact admin to unlock.
-        </div>
-      )}
-      {isOwnProfile && !profile.locked && (
-        <div className="text-xs text-muted font-mono tracking-tight">
-          Edits remaining: {Math.max(0, 3 - (profile.editCount || 0))} of 3
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="lg:col-span-2 space-y-3">
           {editing ? (
             <Card>
               <CardContent className="p-4 sm:p-6 lg:p-8 space-y-6">
@@ -654,7 +667,7 @@ export default function Profile() {
                       )}
                     </div>
                     <div>
-                      <input ref={photoRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
+                      <input ref={photoRef} type="file" accept="image/*" onChange={handlePhoto} className="hidden" />
                       <div className="flex items-center gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => photoRef.current?.click()}>
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
@@ -675,23 +688,36 @@ export default function Profile() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog / Brochure (up to 5 files)</label>
+                  <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog Images (up to 5 files)</label>
                   <div className="flex items-center gap-3">
-                    <input ref={catalogRef} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" multiple onChange={handleCatalog} className="hidden" />
+                    <input ref={catalogRef} type="file" accept=".jpg,.jpeg,.png,.webp" multiple onChange={handleCatalog} className="hidden" />
                     <Button type="button" variant="outline" size="sm" onClick={() => catalogRef.current?.click()}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                         <polyline points="14 2 14 8 20 8" />
                       </svg>
-                      Upload Catalog
+                      Add Images
                     </Button>
                   </div>
                   {catalogFiles.length > 0 && (
-                    <div className="mt-3 space-y-1.5">
+                    <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
                       {catalogFiles.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-canvas text-xs text-steel">
-                          <span className="truncate">{f.name}</span>
-                          <button type="button" onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))} className="text-danger hover:underline shrink-0 ml-2 cursor-pointer">Remove</button>
+                        <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-border bg-muted-bg">
+                          <img
+                            src={URL.createObjectURL(f)}
+                            alt={`Catalog ${i + 1}`}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))}
+                              className="w-7 h-7 rounded-full bg-white/90 text-danger flex items-center justify-center hover:bg-white transition-colors cursor-pointer"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
+                          </div>
+                          <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] font-medium bg-black/50 text-white rounded-md">compressed</div>
                         </div>
                       ))}
                     </div>
@@ -791,125 +817,80 @@ export default function Profile() {
             </Card>
           ) : (
             <>
+              {profile.description && (
               <TiltCard>
               <Card>
-                <CardContent className="p-4 sm:p-6 lg:p-8">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-3 mb-4">
-                        {profile.photoURL ? (
-                          <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0">
-                            <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover aspect-square" />
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold text-lg">
-                            {profile.companyName.charAt(0)}
-                          </div>
-                        )}
-                        <div className={`w-2.5 h-2.5 rounded-full ${userProfile?.onlineStatus === 'online' ? 'bg-success' : 'bg-zinc-300'}`} />
-                      </div>
-                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                        <h2 className="text-fluid-h1 font-bold text-charcoal tracking-tight break-words">{profile.companyName}</h2>
-                        {profile.verified ? (
-                          <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-success-light text-success border border-success/20">Verified</span>
-                        ) : (
-                          <span className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-warning-light text-warning border border-warning/20">Pending Verification</span>
-                        )}
-                      </div>
-                      {(profile.ownerName || profile.ownerSurname) && (
-                        <p className="text-sm text-muted mt-0.5">Owned by {profile.ownerName} {profile.ownerSurname}</p>
-                      )}
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
-                        {(profile.categories ?? []).map((cat) => (
-                          <span key={cat} className="px-3 py-1 text-xs font-medium rounded-xl bg-primary-light text-primary border border-primary/20">{cat}</span>
-                        ))}
-                        <span className="text-sm text-muted font-mono tracking-tight">{profile.companySize} employees</span>
-                      </div>
-                      <p className="text-steel mt-1.5">{profile.location}</p>
-                      {profile.referredByName && (
-                        <p className="text-xs text-muted mt-2">Referred by <span className="font-medium text-charcoal">{profile.referredByName}</span></p>
-                      )}
-                    </div>
-                    <span className="text-xs text-muted font-mono">
-                      {userProfile?.onlineStatus === 'online' ? 'Online' : 'Offline'}
-                    </span>
-                  </div>
+                <CardContent className="p-3">
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">About</h3>
+                  <p className="text-sm text-charcoal">{profile.description}</p>
                 </CardContent>
               </Card>
               </TiltCard>
-
+              )}
               <TiltCard>
               <Card>
-                <CardContent className="p-4 sm:p-6 lg:p-8">
-                  <h3 className="font-semibold text-charcoal tracking-tight mb-4">About</h3>
-                  <p className="text-steel leading-relaxed">
-                    {profile.description || 'No description provided.'}
-                  </p>
-                  {(profile.keywords ?? []).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-border">
-                      {(profile.keywords ?? []).map((kw, i) => (
-                        <span key={`${kw}-${i}`} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
-                      ))}
+                <CardContent className="p-3 space-y-2">
+                  {(profile.categories ?? []).length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Categories</h3>
+                      <div className="flex flex-wrap gap-1">
+                        {(profile.categories ?? []).map((cat) => (
+                          <span key={cat} className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-primary-light text-primary border border-primary/20">{cat}</span>
+                        ))}
+                      </div>
                     </div>
+                  )}
+                  {(profile.keywords ?? []).length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Keywords</h3>
+                      <div className="flex flex-wrap gap-1">
+                        {(profile.keywords ?? []).map((kw) => (
+                          <span key={kw} className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Contact</h3>
+                    <div className="space-y-1.5 text-sm">
+                      {profile.phone && <p className="text-charcoal">📞 {profile.phone}</p>}
+                      {profile.contactEmail && <p className="text-charcoal">✉️ {profile.contactEmail}</p>}
+                      {profile.website && (
+                        <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover transition-colors block">
+                          🌐 {profile.website}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  {profile.referredByName && (
+                    <p className="text-xs text-muted">Referred by <span className="font-medium text-charcoal">{profile.referredByName}</span></p>
                   )}
                 </CardContent>
               </Card>
               </TiltCard>
-
-              <TiltCard>
-              <Card>
-                <CardContent className="p-4 sm:p-6 lg:p-8">
-                  <h3 className="font-semibold text-charcoal tracking-tight mb-4">Contact</h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center gap-3">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                        <polyline points="22,6 12,13 2,6" />
-                      </svg>
-                      <span className="text-steel">{profile.contactEmail}</span>
-                    </div>
-                    {profile.phone && (
-                      <div className="flex items-center gap-3">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                        </svg>
-                        <span className="text-steel">+91 {profile.phone}</span>
-                      </div>
-                    )}
-                    {profile.website && (
-                      <div className="flex items-center gap-3">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A1A1AA" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="2" y1="12" x2="22" y2="12" />
-                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                        </svg>
-                        <a href={profile.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover transition-colors">
-                          {profile.website}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-              </TiltCard>
-
+              {isOwnProfile && (
+                <Link to="/my-issues" className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition-colors">
+                  View My Issues
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </Link>
+              )}
               {(profile.catalogURLs ?? []).length > 0 && (
               <TiltCard>
               <Card>
-                <CardContent className="p-4 sm:p-6 lg:p-8">
-                  <h3 className="font-semibold text-charcoal tracking-tight mb-4">Catalog</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <CardContent className="p-3">
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Catalog</h3>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
                     {(profile.catalogURLs ?? []).map((url, i) => (
                       url.endsWith('.pdf') ? (
-                        <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-canvas border border-border hover:bg-primary-light transition-colors cursor-pointer">
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                        <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="shrink-0 flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-xl bg-canvas border border-border hover:bg-primary-light transition-colors cursor-pointer">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-primary" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                           </svg>
-                          <span className="text-[11px] text-muted font-mono">PDF {i + 1}</span>
+                          <span className="text-[9px] text-muted font-mono">PDF</span>
                         </button>
                       ) : (
-                        <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="block aspect-square rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity cursor-pointer">
+                        <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity cursor-pointer">
                           <img src={url} alt={`Catalog ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
                         </button>
                       )
@@ -948,8 +929,8 @@ export default function Profile() {
           ) : (
           <TiltCard>
           <Card>
-            <CardContent className="p-4 sm:p-6 lg:p-8">
-              <div className="flex items-center justify-between mb-4">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-charcoal tracking-tight">Membership</h3>
                 {(isSuperAdminUser || (isOwnProfile && !profile.paidDate)) && (
                   <button onClick={handleEditMembership} className="text-sm text-primary hover:text-primary-hover transition-colors font-medium cursor-pointer">
@@ -957,7 +938,7 @@ export default function Profile() {
                   </button>
                 )}
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div>
                   <Badge variant={profile.membershipStatus === 'active' ? 'success' : profile.membershipStatus === 'expired' ? 'danger' : 'neutral'}>
                     {profile.membershipStatus === 'active' ? 'Active Member' : profile.membershipStatus === 'expired' ? 'EXPIRED' : profile.membershipStatus.charAt(0).toUpperCase() + profile.membershipStatus.slice(1)}
@@ -995,11 +976,11 @@ export default function Profile() {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-3">
           {profile.photoURL && (
           <TiltCard>
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-2.5">
               <div className="aspect-square rounded-2xl overflow-hidden">
                 <img src={profile.photoURL} alt={profile.companyName} loading="lazy" className="w-full h-full object-cover aspect-square" />
               </div>

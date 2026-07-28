@@ -30,7 +30,7 @@ export default function Profiles() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-3">
         <div className="skeleton h-8 w-48" />
         <div className="skeleton h-12 w-full rounded-[0.75rem]" />
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
@@ -45,16 +45,34 @@ export default function Profiles() {
   return (
     <AnimatedPage>
     <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Business Directory</h1>
-        <p className="text-steel mt-1.5 gradient-text">Discover businesses in the community</p>
+      <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-4 text-center">
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+        <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">Business Directory</h1>
+        <p className="text-steel text-sm mt-0.5">Discover businesses in the community</p>
+        <div className="flex items-center justify-center gap-4 mt-3">
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Total</p>
+            <p className="text-lg font-bold text-charcoal">{profiles.length}</p>
+          </div>
+          <div className="w-px h-8 bg-border" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Verified</p>
+            <p className="text-lg font-bold text-success">{profiles.filter((p) => p.verified).length}</p>
+          </div>
+          <div className="w-px h-8 bg-border" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Locations</p>
+            <p className="text-lg font-bold text-primary">{new Set(profiles.map((p) => p.location).filter(Boolean)).size}</p>
+          </div>
+        </div>
+        <div className="mt-3 max-w-md mx-auto">
+          <Input
+            placeholder="Search by name, category, keyword, or location..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
-
-      <Input
-        placeholder="Search by name, category, keyword, or location..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
 
       {filtered.length === 0 ? (
         <Card>
@@ -63,15 +81,15 @@ export default function Profiles() {
           </CardContent>
         </Card>
       ) : (
-        <StaggerList className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+        <StaggerList className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
           {filtered.map((p) => (
             <StaggerItem key={p.uid} className="h-full">
             <Link to={`/profile/${p.uid}`} className="block h-full">
               <TiltCard className="h-full">
               <Card className="hover:shadow-card-hover transition-all duration-300 cursor-pointer h-full hover:-translate-y-0.5">
-                <CardContent className="p-6 flex flex-col">
+                <CardContent className="p-4 flex flex-col">
                   <div>
-                    <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start justify-between mb-3">
                       <div className="w-11 h-11 bg-primary-light rounded-2xl flex items-center justify-center text-primary font-bold">
                         {(p.companyName || '?').charAt(0)}
                       </div>

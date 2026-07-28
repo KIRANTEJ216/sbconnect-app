@@ -2,9 +2,8 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { storage } from './firebase';
 
 export async function uploadProfilePhoto(uid: string, file: File): Promise<string> {
-  const compressed = await compressProfilePhoto(file, 400, 0.75);
   const storageRef = ref(storage, `profiles/${uid}/photo_${Date.now()}`);
-  const snap = await uploadBytes(storageRef, compressed);
+  const snap = await uploadBytes(storageRef, file);
   return getDownloadURL(snap.ref);
 }
 
@@ -50,18 +49,20 @@ export async function downloadCatalogFile(url: string, index: number) {
   }
 }
 
-export function compressProfilePhoto(file: File, size = 400, quality = 0.75): Promise<Blob> {
+export function compressProfilePhoto(file: File, size = 800, quality = 0.85): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const s = Math.min(img.width, img.height);
-      const sx = (img.width - s) / 2;
-      const sy = (img.height - s) / 2;
-      canvas.width = size;
-      canvas.height = size;
+      const scale = Math.min(size / img.width, size / img.height);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob(
         (blob) => {
           if (blob) resolve(blob);

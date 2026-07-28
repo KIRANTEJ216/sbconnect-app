@@ -5,7 +5,6 @@ service cloud.firestore {
     function isSuperAdmin() {
       return request.auth != null && (
         request.auth.token.role == 'super_admin' ||
-        request.auth.token.email == 'kktej3d@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin')
       );
@@ -14,21 +13,18 @@ service cloud.firestore {
     function isAdminOrSuperAdmin() {
       return request.auth != null && (
         request.auth.token.role in ['admin', 'super_admin'] ||
-        request.auth.token.email == 'kktej3d@gmail.com' ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'])
       );
     }
 
-    // Users: owner can write; super_admin full access; admin read-only
+    // Users: owner can read/write own doc; admin/super_admin can read all; super_admin can write all
     match /users/{uid} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == uid;
-      allow read: if isAdminOrSuperAdmin();
-      allow write: if isSuperAdmin();
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdminOrSuperAdmin());
+      allow write: if request.auth != null && (request.auth.uid == uid || isSuperAdmin());
     }
 
-    // Profiles: authenticated read; owner/create/update; super_admin full access; admin read-only
+    // Profiles: authenticated read; owner create/update; super_admin full access
     match /profiles/{uid} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == uid;
@@ -50,7 +46,7 @@ service cloud.firestore {
       }
     }
 
-    // Meetings: authenticated read; super_admin write; admin read-only
+    // Meetings: authenticated read; super_admin write
     match /meetings/{id} {
       allow read: if request.auth != null;
       allow write: if isSuperAdmin();
@@ -85,7 +81,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // Notifications: authenticated read; super_admin write; admin read-only
+    // Notifications: authenticated read; super_admin write
     match /notifications/{id} {
       allow read: if request.auth != null;
       allow write: if isSuperAdmin();
@@ -106,19 +102,19 @@ service cloud.firestore {
       }
     }
 
-    // Settings: super_admin read/write
+    // Settings: any authenticated read (revenue target is public to members); super_admin write
     match /settings/{key} {
-      allow read: if isAdminOrSuperAdmin();
+      allow read: if request.auth != null;
       allow write: if isSuperAdmin();
     }
 
-    // Stats: members can read; any authenticated user can write (online counting)
+    // Stats: authenticated read; admin/super_admin write (online counting)
     match /stats/{key} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && isAdminOrSuperAdmin();
     }
 
-    // Login logs: super_admin read/create; admin read-only
+    // Login logs: admin/super_admin read; any authenticated create; super_admin update/delete
     match /loginLogs/{id} {
       allow read: if isAdminOrSuperAdmin();
       allow create: if request.auth != null;
@@ -133,7 +129,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // Config: super_admin read/write
+    // Config: admin/super_admin read; super_admin write
     match /config/{key} {
       allow read: if isAdminOrSuperAdmin();
       allow write: if isSuperAdmin();

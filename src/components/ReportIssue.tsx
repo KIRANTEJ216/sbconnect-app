@@ -35,14 +35,35 @@ export default function ReportIssue() {
 
   return (
     <>
+      <style>{`
+        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(59,130,246,.4); } 70% { box-shadow: 0 0 0 14px rgba(59,130,246,0); } 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } }
+        @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 20% { transform: rotate(-10deg); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(4deg); } }
+        @keyframes antenna-l { 0%,100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+        @keyframes antenna-r { 0%,100% { transform: rotate(5deg); } 50% { transform: rotate(-5deg); } }
+        .issue-btn { animation: float 3s ease-in-out infinite, pulse-ring 2s ease-in-out infinite; }
+        .issue-btn:hover { animation: wiggle 0.5s ease-in-out; }
+        .ant-l { transform-origin: 8px 10px; animation: antenna-l 2s ease-in-out infinite; }
+        .ant-r { transform-origin: 16px 10px; animation: antenna-r 2s ease-in-out infinite; }
+      `}</style>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 w-11 h-11 rounded-full bg-primary text-white shadow-btn hover:shadow-btn-hover hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center"
+        className="issue-btn fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white shadow-btn hover:shadow-btn-hover transition-all duration-200 flex items-center justify-center"
         aria-label="Report an issue"
         title="Report an issue"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8a6 6 0 0 1-6 6" /><path d="M6 2a6 6 0 0 1 12 0v2a6 6 0 0 1-12 0V2z" /><path d="M1 18a3 3 0 0 1 3-3h16a3 3 0 0 1 3 3v2a3 3 0 0 1-3 3H4a3 3 0 0 1-3-3v-2z" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="13" r="6" />
+          <circle cx="9" cy="11" r="1" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="11" r="1" fill="currentColor" stroke="none" />
+          <path d="M8 8.5 Q6 5 4 6" className="ant-l" strokeWidth="1.5" />
+          <path d="M16 8.5 Q18 5 20 6" className="ant-r" strokeWidth="1.5" />
+          <path d="M6 15 Q3 17 2 16" strokeWidth="1.2" />
+          <path d="M18 15 Q21 17 22 16" strokeWidth="1.2" />
+          <path d="M6 13 Q3 12 2 11" strokeWidth="1.2" />
+          <path d="M18 13 Q21 12 22 11" strokeWidth="1.2" />
+          <path d="M6 17 Q4 20 3 19" strokeWidth="1.2" />
+          <path d="M18 17 Q20 20 21 19" strokeWidth="1.2" />
         </svg>
       </button>
 

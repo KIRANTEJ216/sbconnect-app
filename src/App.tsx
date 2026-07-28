@@ -20,6 +20,7 @@ import Attendance from './pages/Attendance';
 import AttendanceScan from './pages/AttendanceScan';
 import Payments from './pages/Payments';
 import SeedAdmin from './pages/SeedAdmin';
+import MyIssues from './pages/MyIssues';
 import { AdminGuard } from './components/AdminGuard';
 
 function RootRedirect() {
@@ -54,6 +55,7 @@ function AppRoutes() {
           <Route path="/admin-access" element={<AdminAccess />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/attendance/scan" element={<AttendanceScan />} />
+          <Route path="/my-issues" element={<MyIssues />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
           <Route path="/seed-admin" element={<SeedAdmin />} />

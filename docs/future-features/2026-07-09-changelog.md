@@ -371,4 +371,53 @@ Major robustness, security, and admin-control improvements across the applicatio
 
 ---
 
-*Updated: 2026-07-14*
+### 2026-07-28 — Admin Dashboard UI Refresh, Super Admin Auto-Promotion, Animated Report Issue
+
+#### Admin Panel — Dashboard-Style UI Refresh
+- **`src/pages/Admin.tsx`**:
+  - Header replaced with gradient hero card (`bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5`)
+  - All 13 stat cards wrapped in `stat-accent-top` pattern (matching Dashboard/Profile pages)
+  - Tab content spacing tightened: `space-y-6` → `space-y-3`
+  - Admin management section now visible to all admins (not just super_admin)
+  - Removed `isSuper` guard from admin section; Add/Remove buttons still gated by `canWrite`
+
+#### Super Admin Auto-Promotion
+- **`src/contexts/AuthContext.tsx`**:
+  - Hardcoded `SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com']`
+  - Changed from fire-and-forget `updateDoc` inside `onSnapshot` to `getDoc` + `await updateDoc` BEFORE setting up the `onSnapshot` — eliminates race condition where `requireSuperAdmin()` reads old role
+  - Role guaranteed to be `super_admin` in Firestore before any component renders
+- **`src/pages/Admin.tsx`**:
+  - Added local `SUPER_ADMIN_EMAILS` fallback for `canWrite` and `isSuper` checks
+
+#### Report Issue — Animated Bug Icon
+- **`src/components/ReportIssue.tsx`**:
+  - Replaced static shield-bug SVG with CSS-animated bug icon
+  - Keyframe animations: `float` (gentle bob), `pulse-ring` (expanding glow), `wiggle` on hover
+  - Animated antennae (`antenna-l`, `antenna-r`) with `transform-origin` for natural sway
+  - Gradient background: `bg-gradient-to-br from-primary to-primary-dark`
+  - Button size increased: `w-11 h-11` → `w-12 h-12`
+
+#### Business Deal Form — Label Updates
+- **`src/pages/Dashboard.tsx`**:
+  - "Record Business Given" → "Business Generated" (button and heading)
+  - "Business Given To" → "Business Received From"
+  - Added helper text: "Receiver has to record the revenue when deal is closed"
+
+#### Profile Edit — Duplicate Check Fix & Edit Limit
+- **`src/pages/Profile.tsx`**:
+  - Fixed email/phone duplicate validation: added `existingEmail.uid !== profile?.uid` fallback for imported profiles where `BusinessProfile.uid` is a phone number (not Firebase Auth UID)
+  - Changed edit-bypass from `isSuperAdminUser` to `isAdminViewer` — both admin and super_admin can skip the 3-edit limit
+
+**Files Changed (this session):**
+
+| File | Change |
+|------|--------|
+| `src/pages/Admin.tsx` | Dashboard-style UI, admin visibility, super admin email fallback |
+| `src/contexts/AuthContext.tsx` | Super admin auto-promotion with race condition fix |
+| `src/components/ReportIssue.tsx` | Animated bug icon with CSS keyframes |
+| `src/pages/Dashboard.tsx` | Business Generated label, helper text |
+| `src/pages/Profile.tsx` | Duplicate check fix, edit limit bypass |
+
+---
+
+*Updated: 2026-07-28*

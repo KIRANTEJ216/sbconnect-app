@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { isAdmin } from '../lib/admin';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { StaggerList, StaggerItem } from '../components/motion/StaggerList';
+import { TiltCard } from '../components/motion/TiltCard';
 
 export default function Requests() {
   const { user, profile } = useAuth();
@@ -92,39 +93,41 @@ export default function Requests() {
 
   const myReqs = filtered.filter((r) => r.uid === user?.uid);
   const openReqs = filtered.filter((r) => r.uid !== user?.uid && r.status === 'open');
-  const isAdminUser = isAdmin(user?.email, profile?.role);
+  const isAdminUser = isAdmin(profile?.role);
 
   return (
     <AnimatedPage>
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Requests</h1>
-          <p className="text-steel mt-1.5 gradient-text">Browse business requests and opportunities</p>
+    <div className="max-w-5xl mx-auto space-y-3">
+      <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+        <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">Requests</h1>
+        <p className="text-steel text-sm">Browse business requests and opportunities</p>
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">My Requests</p>
+            <p className="text-lg font-bold gradient-text">{myReqs.length}</p>
+          </div>
+          <div className="w-px h-6 bg-border" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Open Requests</p>
+            <p className="text-lg font-bold text-charcoal">{openReqs.length}</p>
+          </div>
+          <div className="w-px h-6 bg-border" />
+          <div>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Awarded</p>
+            <p className="text-lg font-bold text-success">{requests.filter(r => r.awardedTo).length}</p>
+          </div>
         </div>
-        <Link to="/requests/create">
-          <Button>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Request
-          </Button>
-        </Link>
-      </div>
-
-      {error && (
-        <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl">{error}</p>
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-card bg-surface border border-border shadow-card p-5">
-          <p className="text-sm text-muted font-semibold tracking-tight mb-2">My Requests</p>
-          <p className="text-3xl font-bold text-charcoal tracking-tight">{myReqs.length}</p>
-        </div>
-        <div className="rounded-card bg-surface border border-border shadow-card p-5">
-          <p className="text-sm text-muted font-semibold tracking-tight mb-2">Open Requests</p>
-          <p className="text-3xl font-bold text-charcoal tracking-tight">{openReqs.length}</p>
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <Link to="/requests/create">
+            <Button size="xs">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New Request
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -184,8 +187,9 @@ export default function Requests() {
                       req.status === 'closed' ? 'opacity-60' : ''
                     }`}
                   >
-                    <Card>
-                      <CardContent className="p-4">
+                    <TiltCard>
+                    <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+                    <CardContent className="p-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             <Badge variant={req.status === 'open' ? 'success' : 'neutral'}>
@@ -252,7 +256,8 @@ export default function Requests() {
                           </div>
                         )}
                       </CardContent>
-                    </Card>
+                    </div>
+                    </TiltCard>
                   </div>
                   </StaggerItem>
                   );
@@ -272,8 +277,9 @@ export default function Requests() {
                     onClick={() => navigate(`/requests/${req.id}`)}
                     className="block transition-all duration-300 cursor-pointer hover:-translate-y-0.5"
                   >
-                    <Card>
-                      <CardContent className="p-4">
+                    <TiltCard>
+                    <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+                    <CardContent className="p-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             <Badge variant="success">Open</Badge>
@@ -339,7 +345,8 @@ export default function Requests() {
                           )}
                         </div>
                       </CardContent>
-                    </Card>
+                    </div>
+                    </TiltCard>
                   </div>
                   </StaggerItem>
                   );

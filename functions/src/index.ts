@@ -7,11 +7,21 @@ import * as admin from 'firebase-admin';
 import { v1 } from '@google-cloud/firestore';
 import { Resend } from 'resend';
 import { randomInt } from 'crypto';
+import { checkRateLimit } from './rateLimit';
 
 admin.initializeApp();
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
+
+function sanitize(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
 const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
 
@@ -26,11 +36,12 @@ const DRIP_SUBJECTS: Record<number, string> = {
 };
 
 function dripBody(companyName: string, daysUntilExpiry: number, paidDate: number): string {
+  const safeName = sanitize(companyName);
   if (daysUntilExpiry > 0) {
     return `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
         <h2>Membership Renewal Reminder</h2>
-        <p>Dear ${companyName},</p>
+        <p>Dear ${safeName},</p>
         <p>Your SB Connect membership will expire in <strong>${daysUntilExpiry} days</strong>.</p>
         ${daysUntilExpiry <= 30 ? '<p style="color: #d97706; font-weight: 600;">⚠️ Your membership is expiring soon. Please renew to avoid interruption.</p>' : ''}
         <p>Log in to your dashboard to renew your membership and continue enjoying network benefits.</p>
@@ -42,7 +53,7 @@ function dripBody(companyName: string, daysUntilExpiry: number, paidDate: number
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>Membership Expired</h2>
-      <p>Dear ${companyName},</p>
+      <p>Dear ${safeName},</p>
       <p>Your SB Connect membership has expired.</p>
       <p>Renew now to reactivate your profile and continue connecting with the network.</p>
       <hr style="margin: 24px 0;" />
@@ -52,12 +63,13 @@ function dripBody(companyName: string, daysUntilExpiry: number, paidDate: number
 }
 
 function dripWelcomeBody(companyName: string, paidDate: number, expiry: number): string {
+  const safeName = sanitize(companyName);
   const start = new Date(paidDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const end = new Date(expiry).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>🎉 Welcome to SB Connect!</h2>
-      <p>Dear ${companyName},</p>
+      <p>Dear ${safeName},</p>
       <p>Your membership is now <strong style="color: #059669;">active</strong>.</p>
       <p><strong>Member since:</strong> ${start}</p>
       <p><strong>Valid until:</strong> ${end}</p>
@@ -104,6 +116,14 @@ export const sendWelcomeEmail = callable.onCall(async (request) => {
     throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
   }
 
+  const rl = checkRateLimit(`sendWelcomeEmail:${uid}`, 2, 3_600_000);
+  if (!rl.allowed) {
+    throw new callable.HttpsError(
+      'resource-exhausted',
+      `Too many requests. Try again in ${Math.ceil(rl.resetMs / 60_000)} minutes.`,
+    );
+  }
+
   const profileDoc = await admin.firestore().collection('profiles').doc(uid).get();
   if (!profileDoc.exists) {
     throw new callable.HttpsError('not-found', 'Profile not found.');
@@ -136,6 +156,14 @@ export const sendAdminCode = callable.onCall(async (request) => {
 
   if (!uid || !email) {
     throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
+  }
+
+  const rl = checkRateLimit(`sendAdminCode:${uid}`, 3, 3_600_000);
+  if (!rl.allowed) {
+    throw new callable.HttpsError(
+      'resource-exhausted',
+      `Too many requests. Try again in ${Math.ceil(rl.resetMs / 60_000)} minutes.`,
+    );
   }
 
   const code = generateCode();
@@ -184,6 +212,14 @@ export const verifyAdminCode = callable.onCall(async (request) => {
     throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
   }
 
+  const rl = checkRateLimit(`verifyAdminCode:${uid}`, 5, 900_000);
+  if (!rl.allowed) {
+    throw new callable.HttpsError(
+      'resource-exhausted',
+      `Too many attempts. Try again in ${Math.ceil(rl.resetMs / 60_000)} minutes.`,
+    );
+  }
+
   if (!code || code.length !== 6) {
     throw new callable.HttpsError('invalid-argument', 'Invalid code.');
   }
@@ -212,17 +248,13 @@ export const verifyAdminCode = callable.onCall(async (request) => {
   await admin.firestore().collection('users').doc(uid).update({ role: 'admin' });
   await admin.auth().setCustomUserClaims(uid, { role: 'admin' });
 
-  return { success: true, message: 'You are now an admin!' };
+return { success: true, message: 'You are now an admin!' };
 });
 
-const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
-
 export const onUserCreate = beforeUserCreated(async (event) => {
-  const userData = event.data;
-  const email = (userData?.email || '').toLowerCase().trim();
-  const role = SUPER_ADMIN_EMAILS.includes(email) ? 'super_admin' : 'user';
+  // New users start with 'user' role; admin roles assigned via verified processes only
   return {
-    customClaims: { role },
+    customClaims: { role: 'user' },
   };
 });
 
@@ -241,7 +273,7 @@ export const onUserRegistered = onDocumentCreated('users/{uid}', async (event) =
   const body = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>👋 Welcome to SB Connect!</h2>
-      <p>Dear ${displayName || 'Member'},</p>
+      <p>Dear ${sanitize(displayName || 'Member')},</p>
       <p>Thank you for registering with SB Connect — the premier business networking community.</p>
       <p><strong>Next steps:</strong></p>
       <ul>
@@ -368,6 +400,143 @@ export const checkMembershipExpiry = functions.scheduler.onSchedule(
     functions.logger.info('Membership check complete', { results });
   },
 );
+
+interface IssueReply {
+  id: string;
+  text: string;
+  authorUid: string;
+  authorName: string;
+  authorRole: 'user' | 'admin' | 'super_admin';
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export const onIssueCreated = onDocumentCreated('issueReports/{id}', async (event) => {
+  const snap = event.data;
+  if (!snap) return;
+  const issue = snap.data();
+  const id = event.params.id;
+
+  // Send in-app notification to all admins
+  const userSnap = await admin.firestore().collection('users')
+    .where('role', 'in', ['admin', 'super_admin']).get();
+  const notifPromises = userSnap.docs.map((d) =>
+    admin.firestore().collection('userNotifications').add({
+      uid: d.id,
+      type: 'admin_message',
+      title: 'New Issue Report',
+      message: `${issue.companyName}: ${issue.subject}`,
+      relatedId: id,
+      read: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }),
+  );
+  await Promise.all(notifPromises);
+
+  // Send confirmation email to the reporter
+  if (issue.userEmail && RESEND_API_KEY) {
+    const resend = new Resend(RESEND_API_KEY);
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: issue.userEmail,
+        subject: `[#${id.slice(0, 8)}] Issue Report Received — SB Connect`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>We received your report</h2>
+            <p>Dear ${sanitize(issue.userDisplayName || 'Member')},</p>
+            <p>Thank you for reporting an issue. Here's a summary:</p>
+            <div style="background: #F5F0E8; border-radius: 12px; padding: 16px; margin: 16px 0;">
+              <p><strong>Ticket ID:</strong> #${id.slice(0, 8)}</p>
+              <p><strong>Subject:</strong> ${sanitize(issue.subject)}</p>
+              <p><strong>Description:</strong> ${sanitize(issue.description)}</p>
+            </div>
+            <p>Our admin team will review it and get back to you shortly.</p>
+            <p>You can track this issue in your dashboard under "My Reports".</p>
+            <hr style="margin: 24px 0;" />
+            <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      functions.logger.error('Failed to send issue confirmation email:', err);
+    }
+  }
+});
+
+export const onIssueUpdated = onDocumentWritten('issueReports/{id}', async (event) => {
+  const change = event.data;
+  if (!change) return;
+  const before = change.before.data();
+  const after = change.after.data();
+  if (!before || !after) return;
+
+  if (!RESEND_API_KEY || !after.userEmail) return;
+
+  const beforeReplies: IssueReply[] = (before.replies as IssueReply[] | undefined) || [];
+  const afterReplies: IssueReply[] = (after.replies as IssueReply[] | undefined) || [];
+
+  // Check if status changed to resolved
+  if (before.status !== 'resolved' && after.status === 'resolved') {
+    const resend = new Resend(RESEND_API_KEY);
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: after.userEmail,
+        subject: `[#${event.params.id.slice(0, 8)}] Issue Resolved — SB Connect`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Issue Resolved</h2>
+            <p>Dear ${sanitize(after.userDisplayName || 'Member')},</p>
+            <p>Your issue report has been marked as resolved:</p>
+            <div style="background: #F5F0E8; border-radius: 12px; padding: 16px; margin: 16px 0;">
+              <p><strong>Subject:</strong> ${sanitize(after.subject)}</p>
+              ${after.adminNote ? `<p><strong>Admin note:</strong> ${sanitize(after.adminNote)}</p>` : ''}
+            </div>
+            <p>If you have further questions, feel free to submit a new report.</p>
+            <hr style="margin: 24px 0;" />
+            <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      functions.logger.error('Failed to send issue resolved email:', err);
+    }
+    return;
+  }
+
+  // Check if a new admin reply was added
+  if (afterReplies.length > beforeReplies.length) {
+    const newReply = afterReplies[afterReplies.length - 1];
+    if (newReply.authorRole === 'admin' || newReply.authorRole === 'super_admin') {
+      const resend = new Resend(RESEND_API_KEY);
+      try {
+        await resend.emails.send({
+          from: FROM_EMAIL,
+          to: after.userEmail,
+          subject: `[#${event.params.id.slice(0, 8)}] Admin replied to your report — SB Connect`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>Admin Reply</h2>
+              <p>Dear ${sanitize(after.userDisplayName || 'Member')},</p>
+              <p>Admin replied to your issue report:</p>
+              <div style="background: #F5F0E8; border-radius: 12px; padding: 16px; margin: 16px 0;">
+                <p><strong>Subject:</strong> ${sanitize(after.subject)}</p>
+                <p><strong>Reply:</strong> ${sanitize(newReply.text)}</p>
+              </div>
+              <p>Log in to your dashboard to continue the conversation.</p>
+              <hr style="margin: 24px 0;" />
+              <p style="color: #666; font-size: 12px;">SB Connect — Business Network</p>
+            </div>
+          `,
+        });
+      } catch (err) {
+        functions.logger.error('Failed to send issue reply email:', err);
+      }
+    }
+  }
+});
 
 export const dailyFirestoreBackup = onSchedule('0 0 * * *', async () => {
   const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT || 'sbconnect-65338';

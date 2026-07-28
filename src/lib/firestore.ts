@@ -10,23 +10,6 @@ async function requireSuperAdmin(): Promise<string> {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
-  const email = user.email?.toLowerCase().trim() || '';
-  const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
-  if (SUPER_ADMIN_EMAILS.includes(email)) {
-    // Fire-and-forget: ensure super admin role is set in Firestore
-    (async () => {
-      try {
-        const userRef = doc(db, 'users', user.uid);
-        const snap = await getDoc(userRef);
-        if (!snap.exists()) {
-          await setDoc(userRef, { uid: user.uid, email, role: 'super_admin', createdAt: Date.now(), updatedAt: Date.now() });
-        } else if (snap.data().role !== 'super_admin') {
-          await updateDoc(userRef, { role: 'super_admin', updatedAt: Date.now() });
-        }
-      } catch {}
-    })();
-    return user.uid;
-  }
   const snap = await getDoc(doc(db, 'users', user.uid));
   const profile = snap.data();
   const role = profile?.role;
@@ -282,6 +265,18 @@ export async function awardDeal(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
+  const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
+  if (parsed > 0) {
+    await runTransaction(db, async (tx) => {
+      const statsRef = doc(db, 'stats', 'deals');
+      const snap = await tx.get(statsRef);
+      if (snap.exists()) {
+        tx.update(statsRef, { totalValue: increment(parsed), updatedAt: Date.now() });
+      } else {
+        tx.set(statsRef, { totalValue: parsed, updatedAt: Date.now() });
+      }
+    });
+  }
   await updateDoc(doc(db, 'requests', requestId), { status: 'closed', awardedTo: receiverUid, updatedAt: Date.now() });
   sendUserNotification(receiverUid, 'deal_won', '🎉 You Won!', `Your pitch for "${requestTitle}" was selected by ${giverCompanyName}!`, requestId).catch(() => {});
   sendUserNotification(giverUid, 'deal_thanks', '🙏 Thank You!', `${receiverCompanyName} sends their thanks for awarding "${requestTitle}" to them.`, requestId).catch(() => {});
@@ -322,10 +317,8 @@ export async function recordDeal(
   return ref.id;
 }
 
-export async function ensureDealStats(): Promise<void> {
+export async function recalculateTotalBusinessValue(): Promise<void> {
   const ref = doc(db, 'stats', 'deals');
-  const snap = await getDoc(ref);
-  if (snap.exists()) return;
   const dealsSnap = await getDocs(collection(db, 'deals'));
   let total = 0;
   for (const d of dealsSnap.docs) {
@@ -335,9 +328,15 @@ export async function ensureDealStats(): Promise<void> {
 }
 
 export async function getTotalBusinessValue(): Promise<number> {
-  await ensureDealStats();
   const snap = await getDoc(doc(db, 'stats', 'deals'));
-  return (snap.data()?.totalValue as number) || 0;
+  if (snap.exists()) return (snap.data()?.totalValue as number) || 0;
+  const dealsSnap = await getDocs(collection(db, 'deals'));
+  let total = 0;
+  for (const d of dealsSnap.docs) {
+    total += parseFloat(String(d.data().amount || '0').replace(/[^0-9.]/g, '')) || 0;
+  }
+  try { await setDoc(doc(db, 'stats', 'deals'), { totalValue: total, updatedAt: Date.now() }); } catch {}
+  return total;
 }
 
 export async function getUserDealStats(uid: string): Promise<{ given: number; got: number; givenCount: number; gotCount: number }> {

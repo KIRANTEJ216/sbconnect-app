@@ -21,8 +21,8 @@ function NavBtn({ to, label, children }: { to: string; label: string; children: 
 }
 
 export function BottomNav() {
-  const { user, profile } = useAuth();
-  const isAdminUser = isAdmin(user?.email, profile?.role);
+  const { profile } = useAuth();
+  const isAdminUser = isAdmin(profile?.role);
   const pendingCount = usePendingVerifications();
 
   return (
@@ -51,6 +51,12 @@ export function BottomNav() {
             <line x1="16" y1="13" x2="8" y2="13" />
             <line x1="16" y1="17" x2="8" y2="17" />
             <polyline points="10 9 9 9 8 9" />
+          </svg>
+        </NavBtn>
+        <NavBtn to="/my-issues" label="Issues">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <polyline points="17 9 21 5 17 1" /><line x1="21" y1="5" x2="11" y2="5" />
           </svg>
         </NavBtn>
         <NavBtn to="/attendance" label="Attendance">

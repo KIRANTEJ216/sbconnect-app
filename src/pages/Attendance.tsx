@@ -65,7 +65,8 @@ export default function Attendance() {
   const attendedMeetingIds = new Set(myAttendance.map((a) => a.meetingId));
   const now = Date.now();
 
-  const upcoming = meetings.find((m) => new Date(m.date).getTime() >= now - 86400000 && !attendedMeetingIds.has(m.id));
+  const attendedCount = myAttendance.length;
+  const upcomingCount = meetings.filter((m) => new Date(m.date).getTime() >= now - 86400000 && !attendedMeetingIds.has(m.id)).length;
 
   if (loading) {
     return (
@@ -79,18 +80,35 @@ export default function Attendance() {
 
   return (
     <AnimatedPage>
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Meeting Attendance</h1>
-          <p className="text-steel mt-1.5">Mark your presence and RSVP for upcoming meetings</p>
+      <div className="max-w-4xl mx-auto space-y-3">
+        <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+          <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">Meeting Attendance</h1>
+          <p className="text-steel text-sm">Mark your presence and RSVP for upcoming meetings</p>
+          <div className="flex items-center justify-center gap-4 mt-2">
+            <div>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Total Meetings</p>
+              <p className="text-lg font-bold gradient-text">{meetings.length}</p>
+            </div>
+            <div className="w-px h-6 bg-border" />
+            <div>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Attended</p>
+              <p className="text-lg font-bold text-success">{attendedCount}</p>
+            </div>
+            <div className="w-px h-6 bg-border" />
+            <div>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Upcoming</p>
+              <p className="text-lg font-bold text-primary">{upcomingCount}</p>
+            </div>
+          </div>
         </div>
 
         {user && <StrikeWarning uid={user!.uid} />}
 
         {activeMeeting && !attendedMeetingIds.has(activeMeeting.id) && (
           <TiltCard>
-            <Card>
-              <CardContent className="p-6 text-center">
+            <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+            <CardContent className="p-4 text-center">
                 <div className="w-16 h-16 bg-success-light rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-success" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -107,13 +125,14 @@ export default function Attendance() {
                   </p>
                 )}
               </CardContent>
-            </Card>
+            </div>
           </TiltCard>
         )}
 
         {activeMeeting && attendedMeetingIds.has(activeMeeting.id) && (
-          <Card>
-            <CardContent className="p-6 flex items-center gap-4">
+          <TiltCard>
+            <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+            <CardContent className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 bg-success-light rounded-xl flex items-center justify-center shrink-0">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-success" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
@@ -124,12 +143,14 @@ export default function Attendance() {
                 <p className="text-sm text-steel">{activeMeeting.label}</p>
               </div>
             </CardContent>
-          </Card>
+            </div>
+          </TiltCard>
         )}
 
-        {upcoming && !activeMeeting && (
-          <Card>
-            <CardContent className="p-6">
+        {upcomingCount > 0 && !activeMeeting && (
+          <TiltCard>
+            <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+            <CardContent className="p-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-warning-light rounded-xl flex items-center justify-center shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-warning" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,16 +158,17 @@ export default function Attendance() {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-charcoal">Next Meeting</p>
-                  <p className="text-sm text-steel">{upcoming.label} — {formatDate(new Date(upcoming.date).getTime())}</p>
+                  <p className="font-medium text-charcoal">{upcomingCount} Upcoming Meeting{upcomingCount > 1 ? 's' : ''}</p>
+                  <p className="text-sm text-steel">Check back when the meeting is live to mark attendance</p>
                 </div>
               </div>
             </CardContent>
-          </Card>
+            </div>
+          </TiltCard>
         )}
 
         <TiltCard>
-          <Card>
+          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
             <CardHeader>
               <h3 className="font-semibold text-charcoal tracking-tight">My Attendance History</h3>
             </CardHeader>
@@ -177,7 +199,7 @@ export default function Attendance() {
                 </div>
               )}
             </CardContent>
-          </Card>
+          </div>
         </TiltCard>
       </div>
     </AnimatedPage>

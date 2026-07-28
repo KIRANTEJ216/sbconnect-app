@@ -126,7 +126,7 @@ export default function CreateProfile() {
       return;
     }
     try {
-      const compressed = await compressProfilePhoto(file, 400, 0.75);
+      const compressed = await compressProfilePhoto(file, 800, 0.85);
       const compressedFile = new File([compressed], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
       setPhotoFile(compressedFile);
       setError('');
@@ -138,13 +138,18 @@ export default function CreateProfile() {
     }
   };
 
-  const handleCameraCapture = (blob: Blob) => {
-    const file = new File([blob], 'camera_photo.jpg', { type: 'image/jpeg' });
-    setPhotoFile(file);
-    setError('');
-    const reader = new FileReader();
-    reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+  const handleCameraCapture = async (blob: Blob) => {
+    try {
+      const compressed = await compressProfilePhoto(new File([blob], 'camera_photo.jpg', { type: 'image/jpeg' }), 800, 0.85);
+      const file = new File([compressed], 'camera_photo.jpg', { type: 'image/jpeg' });
+      setPhotoFile(file);
+      setError('');
+      const reader = new FileReader();
+      reader.onload = (ev) => setPhotoPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } catch {
+      setError('Failed to process camera photo.');
+    }
     setCameraOpen(false);
   };
 
@@ -162,7 +167,7 @@ export default function CreateProfile() {
       return;
     }
     const maxSize = 10 * 1024 * 1024;
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     for (const f of files) {
       if (f.size > maxSize) { setError(`"${f.name}" exceeds 10MB limit.`); return; }
       if (!allowed.includes(f.type)) { setError(`"${f.name}" must be JPG, PNG, WebP or PDF.`); return; }
@@ -470,7 +475,6 @@ export default function CreateProfile() {
                           ref={photoRef}
                           type="file"
                           accept="image/*"
-                          capture="environment"
                           onChange={handlePhoto}
                           className="hidden"
                         />
@@ -499,12 +503,12 @@ export default function CreateProfile() {
                   </div>
 
                   <div className="mt-5">
-                    <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog / Brochure (up to 5 files)</label>
+                    <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Catalog Images (up to 5 files)</label>
                     <div className="flex items-center gap-3">
                       <input
                         ref={catalogRef}
                         type="file"
-                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                        accept=".jpg,.jpeg,.png,.webp"
                         multiple
                         onChange={handleCatalog}
                         className="hidden"
@@ -514,26 +518,33 @@ export default function CreateProfile() {
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                           <polyline points="14 2 14 8 20 8" />
                         </svg>
-                        Upload Catalog
+                        Add Images
                       </Button>
                     </div>
                     {catalogFiles.length > 0 && (
-                      <div className="mt-3 space-y-1.5">
+                      <div className="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
                         {catalogFiles.map((f, i) => (
-                          <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-canvas text-xs text-steel">
-                            <span className="truncate">{f.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))}
-                              className="text-danger hover:underline shrink-0 ml-2 cursor-pointer"
-                            >
-                              Remove
-                            </button>
+                          <div key={i} className="relative group aspect-square rounded-xl overflow-hidden border border-border bg-muted-bg">
+                            <img
+                              src={URL.createObjectURL(f)}
+                              alt={`Catalog ${i + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))}
+                                className="w-7 h-7 rounded-full bg-white/90 text-danger flex items-center justify-center hover:bg-white transition-colors cursor-pointer"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                              </button>
+                            </div>
+                            <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] font-medium bg-black/50 text-white rounded-md">compressed</div>
                           </div>
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-muted mt-1.5">JPG, PNG, WebP or PDF. Max 10MB each, up to 5 files.</p>
+                    <p className="text-xs text-muted mt-1.5">JPG, PNG or WebP. Max 10MB each, up to 5 files. Images are compressed to save space.</p>
                   </div>
                 </div>
 

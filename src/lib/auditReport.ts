@@ -299,20 +299,12 @@ export function downloadReport(report: object) {
   const filename = `sbconnect-audit-report-${dateStr}`;
 
   const html = generateReportHTML(report);
-  const w = window.open('', '_blank');
-  if (!w) {
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename + '.html';
-    a.click();
-    URL.revokeObjectURL(url);
-    return filename + '.html';
-  }
-  w.document.write(html);
-  w.document.close();
-  w.document.title = filename;
-  w.print();
-  return filename + ' (PDF via browser print)';
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename + '.html';
+  a.click();
+  URL.revokeObjectURL(url);
+  return filename + '.html';
 }

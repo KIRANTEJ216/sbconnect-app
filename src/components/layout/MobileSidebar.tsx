@@ -13,7 +13,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
   const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isAdminUser = isAdmin(user?.email, profile?.role);
+  const isAdminUser = isAdmin(profile?.role);
   const pendingCount = usePendingVerifications();
 
   useEffect(() => {

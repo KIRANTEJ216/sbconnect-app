@@ -32,7 +32,7 @@ function NavItem({ to, label, expanded, children }: NavItemProps) {
 
 export function Sidebar() {
   const { user, profile } = useAuth();
-  const isAdminUser = isAdmin(user?.email, profile?.role);
+  const isAdminUser = isAdmin(profile?.role);
   const pendingCount = usePendingVerifications();
   const [expanded, setExpanded] = useState(false);
 
@@ -97,6 +97,12 @@ export function Sidebar() {
             <line x1="16" y1="13" x2="8" y2="13" />
             <line x1="16" y1="17" x2="8" y2="17" />
             <polyline points="10 9 9 9 8 9" />
+          </svg>
+        </NavItem>
+        <NavItem to="/my-issues" label="My Issues" expanded={expanded}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <polyline points="17 9 21 5 17 1" /><line x1="21" y1="5" x2="11" y2="5" />
           </svg>
         </NavItem>
         <NavItem to="/payments" label="Payments" expanded={expanded}>

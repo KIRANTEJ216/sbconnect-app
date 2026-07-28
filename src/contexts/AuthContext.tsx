@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
-import { doc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { AppUser, UserProfile } from '../types';
 import { userToAppUser, setUserOnline, setUserOffline } from '../lib/auth';
-import { isAdminEmail, isSuperAdminEmail } from '../lib/admin';
+
+const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
 
 interface AuthState {
   user: AppUser | null;
@@ -28,20 +29,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const handleUnload = () => setUserOffline(firebaseUser.uid);
         window.addEventListener('beforeunload', handleUnload);
 
+        const snap = await getDoc(doc(db, 'users', firebaseUser.uid));
+        if (snap.exists()) {
+          const data = snap.data() as UserProfile;
+          if (SUPER_ADMIN_EMAILS.includes(data.email?.toLowerCase() ?? '') && data.role !== 'super_admin') {
+            await updateDoc(doc(db, 'users', firebaseUser.uid), { role: 'super_admin' });
+            data.role = 'super_admin';
+          }
+          setState((s) => ({ ...s, profile: data }));
+        }
+
         const unsubProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
           if (snap.exists()) {
-            const data = snap.data() as UserProfile;
-            setState((s) => ({ ...s, profile: data }));
-            const email = firebaseUser.email;
-            if (email && isAdminEmail(email) && data.role === 'user') {
-              getDoc(doc(db, 'users', firebaseUser.uid)).then((snap2) => {
-                const fresh = snap2.data() as UserProfile | undefined;
-                if (fresh && fresh.role === 'user') {
-                  const role = isSuperAdminEmail(email) ? 'super_admin' : 'admin';
-                  updateDoc(doc(db, 'users', firebaseUser.uid), { role }).catch(console.error);
-                }
-              });
-            }
+            setState((s) => ({ ...s, profile: snap.data() as UserProfile }));
           }
         });
 

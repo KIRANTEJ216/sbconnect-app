@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { submitRSVP } from '../lib/firestore';
 import { useAuth } from '../contexts/AuthContext';
-import { useMeetings, useUserRSVPs, useBusinessProfile } from '../hooks/useFirebaseQuery';
+import { useMeetings, useUserRSVPs, useBusinessProfile, useAttendanceCompliance } from '../hooks/useFirebaseQuery';
 import { Card, CardContent } from './ui/Card';
+import { StrikeWarning } from './StrikeWarning';
 
 export function DashboardUpdates() {
   const { user, profile } = useAuth();
@@ -59,6 +60,7 @@ export function DashboardUpdates() {
             </svg>
             Upcoming Meetings
           </h3>
+          {user && <StrikeWarning uid={user.uid} compact />}
           <div className="space-y-1.5">
             {currentMonthUpcoming.length === 0 ? (
               <p className="text-xs text-muted text-center py-4">No upcoming meetings this month.</p>

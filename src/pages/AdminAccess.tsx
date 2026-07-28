@@ -1,49 +1,37 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../lib/firebase';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardContent } from '../components/ui/Card';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
-
-function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
 
 export default function AdminAccess() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState<'initial' | 'code' | 'done'>('initial');
   const [code, setCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   const isAlreadyAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
 
+  const sendAdminCode = httpsCallable(functions, 'sendAdminCode');
+  const verifyAdminCode = httpsCallable(functions, 'verifyAdminCode');
+
   const handleRequestCode = async () => {
     if (!user) return;
     setLoading(true);
     setError('');
     try {
-      const { doc, setDoc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
-      const newCode = generateCode();
-      const expiresAt = Date.now() + 5 * 60 * 1000;
-      await setDoc(doc(db, 'adminCodes', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        code: newCode,
-        expiresAt,
-        used: false,
-        createdAt: Date.now(),
-      });
-      setGeneratedCode(newCode);
+      await sendAdminCode();
       setStep('code');
-      setMessage('Your verification code is ready.');
+      setMessage('Verification code sent to your email.');
     } catch (err: any) {
-      setError(err?.message || 'Failed to generate code. Try again.');
+      setError(err?.message || 'Failed to send code. Try again.');
     } finally {
       setLoading(false);
     }
@@ -58,32 +46,7 @@ export default function AdminAccess() {
     setLoading(true);
     setError('');
     try {
-      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
-      const snap = await getDoc(doc(db, 'adminCodes', user.uid));
-      if (!snap.exists()) {
-        setError('No code found. Request a new one.');
-        setLoading(false);
-        return;
-      }
-      const data = snap.data();
-      if (data.used) {
-        setError('Code already used. Request a new one.');
-        setLoading(false);
-        return;
-      }
-      if (Date.now() > data.expiresAt) {
-        setError('Code expired. Request a new one.');
-        setLoading(false);
-        return;
-      }
-      if (data.code !== code) {
-        setError('Incorrect code. Try again.');
-        setLoading(false);
-        return;
-      }
-      await updateDoc(doc(db, 'adminCodes', user.uid), { used: true });
-      await updateDoc(doc(db, 'users', user.uid), { role: 'admin' });
+      await verifyAdminCode({ code });
       setStep('done');
       setMessage('You are now an admin! Redirecting...');
       setTimeout(() => navigate('/admin', { replace: true }), 2000);
@@ -129,12 +92,12 @@ export default function AdminAccess() {
                   </div>
                   <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Request Admin Access</h1>
                   <p className="text-sm text-steel mt-2">
-                    Generate a verification code to upgrade your account to admin.
+                    A verification code will be sent to your email to upgrade your account to admin.
                   </p>
                 </div>
                 {error && <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl mb-4">{error}</p>}
                 <Button onClick={handleRequestCode} loading={loading} className="w-full">
-                  Generate Code
+                  Send Code to Email
                 </Button>
               </>
             )}
@@ -148,12 +111,8 @@ export default function AdminAccess() {
                       <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01" />
                     </svg>
                   </div>
-                  <h2 className="text-xl font-bold text-charcoal tracking-tight">Your Verification Code</h2>
-                  <p className="text-sm text-steel mt-2">Enter this code below to verify. Code expires in 5 minutes.</p>
-                  <div className="text-3xl font-bold tracking-[12px] text-primary bg-primary-light rounded-2xl py-4 px-6 mt-4 font-mono select-all">
-                    {generatedCode}
-                  </div>
-                  <p className="text-xs text-muted mt-2">Copy this code and enter it below</p>
+                  <h2 className="text-xl font-bold text-charcoal tracking-tight">Check Your Email</h2>
+                  <p className="text-sm text-steel mt-2">Enter the 6-digit code sent to your email. Code expires in 5 minutes.</p>
                 </div>
                 {error && <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl mb-4">{error}</p>}
                 <div className="space-y-4">

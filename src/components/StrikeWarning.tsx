@@ -17,24 +17,9 @@ export function StrikeWarning({ uid, compact }: StrikeWarningProps) {
 
   if (compact) {
     return (
-      <div className="px-4 py-3 rounded-xl bg-gradient-to-br from-danger-light via-danger/5 to-warning/10 border border-danger/20 text-sm space-y-2">
-        <div className="flex items-center justify-center gap-2 text-danger">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <span className="font-semibold">Attendance warning: {missing} more meeting{missing > 1 ? 's' : ''} required in 6-month window.</span>
-        </div>
-        <div className="flex items-center justify-center gap-2 p-2 rounded-lg bg-danger-light/60 border border-danger/10">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-danger shrink-0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
-          <p className="text-xs text-steel">
-            Non-compliance requires <strong className="text-danger">renewing at ₹1,000</strong> to rejoin
-          </p>
-        </div>
-      </div>
+      <p className="text-xs text-danger font-medium text-center">
+        ⚠️ Attendance warning — {missing} more meeting{missing > 1 ? 's' : ''} required in 6-month window
+      </p>
     );
   }
 

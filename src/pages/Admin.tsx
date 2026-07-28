@@ -9,7 +9,7 @@ import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
 import { useAllRsvpsByMeeting, useOnlineUsersCount } from '../hooks/useFirebaseQuery';
 import { formatDate, formatTime, formatCurrency, getFinancialYear } from '../lib/format';
-import { isSuperAdmin } from '../lib/admin';
+import { isSuperAdmin, isAdmin } from '../lib/admin';
 import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request, IssueReport, Deal, LeaderboardEntry, RevenueConfig } from '../types';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -69,9 +69,12 @@ function exportProfilesCSV(profiles: BusinessProfile[]) {
 
 
 
+const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
+
 export default function Admin() {
   const { user, profile } = useAuth();
-  const canWrite = isSuperAdmin(user?.email, profile?.role);
+  const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(user?.email?.toLowerCase() ?? '');
+  const canWrite = isSuperAdmin(profile?.role) || isSuperAdminEmail;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<BusinessProfile[]>([]);
@@ -159,7 +162,7 @@ export default function Admin() {
   const [webhookSaving, setWebhookSaving] = useState(false);
   const [webhookSyncing, setWebhookSyncing] = useState(false);
 
-  const isSuper = isSuperAdmin(user?.email, profile?.role);
+  const isSuper = isSuperAdmin(profile?.role) || isSuperAdminEmail;
 
   useEffect(() => {
     loadPending();
@@ -1520,14 +1523,11 @@ export default function Admin() {
             </CardContent>
           </Card>
 
-          {/* Admins (super only) */}
-          {isSuper && (
-            <Card>
-              <div className="stat-accent-top">
+          {/* Admins */}
+          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
                 <CardHeader>
                   <h3 className="font-semibold text-charcoal tracking-tight">🔑 Admins ({admins.length})</h3>
                 </CardHeader>
-              </div>
               <CardContent>
                 <div className="flex flex-col sm:flex-row gap-3 items-end mb-4">
                   <div className="flex-1 w-full">
@@ -1556,8 +1556,7 @@ export default function Admin() {
                   <p className="text-sm text-muted text-center py-4">No admins found.</p>
                 )}
               </CardContent>
-            </Card>
-          )}
+            </div>
         </div>
       )}
 

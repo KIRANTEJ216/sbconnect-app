@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserRequests, recordDeal, getMyNotifications, getUserIssueReports, addIssueReply, getAwardedRequests } from '../lib/firestore';
+import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests, markNotificationRead } from '../lib/firestore';
 import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig } from '../hooks/useFirebaseQuery';
-import type { UserNotification, IssueReport, Request as BusinessRequest } from '../types';
+import type { UserNotification, Request as BusinessRequest } from '../types';
 import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
 import confetti from 'canvas-confetti';
 import { Card, CardContent } from '../components/ui/Card';
@@ -14,7 +14,6 @@ import { Input } from '../components/ui/Input';
 import { isSuperAdmin } from '../lib/admin';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { TiltCard } from '../components/motion/TiltCard';
-import { StrikeWarning } from '../components/StrikeWarning';
 import { DashboardUpdates } from '../components/DashboardUpdates';
 import { MembershipCountdown } from '../components/MembershipCountdown';
 
@@ -22,6 +21,7 @@ import { MembershipCountdown } from '../components/MembershipCountdown';
 
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const { data: myProfile } = useBusinessProfile(user?.uid);
@@ -40,9 +40,6 @@ export default function Dashboard() {
   const [myNotifications, setMyNotifications] = useState<UserNotification[]>([]);
   const [awardedRequests, setAwardedRequests] = useState<BusinessRequest[]>([]);
   const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
-  const [myIssues, setMyIssues] = useState<IssueReport[]>([]);
-  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
-  const [replyingId, setReplyingId] = useState<string | null>(null);
   const { data: totalBusinessValue = 0 } = useTotalBusinessValue();
   const { data: revenueConfig } = useRevenueConfig();
 
@@ -50,9 +47,6 @@ export default function Dashboard() {
     if (!user) return;
     getMyNotifications()
       .then(setMyNotifications)
-      .catch(() => {});
-    getUserIssueReports(user.uid)
-      .then(setMyIssues)
       .catch(() => {});
     getAwardedRequests(user.uid)
       .then(setAwardedRequests)
@@ -180,7 +174,7 @@ export default function Dashboard() {
 
   return (
     <AnimatedPage>
-    <div className="max-w-6xl mx-auto space-y-3">
+    <div className="max-w-6xl mx-auto space-y-2">
       <div>
         <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Dashboard</h1>
         <p className="text-steel text-sm">Welcome, {myProfile ? `${myProfile.ownerName} ${myProfile.ownerSurname}`.trim() : user?.displayName || user?.email}</p>
@@ -193,108 +187,46 @@ export default function Dashboard() {
         const revPct = hasTarget ? Math.min((totalBusinessValue / target) * 100, 100) : 0;
         const remaining = hasTarget ? Math.max(0, target - totalBusinessValue) : 0;
         const achieved = hasTarget && totalBusinessValue >= target;
-
-        const urgency = fy.timeProgress;
-        const countdownBg = urgency > 0.75
-          ? 'bg-gradient-to-br from-danger/10 via-danger/5 to-warning/15'
-          : urgency > 0.5
-            ? 'bg-gradient-to-br from-warning/10 via-accent/5 to-primary/8'
-            : 'bg-gradient-to-br from-primary/8 via-accent/5 to-success/10';
-        const countdownBorder = urgency > 0.75
-          ? 'border-danger/20'
-          : urgency > 0.5
-            ? 'border-warning/20'
-            : 'border-primary/10';
-        const barGradient = urgency > 0.75
-          ? 'from-danger to-warning'
-          : urgency > 0.5
-            ? 'from-warning to-accent'
-            : 'from-primary to-success';
-        const emoji = urgency > 0.75 ? '🚨' : urgency > 0.5 ? '⚠️' : '🔥';
         return (
-        <Card className="stat-accent-top overflow-hidden">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted tracking-tight uppercase">
-                  {hasTarget ? `${fy.fyLabel} · Raised` : fy.fyLabel}
-                </p>
-                <p className="text-lg sm:text-xl font-bold gradient-text mt-0.5 tracking-tight">
-                  ₹ {totalBusinessValue.toLocaleString('en-IN')}
-                </p>
-              </div>
-              {hasTarget && (
-                <div className="text-right shrink-0">
-                  <p className="text-[10px] text-muted font-medium">Target</p>
-                  <p className="text-base sm:text-lg font-bold text-charcoal tracking-tight">{achieved ? '✓' : `₹ ${target.toLocaleString('en-IN')}`}</p>
-                </div>
-              )}
+        <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
+          <div className="flex items-center justify-center gap-4">
+            <div>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">{hasTarget ? `${fy.fyLabel} · Raised` : fy.fyLabel}</p>
+              <p className="text-lg font-bold gradient-text">₹ {totalBusinessValue.toLocaleString('en-IN')}</p>
             </div>
-
-            <div className="mb-2">
-              <div className="w-full h-2 bg-muted-bg rounded-full overflow-hidden shadow-inner">
-                <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary-light to-success transition-all duration-700 ease-out"
-                  style={{ width: `${hasTarget ? revPct : 0}%` }}
-                />
+            {hasTarget && (
+              <>
+                <div className="w-px h-8 bg-border" />
+                <div>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Target</p>
+                  <p className="text-lg font-bold text-charcoal">{achieved ? '🎉' : `₹ ${target.toLocaleString('en-IN')}`}</p>
+                </div>
+                <div className="w-px h-8 bg-border" />
+                <div>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Progress</p>
+                  <p className="text-lg font-bold" style={{ color: revPct >= 100 ? '#16a34a' : revPct > 50 ? '#2563eb' : '#dc2626' }}>{Math.round(revPct)}%</p>
+                </div>
+              </>
+            )}
+          </div>
+          {hasTarget && (
+            <div className="mt-2 w-full max-w-xs mx-auto">
+              <div className="w-full h-1.5 bg-muted-bg rounded-full overflow-hidden shadow-inner">
+                <div className="h-full rounded-full bg-gradient-to-r from-primary via-primary-light to-success transition-all duration-700 ease-out" style={{ width: `${revPct}%` }} />
               </div>
-              <div className="flex justify-between mt-1 text-[10px]">
-                <span className="font-semibold text-charcoal">₹ {totalBusinessValue.toLocaleString('en-IN')} raised</span>
-                {hasTarget && <span className="text-steel">{Math.round(revPct)}%</span>}
-              </div>
+              <p className="text-[10px] text-steel mt-0.5">₹ {remaining.toLocaleString('en-IN')} remaining to target</p>
             </div>
-
-            {!achieved && (
-              <div className={`rounded-xl ${countdownBg} border ${countdownBorder} p-2.5 transition-all duration-500`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base">{emoji}</span>
-                    <div>
-                      <p className="text-[11px] font-semibold text-charcoal tracking-tight leading-tight">
-                        {fy.remainingMonths > 0
-                          ? `${fy.remainingMonths}m ${fy.remainingDaysInMonth}d left`
-                          : `${fy.remainingDays}d left`}
-                      </p>
-                      <p className="text-[10px] text-steel mt-px">
-                        {hasTarget
-                          ? `₹ ${Math.round(remaining / Math.max(fy.remainingDays, 1)).toLocaleString('en-IN')}/day needed`
-                          : `₹ ${Math.round(totalBusinessValue / Math.max(fy.elapsedDays, 1)).toLocaleString('en-IN')}/day avg`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-[11px] font-bold gradient-text">{Math.round(fy.timeProgress * 100)}%</p>
-                    <p className="text-[9px] text-steel leading-tight -mt-px">elapsed</p>
-                  </div>
-                </div>
-                <div className="w-full h-1 bg-muted-bg/60 rounded-full overflow-hidden mt-2">
-                  <div className={`h-full rounded-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out`}
-                    style={{ width: `${fy.timeProgress * 100}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-0.5 text-[9px] text-muted">
-                  <span>{fy.elapsedDays}d elapsed</span>
-                  <span>{fy.remainingDays}d to go</span>
-                </div>
-              </div>
-            )}
-
-            {achieved && (
-              <div className="rounded-xl bg-gradient-to-br from-success/10 to-success/5 border border-success/20 p-2.5 text-center">
-                <p className="text-xs font-bold text-success">🎉 Target Achieved!</p>
-                <p className="text-[10px] text-steel mt-0.5">₹ {totalBusinessValue.toLocaleString('en-IN')} of ₹ {target.toLocaleString('en-IN')} target</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )})()}
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
         {statCards.map((s) => {
           const inner = (
             <div className={`stat-accent-top rounded-card bg-surface border border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:border-primary/10 h-full flex flex-col ${s.to ? 'cursor-pointer' : ''}`}>
-              <CardContent className="p-5 flex-1 flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-muted font-semibold tracking-tight flex items-center gap-1.5">
+              <CardContent className="p-3 flex-1 flex flex-col">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-muted font-semibold tracking-tight flex items-center gap-1.5">
                     {s.label}
                     {s.dot && <span className="w-2 h-2 rounded-full bg-danger animate-pulse" />}
                   </p>
@@ -374,11 +306,21 @@ export default function Dashboard() {
           </div>
           <div className="space-y-2">
             {myNotifications.filter((n) => !n.read).map((n) => (
-              <div key={n.id} className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${
-                n.type === 'issue_resolved' || n.type === 'deal_won' ? 'bg-success-light/20 border-success/15' :
-                n.type === 'issue_reply' ? 'bg-warning-light/20 border-warning/15' :
-                'bg-primary-light/20 border-primary/15'
-              }`}>
+              <div
+                key={n.id}
+                onClick={() => {
+                  markNotificationRead(n.id).catch(() => {});
+                  const target = n.type === 'issue_reply' || n.type === 'issue_resolved'
+                    ? `/my-issues?highlight=${n.relatedId}`
+                    : '/my-issues';
+                  navigate(target);
+                }}
+                className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors hover:shadow-sm ${
+                  n.type === 'issue_resolved' || n.type === 'deal_won' ? 'bg-success-light/20 border-success/15 hover:bg-success-light/30' :
+                  n.type === 'issue_reply' ? 'bg-warning-light/20 border-warning/15 hover:bg-warning-light/30' :
+                  'bg-primary-light/20 border-primary/15 hover:bg-primary-light/30'
+                }`}
+              >
                 <div className="shrink-0 mt-0.5">
                   {n.type === 'issue_resolved' ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-success">
@@ -419,7 +361,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {awardedRequests.length > 0 && (
           <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card overflow-hidden">
             <div className="px-3 py-2 border-b border-border">
@@ -430,7 +372,7 @@ export default function Dashboard() {
                 const winnerProfile = allBusinesses.find((b) => b.uid === r.awardedTo);
                 const winnerName = winnerProfile?.companyName || 'Unknown';
                 return (
-                  <div key={r.id} className="flex items-center justify-between px-3 py-2">
+                  <div key={r.id} className="flex items-center justify-between px-3 py-1.5">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
                       <p className="text-xs font-medium text-charcoal truncate">{r.title}</p>
@@ -446,74 +388,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {user && <StrikeWarning uid={user.uid} compact />}
       </div>
-
-      {myIssues.length > 0 && (
-        <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-charcoal tracking-tight text-xs">My Reports ({myIssues.length})</h3>
-          </div>
-          <div className="space-y-2">
-            {myIssues.map((r) => (
-              <div key={r.id} className="border border-border rounded-lg px-3 py-2.5 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${r.status === 'open' ? 'bg-danger' : 'bg-success'}`} />
-                      <p className="text-xs font-semibold text-charcoal">{r.subject}</p>
-                    </div>
-                    <p className="text-[11px] text-steel mt-0.5">{r.description}</p>
-                  </div>
-                  <Badge variant={r.status === 'open' ? 'danger' : 'success'}>
-                    {r.status}
-                  </Badge>
-                </div>
-                <p className="text-[10px] text-muted">{new Date(r.createdAt).toLocaleString('en-IN')}</p>
-
-                {(r.replies ?? []).length > 0 && (
-                  <div className="space-y-1.5 pl-2 border-l-2 border-border">
-                    {r.replies.map((reply) => (
-                      <div key={reply.id} className="flex items-start gap-2">
-                        <span className="text-[10px] font-semibold text-steel shrink-0 mt-0.5">{reply.authorName}:</span>
-                        <p className="text-[11px] text-charcoal">{reply.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Type a reply..."
-                    className="flex-1 min-w-0 rounded-[0.5rem] border border-border px-2.5 py-1.5 text-xs bg-canvas focus:outline-none focus:ring-2 focus:ring-primary-ring"
-                    value={replyTexts[r.id] ?? ''}
-                    onChange={(e) => setReplyTexts((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                  />
-                  <Button
-                    size="xs"
-                    variant="primary"
-                    loading={replyingId === r.id}
-                    onClick={async () => {
-                      const text = replyTexts[r.id]?.trim();
-                      if (!text) return;
-                      setReplyingId(r.id);
-                      try {
-                        const reply = await addIssueReply(r.id, text, user!.uid, profile?.displayName || user?.displayName || 'You', 'user');
-                        setMyIssues((prev) => prev.map((x) => x.id === r.id ? { ...x, replies: [...(x.replies ?? []), reply] } : x));
-                        setReplyTexts((prev) => ({ ...prev, [r.id]: '' }));
-                      } catch { /* error tracked */ }
-                      setReplyingId(null);
-                    }}
-                  >
-                    Send
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {!myProfile ? (
         <Card>
@@ -537,29 +412,29 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
           {/* Quick Actions */}
           <div className="rounded-card bg-surface border border-border shadow-card p-3">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Quick Actions</h3>
-            <div className="space-y-1.5">
-              <Link to="/requests/create" className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal">
+            <div className="space-y-0.5">
+              <Link to="/requests/create" className="flex items-center gap-2 px-3 py-1.5 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="15" y2="15" />
                 </svg>
                 Create a Request
               </Link>
-              <Link to={`/profile/${user?.uid}`} className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal">
+              <Link to={`/profile/${user?.uid}`} className="flex items-center gap-2 px-3 py-1.5 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
                 </svg>
                 View My Profile
               </Link>
               <button onClick={() => { setShowDealForm(true); setTimeout(() => document.getElementById('deal-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100); }}
-                className="flex items-center gap-2 px-3 py-2 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal w-full text-left">
+                className="flex items-center gap-2 px-3 py-1.5 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-xs font-medium text-charcoal w-full text-left">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                   <text x="12" y="18" textAnchor="middle" fontSize="18" fontWeight="700" fill="currentColor" stroke="none">₹</text>
                 </svg>
-                Record Business Given
+                Business Generated
               </button>
             </div>
           </div>
@@ -568,7 +443,7 @@ export default function Dashboard() {
           {myProfile && (
           <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
             <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Your Business Profile</h3>
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-2">
               {myProfile.photoURL ? (
                 <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-border">
                   <img src={myProfile.photoURL} alt={myProfile.companyName || ''} className="w-full h-full object-cover aspect-square" />
@@ -605,7 +480,7 @@ export default function Dashboard() {
           </div>)}
 
           {/* Leaderboard + Upcoming Meetings */}
-          <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
             <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card p-3">
               <h3 className="font-semibold text-charcoal tracking-tight text-xs mb-2">Leaderboard</h3>
               {leaderboard.length === 0 ? (
@@ -633,7 +508,7 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-                {isSuperAdmin(user?.email, profile?.role) && leaderboard.length > 3 && (
+                {isSuperAdmin(profile?.role) && leaderboard.length > 3 && (
                   <button
                     onClick={() => setShowAllLeaderboard(!showAllLeaderboard)}
                     className="mt-2 w-full text-[11px] font-medium text-primary hover:text-primary-hover transition-colors cursor-pointer py-1"
@@ -654,12 +529,13 @@ export default function Dashboard() {
         <Card>
           <CardContent className="p-4 sm:p-6 lg:p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="font-semibold text-charcoal tracking-tight">Record Business Given</h3>
+              <h3 className="font-semibold text-charcoal tracking-tight">Business Generated</h3>
               <button onClick={() => { setShowDealForm(false); setDealMsg(''); }} className="text-sm text-muted hover:text-charcoal transition-colors cursor-pointer">Cancel</button>
             </div>
+            <p className="text-xs text-muted">Receiver has to record the revenue when deal is closed</p>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Business Given To</label>
+                <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Business Received From</label>
                 <select
                   value={dealReceiver}
                   onChange={(e) => setDealReceiver(e.target.value)}

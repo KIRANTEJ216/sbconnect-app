@@ -12,7 +12,7 @@ export function useProfiles(max = 200) {
   return useQuery({
     queryKey: ['profiles', max, 'verified'],
     queryFn: () => getAllProfiles(max, true),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 10,
   });
 }
 
@@ -28,7 +28,7 @@ export function useLeaderboardQuery() {
   return useQuery({
     queryKey: ['leaderboard'],
     queryFn: getLeaderboard,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -63,7 +63,7 @@ export function useUserRSVPs(uid: string | undefined) {
     queryKey: ['userRSVPs', uid],
     queryFn: () => getUserRSVPs(uid!),
     enabled: !!uid,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
@@ -112,7 +112,7 @@ export function useRevenueConfig() {
   return useQuery({
     queryKey: ['revenueConfig'],
     queryFn: getRevenueConfig,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
     refetchInterval: 60_000,
   });
 }

@@ -66,7 +66,7 @@ export default function Chat() {
           <CardContent className="p-14 text-center">
             <p className="text-muted">No conversations yet.</p>
             <p className="text-sm text-muted mt-2">
-              Visit a business profile and send a message to start chatting.
+              Browse profiles to start a conversation.
             </p>
             <Link
               to="/profiles"
