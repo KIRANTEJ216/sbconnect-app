@@ -304,15 +304,20 @@ export async function recordDeal(
   });
   const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
   if (parsed > 0) {
-    await runTransaction(db, async (tx) => {
-      const statsRef = doc(db, 'stats', 'deals');
-      const snap = await tx.get(statsRef);
-      if (snap.exists()) {
-        tx.update(statsRef, { totalValue: increment(parsed), updatedAt: Date.now() });
-      } else {
-        tx.set(statsRef, { totalValue: parsed, updatedAt: Date.now() });
-      }
-    });
+    try {
+      await runTransaction(db, async (tx) => {
+        const statsRef = doc(db, 'stats', 'deals');
+        const snap = await tx.get(statsRef);
+        if (snap.exists()) {
+          tx.update(statsRef, { totalValue: increment(parsed), updatedAt: Date.now() });
+        } else {
+          tx.set(statsRef, { totalValue: parsed, updatedAt: Date.now() });
+        }
+      });
+    } catch (error) {
+      console.error('Failed to update total business value:', error);
+      throw error;
+    }
   }
   // Notify the giver that business was given to receiver
   sendUserNotification(
