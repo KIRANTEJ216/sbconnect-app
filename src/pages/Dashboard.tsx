@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests } from '../lib/firestore';
-import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig } from '../hooks/useFirebaseQuery';
+import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useReceivedDealsQuery } from '../hooks/useFirebaseQuery';
 import type { UserNotification, Request as BusinessRequest } from '../types';
 import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
 import confetti from 'canvas-confetti';
@@ -25,10 +25,11 @@ export default function Dashboard() {
   const { data: allBusinesses = [] } = useProfiles(200);
   const { data: allReqs = [] } = useRequestsQuery();
   const { data: leaderboard = [] } = useLeaderboardQuery();
+  const { data: receivedDeals = [] } = useReceivedDealsQuery(user?.uid);
   const [myRequests, setMyRequests] = useState(0);
   const [newRequestsDot, setNewRequestsDot] = useState(false);
   const [showDealForm, setShowDealForm] = useState(false);
-  const [dealReceiver, setDealReceiver] = useState('');
+  const [dealGiver, setDealGiver] = useState('');
   const [dealOtherName, setDealOtherName] = useState('');
   const [dealAmount, setDealAmount] = useState('');
   const [dealDesc, setDealDesc] = useState('');
@@ -67,48 +68,49 @@ export default function Dashboard() {
 
   const handleRecordDeal = async () => {
     if (!myProfile || !user) return;
-    if (!dealReceiver || !dealAmount) {
+    if (!dealGiver || !dealAmount) {
       setDealMsg('Select a business and enter an amount.');
       return;
     }
-    if (dealReceiver === '__other__' && !dealOtherName.trim()) {
-      setDealMsg('Enter the name of the business you gave work to.');
+    if (dealGiver === '__other__' && !dealOtherName.trim()) {
+      setDealMsg('Enter the name of the business that gave you work.');
       return;
     }
     setDealSaving(true);
     setDealMsg('');
     try {
-      if (dealReceiver === '__other__') {
+      if (dealGiver === '__other__') {
         await recordDeal(
-          user.uid,
-          myProfile.companyName,
           '__other__',
           dealOtherName.trim(),
+          user.uid,
+          myProfile.companyName,
           dealAmount,
           dealDesc,
         );
       } else {
-        const receiver = allBusinesses.find((b) => b.uid === dealReceiver);
-        if (!receiver) {
+        const giver = allBusinesses.find((b) => b.uid === dealGiver);
+        if (!giver) {
           setDealMsg('Select a valid business.');
           setDealSaving(false);
           return;
         }
         await recordDeal(
+          giver.uid,
+          giver.companyName,
           user.uid,
           myProfile.companyName,
-          receiver.uid,
-          receiver.companyName,
           dealAmount,
           dealDesc,
         );
       }
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
-      const receiverName = dealReceiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealReceiver)?.companyName;
-      setDealMsg(`🎉 Congratulations! Deal recorded — ${dealAmount} given to ${receiverName}`);
+      queryClient.invalidateQueries({ queryKey: ['receivedDeals', user.uid] });
+      const giverName = dealGiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealGiver)?.companyName;
+      setDealMsg(`🎉 Congratulations! Deal recorded — ${dealAmount} received from ${giverName}`);
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-      setDealReceiver('');
+      setDealGiver('');
       setDealOtherName('');
       setDealAmount('');
       setDealDesc('');
@@ -281,7 +283,7 @@ export default function Dashboard() {
                 </Link>
                 <button onClick={() => setShowDealForm(true)} className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-canvas rounded-lg hover:bg-primary-light transition-colors text-[11px] font-medium text-charcoal cursor-pointer">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><text x="12" y="18" textAnchor="middle" fontSize="18" fontWeight="700" fill="currentColor" stroke="none">₹</text></svg>
-                  Record Deal
+                  Record Business Received
                 </button>
               </div>
             </CardContent>
@@ -348,6 +350,37 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
+
+          {/* Deals Received */}
+          {receivedDeals.length > 0 && (
+            <Card className="stat-accent-top">
+              <CardContent className="p-2.5">
+                <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">📥 Deals Received</h3>
+                <div className="divide-y divide-border">
+                  {receivedDeals
+                    .sort((a, b) => b.createdAt - a.createdAt)
+                    .slice(0, 5)
+                    .map((deal) => (
+                      <div key={deal.id} className="flex items-center justify-between py-1.5 first:pt-0 last:pb-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium text-charcoal truncate">{deal.giverCompanyName}</p>
+                            <p className="text-[9px] text-muted truncate leading-tight">{deal.requestTitle}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span className="text-[11px] font-semibold text-success truncate max-w-[100px]">{formatCurrency(deal.amount)}</span>
+                          <span className="text-[9px] text-muted font-mono whitespace-nowrap">{new Date(deal.createdAt).toLocaleDateString('en-IN')}</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                {receivedDeals.length > 5 && (
+                  <p className="mt-1 text-[10px] text-muted text-center">+{receivedDeals.length - 5} more deals</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Upcoming Meetings */}
           <DashboardUpdates />
@@ -416,12 +449,12 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setShowDealForm(false); setDealMsg(''); }}>
           <div className="bg-surface border border-border rounded-2xl shadow-xl p-6 w-full max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-charcoal tracking-tight text-base">Record Business Deal</h3>
+              <h3 className="font-semibold text-charcoal tracking-tight text-base">Record Business Received</h3>
               <button onClick={() => { setShowDealForm(false); setDealMsg(''); }} className="text-xs text-muted hover:text-charcoal transition-colors cursor-pointer">✕</button>
             </div>
             <div className="space-y-3">
-              <p className="text-[11px] text-muted bg-muted-bg rounded-lg px-3 py-2">Receiver has to update the deal</p>
-              <select value={dealReceiver} onChange={(e) => setDealReceiver(e.target.value)}
+              <p className="text-[11px] text-muted bg-muted-bg rounded-lg px-3 py-2">Select who gave you this business</p>
+              <select value={dealGiver} onChange={(e) => setDealGiver(e.target.value)}
                 className="w-full px-3 py-2 rounded-[0.75rem] border border-border bg-surface text-charcoal text-xs focus:outline-none focus:ring-2 focus:ring-primary">
                 <option value="">Select a business...</option>
                 {allBusinesses.filter((b) => b.uid !== user?.uid).sort((a, b) => a.companyName.localeCompare(b.companyName)).map((b) => (
@@ -429,7 +462,7 @@ export default function Dashboard() {
                 ))}
                 <option value="__other__">Other (not in list)</option>
               </select>
-              {dealReceiver === '__other__' && (
+              {dealGiver === '__other__' && (
                 <Input label="Company Name" value={dealOtherName} onChange={(e) => setDealOtherName(e.target.value)} placeholder="Enter company name" />
               )}
               <Input label="Amount (₹)" type="number" value={dealAmount} onChange={(e) => setDealAmount(e.target.value)} placeholder="100000" />

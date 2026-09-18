@@ -180,7 +180,7 @@ export interface AppNotification {
 export interface UserNotification {
   id: string;
   uid: string;
-  type: 'issue_resolved' | 'admin_message' | 'issue_reply' | 'deal_won' | 'deal_thanks';
+  type: 'issue_resolved' | 'admin_message' | 'issue_reply' | 'deal_won' | 'deal_thanks' | 'business_given';
   title: string;
   message: string;
   relatedId: string;

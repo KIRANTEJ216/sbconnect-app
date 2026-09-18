@@ -314,6 +314,14 @@ export async function recordDeal(
       }
     });
   }
+  // Notify the giver that business was given to receiver
+  sendUserNotification(
+    giverUid,
+    'business_given',
+    'Business Given',
+    `${receiverCompanyName} recorded a deal of ${amount} from you`,
+    ref.id
+  ).catch(() => {});
   return ref.id;
 }
 
