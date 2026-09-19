@@ -4,7 +4,7 @@ import {
   getAllRequests, getTotalBusinessValue,
   getAttendanceCompliance, getUserRSVPs, getBusinessProfile,
   getMeetingRSVPs, getUnverifiedProfiles, getRevenueConfig,
-  getOnlineUsersCount, getUserDeals,
+  getOnlineUsersCount, getUserDeals, getDeals,
 } from '../lib/firestore';
 import type { MeetingRSVP, Deal } from '../types';
 
@@ -133,5 +133,13 @@ export function useReceivedDealsQuery(uid: string | undefined) {
     enabled: !!uid,
     staleTime: 1000 * 60 * 2,
     select: (deals: Deal[]) => deals.filter((d) => d.receiverUid === uid),
+  });
+}
+
+export function useAllDealsQuery() {
+  return useQuery({
+    queryKey: ['allDeals'],
+    queryFn: getDeals,
+    staleTime: 1000 * 60 * 2,
   });
 }

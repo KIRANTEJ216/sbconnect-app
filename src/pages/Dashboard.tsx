@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests } from '../lib/firestore';
-import { useProfiles, useRequestsQuery, useLeaderboardQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useReceivedDealsQuery } from '../hooks/useFirebaseQuery';
+import { useProfiles, useRequestsQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useReceivedDealsQuery, useAllDealsQuery } from '../hooks/useFirebaseQuery';
 import type { UserNotification, Request as BusinessRequest } from '../types';
 import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
 import confetti from 'canvas-confetti';
@@ -11,11 +11,8 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { isSuperAdmin } from '../lib/admin';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { DashboardUpdates } from '../components/DashboardUpdates';
-
-
 
 
 export default function Dashboard() {
@@ -24,8 +21,8 @@ export default function Dashboard() {
   const { data: myProfile } = useBusinessProfile(user?.uid);
   const { data: allBusinesses = [] } = useProfiles(200);
   const { data: allReqs = [] } = useRequestsQuery();
-  const { data: leaderboard = [] } = useLeaderboardQuery();
   const { data: receivedDeals = [] } = useReceivedDealsQuery(user?.uid);
+  const { data: allDeals = [] } = useAllDealsQuery();
   const [myRequests, setMyRequests] = useState(0);
   const [newRequestsDot, setNewRequestsDot] = useState(false);
   const [showDealForm, setShowDealForm] = useState(false);
@@ -37,7 +34,6 @@ export default function Dashboard() {
   const [dealMsg, setDealMsg] = useState('');
   const [myNotifications, setMyNotifications] = useState<UserNotification[]>([]);
   const [awardedRequests, setAwardedRequests] = useState<BusinessRequest[]>([]);
-  const [showAllLeaderboard, setShowAllLeaderboard] = useState(false);
   const { data: totalBusinessValue = 0 } = useTotalBusinessValue();
   const { data: revenueConfig } = useRevenueConfig();
 
@@ -322,38 +318,45 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Leaderboard */}
+          {/* Business Transactions */}
           <Card className="stat-accent-top">
             <CardContent className="p-2.5">
-              <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">🏆 Leaderboard</h3>
-              {leaderboard.length === 0 ? (
+              <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">📊 Business Transactions</h3>
+              {allDeals.length === 0 ? (
                 <p className="text-[11px] text-muted text-center py-2">No deals recorded yet.</p>
               ) : (
-                <div className="divide-y divide-border">
-                  {leaderboard.slice(0, showAllLeaderboard ? leaderboard.length : 3).map((entry, i) => (
-                    <div key={entry.uid} className="flex items-center justify-between py-1.5 first:pt-0 last:pb-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[11px]">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}</span>
-                        <div className="min-w-0">
-                          <Link to={`/profile/${entry.uid}`} className="text-[11px] font-medium text-charcoal hover:text-primary transition-colors truncate block leading-tight">
-                            {entry.ownerName || entry.companyName}
-                          </Link>
-                          <p className="text-[9px] text-muted truncate leading-tight">{entry.companyName}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <p className="text-[11px] font-semibold text-charcoal">{formatCurrency(String(entry.totalRevenue))}</p>
-                        <p className="text-[9px] text-muted font-mono">{entry.dealCount}d</p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Receiver (Got Business)</th>
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Giver (Gave Business)</th>
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {allDeals
+                        .sort((a, b) => b.createdAt - a.createdAt)
+                        .slice(0, 10)
+                        .map((deal) => (
+                          <tr key={deal.id} className="hover:bg-canvas/50 transition-colors">
+                            <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
+                              {deal.receiverCompanyName}
+                            </td>
+                            <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
+                              {deal.giverCompanyName}
+                            </td>
+                            <td className="px-3 py-2 text-[11px] font-semibold text-success text-right">
+                              {formatCurrency(deal.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {allDeals.length > 10 && (
+                    <p className="mt-1 text-[10px] text-muted text-center">Showing latest 10 of {allDeals.length} transactions</p>
+                  )}
                 </div>
-              )}
-              {isSuperAdmin(profile?.role) && leaderboard.length > 3 && (
-                <button onClick={() => setShowAllLeaderboard(!showAllLeaderboard)}
-                  className="mt-1 w-full text-[10px] font-medium text-primary hover:text-primary-hover transition-colors cursor-pointer py-0.5">
-                  {showAllLeaderboard ? '▲ Less' : `▼ All (${leaderboard.length})`}
-                </button>
               )}
             </CardContent>
           </Card>
