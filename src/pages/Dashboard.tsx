@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests } from '../lib/firestore';
+import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests, recalculateTotalBusinessValue } from '../lib/firestore';
 import { useProfiles, useRequestsQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useReceivedDealsQuery, useAllDealsQuery } from '../hooks/useFirebaseQuery';
 import type { UserNotification, Request as BusinessRequest } from '../types';
 import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
@@ -111,6 +111,8 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
       queryClient.invalidateQueries({ queryKey: ['receivedDeals', user.uid] });
+      // Force recalculate total business value to ensure it's updated
+      recalculateTotalBusinessValue().catch(console.error);
       setDealMsg(`🎉 Congratulations! Deal recorded — ${dealAmount} received from ${giverCompanyName}`);
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       setDealGiver('');
