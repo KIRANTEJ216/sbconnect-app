@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests, recalculateTotalBusinessValue } from '../lib/firestore';
-import { useProfiles, useRequestsQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useReceivedDealsQuery, useAllDealsQuery } from '../hooks/useFirebaseQuery';
+import { useProfiles, useRequestsQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useAllDealsQuery } from '../hooks/useFirebaseQuery';
 import type { UserNotification, Request as BusinessRequest } from '../types';
 import { formatDate, formatCurrency, getFinancialYear } from '../lib/format';
 import confetti from 'canvas-confetti';
@@ -21,7 +21,6 @@ export default function Dashboard() {
   const { data: myProfile } = useBusinessProfile(user?.uid);
   const { data: allBusinesses = [] } = useProfiles(200);
   const { data: allReqs = [] } = useRequestsQuery();
-  const { data: receivedDeals = [] } = useReceivedDealsQuery(user?.uid);
   const { data: allDeals = [] } = useAllDealsQuery();
   const [myRequests, setMyRequests] = useState(0);
   const [newRequestsDot, setNewRequestsDot] = useState(false);
@@ -320,8 +319,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Business Leaderboard */}
-          <Card className="stat-accent-top">
+{/* Business Leaderboard */}
+          <Card className="stat-accent-top lg:col-span-2">
             <CardContent className="p-2.5">
               <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">🏆 Business Leaderboard</h3>
               {allDeals.length === 0 ? (
@@ -333,18 +332,23 @@ export default function Dashboard() {
                       <tr className="border-b border-border text-left">
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] w-8">Rank</th>
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Received By</th>
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Deals Won</th>
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Given By</th>
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] text-right">Deal Value</th>
                       </tr>
                     </thead>
-<tbody className="divide-y divide-border">
+                    <tbody className="divide-y divide-border">
                       {(() => {
                         // Calculate total given by each giver
                         const giverTotals = new Map<string, { total: number; companyName: string }>();
+                        // Calculate deals won by each receiver
+                        const receiverWins = new Map<string, number>();
                         allDeals.forEach((deal) => {
                           const existing = giverTotals.get(deal.giverUid) || { total: 0, companyName: deal.giverCompanyName };
                           existing.total += parseFloat(deal.amount.replace(/[^0-9.]/g, '')) || 0;
                           giverTotals.set(deal.giverUid, existing);
+                          
+                          receiverWins.set(deal.receiverUid, (receiverWins.get(deal.receiverUid) || 0) + 1);
                         });
                         
                         // Sort givers by total given (descending)
@@ -369,6 +373,9 @@ export default function Dashboard() {
                               <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
                                 {deal.receiverCompanyName}
                               </td>
+                              <td className="px-3 py-2 text-[11px] font-medium text-charcoal text-center">
+                                {receiverWins.get(deal.receiverUid) || 0}
+                              </td>
                               <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
                                 {deal.giverCompanyName}
                               </td>
@@ -385,37 +392,6 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
-
-          {/* Deals Received */}
-          {receivedDeals.length > 0 && (
-            <Card className="stat-accent-top">
-              <CardContent className="p-2.5">
-                <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">📥 Deals Received</h3>
-                <div className="divide-y divide-border">
-                  {receivedDeals
-                    .sort((a, b) => b.createdAt - a.createdAt)
-                    .slice(0, 5)
-                    .map((deal) => (
-                      <div key={deal.id} className="flex items-center justify-between py-1.5 first:pt-0 last:pb-0">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <div className="min-w-0">
-                            <p className="text-[11px] font-medium text-charcoal truncate">{deal.giverCompanyName}</p>
-                            <p className="text-[9px] text-muted truncate leading-tight">{deal.requestTitle}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <span className="text-[11px] font-semibold text-success truncate max-w-[100px]">{formatCurrency(deal.amount)}</span>
-                          <span className="text-[9px] text-muted font-mono whitespace-nowrap">{new Date(deal.createdAt).toLocaleDateString('en-IN')}</span>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-                {receivedDeals.length > 5 && (
-                  <p className="mt-1 text-[10px] text-muted text-center">+{receivedDeals.length - 5} more deals</p>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {/* Upcoming Meetings */}
           <DashboardUpdates />
