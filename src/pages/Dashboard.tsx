@@ -329,8 +329,8 @@ export default function Dashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">
-                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Receiver (Got Business)</th>
-                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Giver (Gave Business)</th>
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Received By</th>
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Given By</th>
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] text-right">Amount</th>
                       </tr>
                     </thead>
