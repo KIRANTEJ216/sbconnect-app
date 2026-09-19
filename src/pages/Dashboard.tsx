@@ -318,10 +318,10 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Business Transactions */}
+          {/* Business Leaderboard */}
           <Card className="stat-accent-top">
             <CardContent className="p-2.5">
-              <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">📊 Business Transactions</h3>
+              <h3 className="font-semibold text-charcoal tracking-tight text-[11px] mb-1.5">🏆 Business Leaderboard</h3>
               {allDeals.length === 0 ? (
                 <p className="text-[11px] text-muted text-center py-2">No deals recorded yet.</p>
               ) : (
@@ -329,33 +329,56 @@ export default function Dashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border text-left">
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] w-8">Rank</th>
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Received By</th>
                         <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px]">Given By</th>
-                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] text-right">Amount</th>
+                        <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-[10px] text-right">Deal Value</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border">
-                      {allDeals
-                        .sort((a, b) => b.createdAt - a.createdAt)
-                        .slice(0, 10)
-                        .map((deal) => (
-                          <tr key={deal.id} className="hover:bg-canvas/50 transition-colors">
-                            <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
-                              {deal.receiverCompanyName}
-                            </td>
-                            <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
-                              {deal.giverCompanyName}
-                            </td>
-                            <td className="px-3 py-2 text-[11px] font-semibold text-success text-right">
-                              {formatCurrency(deal.amount)}
-                            </td>
-                          </tr>
-                        ))}
+<tbody className="divide-y divide-border">
+                      {(() => {
+                        // Calculate total given by each giver
+                        const giverTotals = new Map<string, { total: number; companyName: string }>();
+                        allDeals.forEach((deal) => {
+                          const existing = giverTotals.get(deal.giverUid) || { total: 0, companyName: deal.giverCompanyName };
+                          existing.total += parseFloat(deal.amount.replace(/[^0-9.]/g, '')) || 0;
+                          giverTotals.set(deal.giverUid, existing);
+                        });
+                        
+                        // Sort givers by total given (descending)
+                        const sortedGivers = Array.from(giverTotals.entries())
+                          .sort((a, b) => b[1].total - a[1].total);
+                        
+                        // For each giver, show their individual deals
+                        return sortedGivers.flatMap(([giverUid], rankIndex) => {
+                          const giverDeals = allDeals
+                            .filter((d) => d.giverUid === giverUid)
+                            .sort((a, b) => b.createdAt - a.createdAt);
+                          
+                          return giverDeals.map((deal, dealIndex) => (
+                            <tr key={`${deal.id}-${rankIndex}-${dealIndex}`} className="hover:bg-canvas/50 transition-colors">
+                              <td className="px-3 py-2 text-[11px] font-semibold text-charcoal w-8">
+                                {dealIndex === 0 ? (
+                                  rankIndex === 0 ? '🥇' : rankIndex === 1 ? '🥈' : rankIndex === 2 ? '🥉' : `${rankIndex + 1}`
+                                ) : (
+                                  ''
+                                )}
+                              </td>
+                              <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
+                                {deal.receiverCompanyName}
+                              </td>
+                              <td className="px-3 py-2 text-[11px] font-medium text-charcoal truncate max-w-[140px]">
+                                {deal.giverCompanyName}
+                              </td>
+                              <td className="px-3 py-2 text-[11px] font-semibold text-success text-right">
+                                {formatCurrency(deal.amount)}
+                              </td>
+                            </tr>
+                          ));
+                        });
+                      })()}
                     </tbody>
                   </table>
-                  {allDeals.length > 10 && (
-                    <p className="mt-1 text-[10px] text-muted text-center">Showing latest 10 of {allDeals.length} transactions</p>
-                  )}
                 </div>
               )}
             </CardContent>
