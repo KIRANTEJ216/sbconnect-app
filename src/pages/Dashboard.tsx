@@ -79,10 +79,16 @@ export default function Dashboard() {
     setDealSaving(true);
     setDealMsg('');
     try {
+      let giverUid: string;
+      let giverCompanyName: string;
+      
       if (dealGiver === '__other__') {
+        giverCompanyName = dealOtherName.trim();
+        // Generate a unique uid for "other" givers based on company name
+        giverUid = `other_${btoa(giverCompanyName).replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)}`;
         await recordDeal(
-          '__other__',
-          dealOtherName.trim(),
+          giverUid,
+          giverCompanyName,
           user.uid,
           myProfile.companyName,
           dealAmount,
@@ -95,9 +101,11 @@ export default function Dashboard() {
           setDealSaving(false);
           return;
         }
+        giverUid = giver.uid;
+        giverCompanyName = giver.companyName;
         await recordDeal(
-          giver.uid,
-          giver.companyName,
+          giverUid,
+          giverCompanyName,
           user.uid,
           myProfile.companyName,
           dealAmount,
@@ -107,8 +115,7 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
       queryClient.invalidateQueries({ queryKey: ['receivedDeals', user.uid] });
-      const giverName = dealGiver === '__other__' ? dealOtherName.trim() : allBusinesses.find((b) => b.uid === dealGiver)?.companyName;
-      setDealMsg(`🎉 Congratulations! Deal recorded — ${dealAmount} received from ${giverName}`);
+      setDealMsg(`🎉 Congratulations! Deal recorded — ${dealAmount} received from ${giverCompanyName}`);
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
       setDealGiver('');
       setDealOtherName('');
@@ -117,7 +124,7 @@ export default function Dashboard() {
       setShowDealForm(false);
     } catch (err) {
       console.error('Failed to record deal:', err);
-      setDealMsg('Failed to record deal. Try again.');
+      setDealMsg(`Failed to record deal: ${err instanceof Error ? err.message : 'Try again.'}`);
     } finally {
       setDealSaving(false);
     }

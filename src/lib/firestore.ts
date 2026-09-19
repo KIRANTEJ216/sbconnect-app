@@ -302,20 +302,24 @@ export async function recordDeal(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
+  console.log('[recordDeal] Deal created:', ref.id, { giverUid, giverCompanyName, receiverUid, receiverCompanyName, amount });
   const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
+  console.log('[recordDeal] Parsed amount:', parsed);
   if (parsed > 0) {
     try {
       await runTransaction(db, async (tx) => {
         const statsRef = doc(db, 'stats', 'deals');
         const snap = await tx.get(statsRef);
+        console.log('[recordDeal] Stats snapshot exists:', snap.exists(), 'current value:', snap.data()?.totalValue);
         if (snap.exists()) {
           tx.update(statsRef, { totalValue: increment(parsed), updatedAt: Date.now() });
         } else {
           tx.set(statsRef, { totalValue: parsed, updatedAt: Date.now() });
         }
       });
+      console.log('[recordDeal] Transaction committed successfully');
     } catch (error) {
-      console.error('Failed to update total business value:', error);
+      console.error('[recordDeal] Failed to update total business value:', error);
       throw error;
     }
   }
