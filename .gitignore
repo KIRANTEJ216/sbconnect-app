@@ -61,3 +61,7 @@ screenshots/
 /fix-admin.mjs
 /mpt_agent.py
 /SBConnect-Release-Summary.pdf
+
+# Resend key now lives in Secret Manager (defineSecret), not in a repo file.
+# Kept as a safety net so a stray copy can never be committed.
+/functions/runtime-env.json

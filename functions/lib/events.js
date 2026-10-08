@@ -37,6 +37,7 @@ exports.onMeetingCreated = exports.onAdminIssueCreated = exports.onPendingRevenu
 const functions = __importStar(require("firebase-functions/v2"));
 const firestore_1 = require("firebase-functions/v2/firestore");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
+const secrets_1 = require("./secrets");
 const adminEmail_1 = require("./adminEmail");
 const admin = __importStar(require("firebase-admin"));
 const firestore_2 = require("firebase-admin/firestore");
@@ -73,7 +74,12 @@ async function guard(name, fn) {
  * advances only after a successful send, so a Resend failure means the next run
  * retries the same window instead of silently dropping those requests.
  */
-exports.onRequestDigest = (0, scheduler_1.onSchedule)({ schedule: 'every 12 hours', timeZone: 'Asia/Kolkata', retryCount: 3 }, async () => {
+exports.onRequestDigest = (0, scheduler_1.onSchedule)({
+    schedule: 'every 12 hours',
+    timeZone: 'Asia/Kolkata',
+    retryCount: 3,
+    ...(0, secrets_1.secretParams)(),
+}, async () => {
     const db = admin.firestore();
     const cursorRef = db.doc('config/requestDigest');
     try {
@@ -111,7 +117,7 @@ exports.onRequestDigest = (0, scheduler_1.onSchedule)({ schedule: 'every 12 hour
     }
 });
 /** 2. A new business profile is waiting for verification. */
-exports.onProfileCreated = (0, firestore_1.onDocumentCreated)('profiles/{uid}', async (event) => {
+exports.onProfileCreated = (0, firestore_1.onDocumentCreated)({ document: 'profiles/{uid}', ...(0, secrets_1.secretParams)() }, async (event) => {
     await guard('new_profile', async () => {
         const doc = event.data?.data();
         if (!doc)
@@ -130,7 +136,7 @@ exports.onProfileCreated = (0, firestore_1.onDocumentCreated)('profiles/{uid}', 
     });
 });
 /** 3. A member pitched on someone's request. */
-exports.onInterestCreated = (0, firestore_1.onDocumentCreated)('requests/{requestId}/interests/{interestId}', async (event) => {
+exports.onInterestCreated = (0, firestore_1.onDocumentCreated)({ document: 'requests/{requestId}/interests/{interestId}', ...(0, secrets_1.secretParams)() }, async (event) => {
     await guard('new_pitch', async () => {
         const interest = event.data?.data();
         if (!interest)
@@ -182,7 +188,7 @@ exports.onInterestCreated = (0, firestore_1.onDocumentCreated)('requests/{reques
  * verifying. Deals are also created by admins when awarding a request, so this
  * is gated on `status === 'pending'` — which only member submissions ever have.
  */
-exports.onPendingRevenueCreated = (0, firestore_1.onDocumentCreated)('deals/{dealId}', async (event) => {
+exports.onPendingRevenueCreated = (0, firestore_1.onDocumentCreated)({ document: 'deals/{dealId}', ...(0, secrets_1.secretParams)() }, async (event) => {
     await guard('pending_revenue', async () => {
         const doc = event.data?.data();
         if (!doc)
@@ -200,7 +206,7 @@ exports.onPendingRevenueCreated = (0, firestore_1.onDocumentCreated)('deals/{dea
     });
 });
 /** 5. A member filed an issue report. */
-exports.onAdminIssueCreated = (0, firestore_1.onDocumentCreated)('issueReports/{id}', async (event) => {
+exports.onAdminIssueCreated = (0, firestore_1.onDocumentCreated)({ document: 'issueReports/{id}', ...(0, secrets_1.secretParams)() }, async (event) => {
     await guard('new_issue', async () => {
         const doc = event.data?.data();
         if (!doc)
@@ -222,7 +228,7 @@ exports.onAdminIssueCreated = (0, firestore_1.onDocumentCreated)('issueReports/{
  * the super admin about their own action. It is included because the brief was
  * "anything new"; delete this export to switch it off.
  */
-exports.onMeetingCreated = (0, firestore_1.onDocumentCreated)('meetings/{id}', async (event) => {
+exports.onMeetingCreated = (0, firestore_1.onDocumentCreated)({ document: 'meetings/{id}', ...(0, secrets_1.secretParams)() }, async (event) => {
     await guard('new_meeting', async () => {
         const doc = event.data?.data();
         if (!doc)

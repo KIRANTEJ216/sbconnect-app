@@ -44,6 +44,7 @@ exports.composeRequestDigest = composeRequestDigest;
 const functions = __importStar(require("firebase-functions/v2"));
 const resend_1 = require("resend");
 const html_1 = require("./html");
+const secrets_1 = require("./secrets");
 /**
  * Admin email alerts.
  *
@@ -75,7 +76,7 @@ const html_1 = require("./html");
  */
 /** Read at call time so a redeploy-free env change is picked up. */
 function adminAlertEmail() {
-    return process.env.ADMIN_ALERT_EMAIL || 'kktej3d@gmail.com';
+    return secrets_1.ADMIN_ALERT_EMAIL.value();
 }
 const SUBJECTS = {
     new_request: 'New request posted',
@@ -224,14 +225,14 @@ const BURST_WINDOW_MS = 8_000;
 const MAX_PER_HOUR = 60;
 const bursts = new Map();
 async function sendViaResend(email) {
-    const apiKey = process.env.RESEND_API_KEY || '';
+    const apiKey = await secrets_1.RESEND_API_KEY.value();
     if (!apiKey) {
-        functions.logger.warn('RESEND_API_KEY is not set — admin alert not sent. Configure it, or emails will silently no-op.');
+        functions.logger.warn('RESEND_API_KEY secret resolved empty — admin alert not sent. Check the secret exists and has an enabled version.');
         return;
     }
     const resend = new resend_1.Resend(apiKey);
     await resend.emails.send({
-        from: process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>',
+        from: secrets_1.FROM_EMAIL.value(),
         to: adminAlertEmail(),
         subject: email.subject,
         html: email.html,

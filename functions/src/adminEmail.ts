@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions/v2';
 import { Resend } from 'resend';
 import { sanitize, truncate, emailRow, emailNote, emailShell } from './html';
+import { RESEND_API_KEY, FROM_EMAIL, ADMIN_ALERT_EMAIL } from './secrets';
 
 /**
  * Admin email alerts.
@@ -34,7 +35,7 @@ import { sanitize, truncate, emailRow, emailNote, emailShell } from './html';
 
 /** Read at call time so a redeploy-free env change is picked up. */
 function adminAlertEmail(): string {
-  return process.env.ADMIN_ALERT_EMAIL || 'kktej3d@gmail.com';
+  return ADMIN_ALERT_EMAIL.value();
 }
 
 export type AlertKind =
@@ -250,16 +251,16 @@ interface BurstState {
 const bursts = new Map<AlertKind, BurstState>();
 
 export async function sendViaResend(email: ComposedEmail): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY || '';
+  const apiKey = await RESEND_API_KEY.value();
   if (!apiKey) {
     functions.logger.warn(
-      'RESEND_API_KEY is not set — admin alert not sent. Configure it, or emails will silently no-op.',
+      'RESEND_API_KEY secret resolved empty — admin alert not sent. Check the secret exists and has an enabled version.',
     );
     return;
   }
   const resend = new Resend(apiKey);
   await resend.emails.send({
-    from: process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>',
+    from: FROM_EMAIL.value(),
     to: adminAlertEmail(),
     subject: email.subject,
     html: email.html,

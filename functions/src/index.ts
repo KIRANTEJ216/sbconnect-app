@@ -1,6 +1,3 @@
-// Side-effect import: populates process.env from functions/runtime-env.json
-// BEFORE the module-scope constants below read it. Keep it first.
-import './runtimeEnv';
 import * as functions from 'firebase-functions/v2';
 import * as callable from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -26,20 +23,10 @@ export {
   onAdminIssueCreated,
   onMeetingCreated,
 } from './events';
+import { RESEND_API_KEY, FROM_EMAIL, secretParams, resendKey } from './secrets';
 
 admin.initializeApp();
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
-
-// Surfaced once at cold start: an unset key makes every email silently no-op,
-// and that is otherwise only visible in per-send logs.
-if (!RESEND_API_KEY) {
-  functions.logger.warn(
-    'RESEND_API_KEY is not set — all outbound email is disabled. ' +
-      'Set it in functions/runtime-env.json or as a platform env var.',
-  );
-}
 
 const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
 
@@ -121,14 +108,14 @@ function generateCode(): string {
 
 async function sendEmail(resend: Resend, to: string, subject: string, html: string) {
   await resend.emails.send({
-    from: FROM_EMAIL,
+    from: FROM_EMAIL.value(),
     to,
     subject,
     html,
   });
 }
 
-export const sendWelcomeEmail = callable.onCall(async (request) => {
+export const sendWelcomeEmail = callable.onCall(secretParams(), async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
@@ -152,11 +139,11 @@ export const sendWelcomeEmail = callable.onCall(async (request) => {
     throw new callable.HttpsError('failed-precondition', 'Membership not activated yet.');
   }
 
-  if (!RESEND_API_KEY) {
+  if (!(await resendKey())) {
     throw new callable.HttpsError('internal', 'Email service not configured.');
   }
 
-  const resend = new Resend(RESEND_API_KEY);
+  const resend = new Resend(await resendKey());
   const expiry = profile.paidDate + 364 * 24 * 60 * 60 * 1000;
 
   try {
@@ -168,7 +155,7 @@ export const sendWelcomeEmail = callable.onCall(async (request) => {
   }
 });
 
-export const sendAdminCode = callable.onCall(async (request) => {
+export const sendAdminCode = callable.onCall(secretParams(), async (request) => {
   const uid = request.auth?.uid;
   const email = request.auth?.token?.email;
 
@@ -196,10 +183,10 @@ export const sendAdminCode = callable.onCall(async (request) => {
     createdAt: Date.now(),
   });
 
-  if (RESEND_API_KEY) {
-    const resend = new Resend(RESEND_API_KEY);
+  if (await resendKey()) {
+    const resend = new Resend(await resendKey());
     await resend.emails.send({
-      from: FROM_EMAIL,
+      from: FROM_EMAIL.value(),
       to: email,
       subject: 'SB Connect — Admin Access Code',
       html: `
@@ -276,7 +263,7 @@ export const onUserCreate = beforeUserCreated(async (event) => {
   };
 });
 
-export const onUserRegistered = onDocumentCreated('users/{uid}', async (event) => {
+export const onUserRegistered = onDocumentCreated({ document: 'users/{uid}', ...secretParams() }, async (event) => {
   const snap = event.data;
   if (!snap) return;
 
@@ -284,9 +271,9 @@ export const onUserRegistered = onDocumentCreated('users/{uid}', async (event) =
   const email = userData?.email as string | undefined;
   const displayName = userData?.displayName as string | undefined;
 
-  if (!email || !RESEND_API_KEY) return;
+  if (!email || !(await resendKey())) return;
 
-  const resend = new Resend(RESEND_API_KEY);
+  const resend = new Resend(await resendKey());
 
   const body = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
@@ -330,7 +317,7 @@ export const syncUserRole = onDocumentWritten('users/{uid}', async (event) => {
   functions.logger.info(`Synced role "${role}" for user ${uid}`);
 });
 
-export const onMembershipActivated = onDocumentWritten('profiles/{uid}', async (event) => {
+export const onMembershipActivated = onDocumentWritten({ document: 'profiles/{uid}', ...secretParams() }, async (event) => {
   const change = event.data;
   if (!change) return;
 
@@ -345,9 +332,9 @@ export const onMembershipActivated = onDocumentWritten('profiles/{uid}', async (
   if (afterPaid === 0) return; // Still no paidDate
 
   const profile = after as BusinessProfile;
-  if (!profile.contactEmail || !RESEND_API_KEY) return;
+  if (!profile.contactEmail || !(await resendKey())) return;
 
-  const resend = new Resend(RESEND_API_KEY);
+  const resend = new Resend(await resendKey());
   const expiry = afterPaid + 364 * 24 * 60 * 60 * 1000;
 
   try {
@@ -359,14 +346,14 @@ export const onMembershipActivated = onDocumentWritten('profiles/{uid}', async (
 });
 
 export const checkMembershipExpiry = functions.scheduler.onSchedule(
-  { schedule: '0 8 * * *', timeZone: 'Asia/Kolkata' },
+  { schedule: '0 8 * * *', timeZone: 'Asia/Kolkata', ...secretParams() },
   async () => {
-    if (!RESEND_API_KEY) {
-      functions.logger.warn('RESEND_API_KEY not set — skipping email notifications');
+    if (!(await resendKey())) {
+      functions.logger.warn('RESEND_API_KEY unavailable — skipping email notifications');
       return;
     }
 
-    const resend = new Resend(RESEND_API_KEY);
+    const resend = new Resend(await resendKey());
     const now = Date.now();
     const profilesSnap = await admin.firestore().collection('profiles').get();
 
@@ -429,7 +416,7 @@ interface IssueReply {
   updatedAt?: number;
 }
 
-export const onIssueCreated = onDocumentCreated('issueReports/{id}', async (event) => {
+export const onIssueCreated = onDocumentCreated({ document: 'issueReports/{id}', ...secretParams() }, async (event) => {
   const snap = event.data;
   if (!snap) return;
   const issue = snap.data();
@@ -453,11 +440,11 @@ export const onIssueCreated = onDocumentCreated('issueReports/{id}', async (even
   await Promise.all(notifPromises);
 
   // Send confirmation email to the reporter
-  if (issue.userEmail && RESEND_API_KEY) {
-    const resend = new Resend(RESEND_API_KEY);
+  if (issue.userEmail && (await resendKey())) {
+    const resend = new Resend(await resendKey());
     try {
       await resend.emails.send({
-        from: FROM_EMAIL,
+        from: FROM_EMAIL.value(),
         to: issue.userEmail,
         subject: `[#${id.slice(0, 8)}] Issue Report Received — SB Connect`,
         html: `
@@ -483,24 +470,24 @@ export const onIssueCreated = onDocumentCreated('issueReports/{id}', async (even
   }
 });
 
-export const onIssueUpdated = onDocumentWritten('issueReports/{id}', async (event) => {
+export const onIssueUpdated = onDocumentWritten({ document: 'issueReports/{id}', ...secretParams() }, async (event) => {
   const change = event.data;
   if (!change) return;
   const before = change.before.data();
   const after = change.after.data();
   if (!before || !after) return;
 
-  if (!RESEND_API_KEY || !after.userEmail) return;
+  if (!(await resendKey()) || !after.userEmail) return;
 
   const beforeReplies: IssueReply[] = (before.replies as IssueReply[] | undefined) || [];
   const afterReplies: IssueReply[] = (after.replies as IssueReply[] | undefined) || [];
 
   // Check if status changed to resolved
   if (before.status !== 'resolved' && after.status === 'resolved') {
-    const resend = new Resend(RESEND_API_KEY);
+    const resend = new Resend(await resendKey());
     try {
       await resend.emails.send({
-        from: FROM_EMAIL,
+        from: FROM_EMAIL.value(),
         to: after.userEmail,
         subject: `[#${event.params.id.slice(0, 8)}] Issue Resolved — SB Connect`,
         html: `
@@ -528,10 +515,10 @@ export const onIssueUpdated = onDocumentWritten('issueReports/{id}', async (even
   if (afterReplies.length > beforeReplies.length) {
     const newReply = afterReplies[afterReplies.length - 1];
     if (newReply.authorRole === 'admin' || newReply.authorRole === 'super_admin') {
-      const resend = new Resend(RESEND_API_KEY);
+      const resend = new Resend(await resendKey());
       try {
         await resend.emails.send({
-          from: FROM_EMAIL,
+          from: FROM_EMAIL.value(),
           to: after.userEmail,
           subject: `[#${event.params.id.slice(0, 8)}] Admin replied to your report — SB Connect`,
           html: `

@@ -34,9 +34,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dailyFirestoreBackup = exports.onIssueUpdated = exports.onIssueCreated = exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserRegistered = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = exports.onMeetingCreated = exports.onAdminIssueCreated = exports.onPendingRevenueCreated = exports.onInterestCreated = exports.onProfileCreated = exports.onRequestDigest = exports.rebuildRevenueStats = exports.reconcileRevenueStats = exports.onDealWritten = void 0;
-// Side-effect import: populates process.env from functions/runtime-env.json
-// BEFORE the module-scope constants below read it. Keep it first.
-require("./runtimeEnv");
 const functions = __importStar(require("firebase-functions/v2"));
 const callable = __importStar(require("firebase-functions/v2/https"));
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -62,15 +59,8 @@ Object.defineProperty(exports, "onInterestCreated", { enumerable: true, get: fun
 Object.defineProperty(exports, "onPendingRevenueCreated", { enumerable: true, get: function () { return events_1.onPendingRevenueCreated; } });
 Object.defineProperty(exports, "onAdminIssueCreated", { enumerable: true, get: function () { return events_1.onAdminIssueCreated; } });
 Object.defineProperty(exports, "onMeetingCreated", { enumerable: true, get: function () { return events_1.onMeetingCreated; } });
+const secrets_1 = require("./secrets");
 admin.initializeApp();
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
-// Surfaced once at cold start: an unset key makes every email silently no-op,
-// and that is otherwise only visible in per-send logs.
-if (!RESEND_API_KEY) {
-    functions.logger.warn('RESEND_API_KEY is not set — all outbound email is disabled. ' +
-        'Set it in functions/runtime-env.json or as a platform env var.');
-}
 const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
 const DRIP_SUBJECTS = {
     90: 'SB Connect — Membership Renewal Reminder (3 Months)',
@@ -136,13 +126,13 @@ function generateCode() {
 }
 async function sendEmail(resend, to, subject, html) {
     await resend.emails.send({
-        from: FROM_EMAIL,
+        from: secrets_1.FROM_EMAIL.value(),
         to,
         subject,
         html,
     });
 }
-exports.sendWelcomeEmail = callable.onCall(async (request) => {
+exports.sendWelcomeEmail = callable.onCall((0, secrets_1.secretParams)(), async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
         throw new callable.HttpsError('unauthenticated', 'You must be logged in.');
@@ -159,10 +149,10 @@ exports.sendWelcomeEmail = callable.onCall(async (request) => {
     if (!profile.paidDate || profile.paidDate <= 0) {
         throw new callable.HttpsError('failed-precondition', 'Membership not activated yet.');
     }
-    if (!RESEND_API_KEY) {
+    if (!(await (0, secrets_1.resendKey)())) {
         throw new callable.HttpsError('internal', 'Email service not configured.');
     }
-    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
     const expiry = profile.paidDate + 364 * 24 * 60 * 60 * 1000;
     try {
         await sendEmail(resend, profile.contactEmail, 'Welcome to SB Connect!', dripWelcomeBody(profile.companyName, profile.paidDate, expiry));
@@ -173,7 +163,7 @@ exports.sendWelcomeEmail = callable.onCall(async (request) => {
         throw new callable.HttpsError('internal', 'Failed to send welcome email.');
     }
 });
-exports.sendAdminCode = callable.onCall(async (request) => {
+exports.sendAdminCode = callable.onCall((0, secrets_1.secretParams)(), async (request) => {
     const uid = request.auth?.uid;
     const email = request.auth?.token?.email;
     if (!uid || !email) {
@@ -193,10 +183,10 @@ exports.sendAdminCode = callable.onCall(async (request) => {
         used: false,
         createdAt: Date.now(),
     });
-    if (RESEND_API_KEY) {
-        const resend = new resend_1.Resend(RESEND_API_KEY);
+    if (await (0, secrets_1.resendKey)()) {
+        const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
         await resend.emails.send({
-            from: FROM_EMAIL,
+            from: secrets_1.FROM_EMAIL.value(),
             to: email,
             subject: 'SB Connect — Admin Access Code',
             html: `
@@ -255,16 +245,16 @@ exports.onUserCreate = (0, identity_1.beforeUserCreated)(async (event) => {
         customClaims: { role: 'user' },
     };
 });
-exports.onUserRegistered = (0, firestore_1.onDocumentCreated)('users/{uid}', async (event) => {
+exports.onUserRegistered = (0, firestore_1.onDocumentCreated)({ document: 'users/{uid}', ...(0, secrets_1.secretParams)() }, async (event) => {
     const snap = event.data;
     if (!snap)
         return;
     const userData = snap.data();
     const email = userData?.email;
     const displayName = userData?.displayName;
-    if (!email || !RESEND_API_KEY)
+    if (!email || !(await (0, secrets_1.resendKey)()))
         return;
-    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
     const body = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>👋 Welcome to SB Connect!</h2>
@@ -305,7 +295,7 @@ exports.syncUserRole = (0, firestore_1.onDocumentWritten)('users/{uid}', async (
     await admin.auth().setCustomUserClaims(uid, { role });
     functions.logger.info(`Synced role "${role}" for user ${uid}`);
 });
-exports.onMembershipActivated = (0, firestore_1.onDocumentWritten)('profiles/{uid}', async (event) => {
+exports.onMembershipActivated = (0, firestore_1.onDocumentWritten)({ document: 'profiles/{uid}', ...(0, secrets_1.secretParams)() }, async (event) => {
     const change = event.data;
     if (!change)
         return;
@@ -321,9 +311,9 @@ exports.onMembershipActivated = (0, firestore_1.onDocumentWritten)('profiles/{ui
     if (afterPaid === 0)
         return; // Still no paidDate
     const profile = after;
-    if (!profile.contactEmail || !RESEND_API_KEY)
+    if (!profile.contactEmail || !(await (0, secrets_1.resendKey)()))
         return;
-    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
     const expiry = afterPaid + 364 * 24 * 60 * 60 * 1000;
     try {
         await sendEmail(resend, profile.contactEmail, 'Welcome to SB Connect!', dripWelcomeBody(profile.companyName, afterPaid, expiry));
@@ -333,12 +323,12 @@ exports.onMembershipActivated = (0, firestore_1.onDocumentWritten)('profiles/{ui
         functions.logger.error('Failed to send welcome email:', err);
     }
 });
-exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Kolkata' }, async () => {
-    if (!RESEND_API_KEY) {
-        functions.logger.warn('RESEND_API_KEY not set — skipping email notifications');
+exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Kolkata', ...(0, secrets_1.secretParams)() }, async () => {
+    if (!(await (0, secrets_1.resendKey)())) {
+        functions.logger.warn('RESEND_API_KEY unavailable — skipping email notifications');
         return;
     }
-    const resend = new resend_1.Resend(RESEND_API_KEY);
+    const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
     const now = Date.now();
     const profilesSnap = await admin.firestore().collection('profiles').get();
     const results = [];
@@ -379,7 +369,7 @@ exports.checkMembershipExpiry = functions.scheduler.onSchedule({ schedule: '0 8 
     }
     functions.logger.info('Membership check complete', { results });
 });
-exports.onIssueCreated = (0, firestore_1.onDocumentCreated)('issueReports/{id}', async (event) => {
+exports.onIssueCreated = (0, firestore_1.onDocumentCreated)({ document: 'issueReports/{id}', ...(0, secrets_1.secretParams)() }, async (event) => {
     const snap = event.data;
     if (!snap)
         return;
@@ -400,11 +390,11 @@ exports.onIssueCreated = (0, firestore_1.onDocumentCreated)('issueReports/{id}',
     }));
     await Promise.all(notifPromises);
     // Send confirmation email to the reporter
-    if (issue.userEmail && RESEND_API_KEY) {
-        const resend = new resend_1.Resend(RESEND_API_KEY);
+    if (issue.userEmail && (await (0, secrets_1.resendKey)())) {
+        const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
         try {
             await resend.emails.send({
-                from: FROM_EMAIL,
+                from: secrets_1.FROM_EMAIL.value(),
                 to: issue.userEmail,
                 subject: `[#${id.slice(0, 8)}] Issue Report Received — SB Connect`,
                 html: `
@@ -430,7 +420,7 @@ exports.onIssueCreated = (0, firestore_1.onDocumentCreated)('issueReports/{id}',
         }
     }
 });
-exports.onIssueUpdated = (0, firestore_1.onDocumentWritten)('issueReports/{id}', async (event) => {
+exports.onIssueUpdated = (0, firestore_1.onDocumentWritten)({ document: 'issueReports/{id}', ...(0, secrets_1.secretParams)() }, async (event) => {
     const change = event.data;
     if (!change)
         return;
@@ -438,16 +428,16 @@ exports.onIssueUpdated = (0, firestore_1.onDocumentWritten)('issueReports/{id}',
     const after = change.after.data();
     if (!before || !after)
         return;
-    if (!RESEND_API_KEY || !after.userEmail)
+    if (!(await (0, secrets_1.resendKey)()) || !after.userEmail)
         return;
     const beforeReplies = before.replies || [];
     const afterReplies = after.replies || [];
     // Check if status changed to resolved
     if (before.status !== 'resolved' && after.status === 'resolved') {
-        const resend = new resend_1.Resend(RESEND_API_KEY);
+        const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
         try {
             await resend.emails.send({
-                from: FROM_EMAIL,
+                from: secrets_1.FROM_EMAIL.value(),
                 to: after.userEmail,
                 subject: `[#${event.params.id.slice(0, 8)}] Issue Resolved — SB Connect`,
                 html: `
@@ -475,10 +465,10 @@ exports.onIssueUpdated = (0, firestore_1.onDocumentWritten)('issueReports/{id}',
     if (afterReplies.length > beforeReplies.length) {
         const newReply = afterReplies[afterReplies.length - 1];
         if (newReply.authorRole === 'admin' || newReply.authorRole === 'super_admin') {
-            const resend = new resend_1.Resend(RESEND_API_KEY);
+            const resend = new resend_1.Resend(await (0, secrets_1.resendKey)());
             try {
                 await resend.emails.send({
-                    from: FROM_EMAIL,
+                    from: secrets_1.FROM_EMAIL.value(),
                     to: after.userEmail,
                     subject: `[#${event.params.id.slice(0, 8)}] Admin replied to your report — SB Connect`,
                     html: `

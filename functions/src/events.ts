@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions/v2';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { secretParams } from './secrets';
 import { notifyAdmin, composeRequestDigest, sendViaResend } from './adminEmail';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -39,7 +40,12 @@ async function guard(name: string, fn: () => Promise<void>): Promise<void> {
  * retries the same window instead of silently dropping those requests.
  */
 export const onRequestDigest = onSchedule(
-  { schedule: 'every 12 hours', timeZone: 'Asia/Kolkata', retryCount: 3 },
+  {
+    schedule: 'every 12 hours',
+    timeZone: 'Asia/Kolkata',
+    retryCount: 3,
+    ...secretParams(),
+  },
   async () => {
     const db = admin.firestore();
     const cursorRef = db.doc('config/requestDigest');
@@ -88,7 +94,8 @@ export const onRequestDigest = onSchedule(
 );
 
 /** 2. A new business profile is waiting for verification. */
-export const onProfileCreated = onDocumentCreated('profiles/{uid}', async (event) => {
+export const onProfileCreated = onDocumentCreated({ document: 'profiles/{uid}', ...secretParams() },
+  async (event) => {
   await guard('new_profile', async () => {
     const doc = event.data?.data();
     if (!doc) return;
@@ -107,8 +114,7 @@ export const onProfileCreated = onDocumentCreated('profiles/{uid}', async (event
 });
 
 /** 3. A member pitched on someone's request. */
-export const onInterestCreated = onDocumentCreated(
-  'requests/{requestId}/interests/{interestId}',
+export const onInterestCreated = onDocumentCreated({ document: 'requests/{requestId}/interests/{interestId}', ...secretParams() },
   async (event) => {
     await guard('new_pitch', async () => {
       const interest = event.data?.data();
@@ -162,7 +168,8 @@ export const onInterestCreated = onDocumentCreated(
  * verifying. Deals are also created by admins when awarding a request, so this
  * is gated on `status === 'pending'` — which only member submissions ever have.
  */
-export const onPendingRevenueCreated = onDocumentCreated('deals/{dealId}', async (event) => {
+export const onPendingRevenueCreated = onDocumentCreated({ document: 'deals/{dealId}', ...secretParams() },
+  async (event) => {
   await guard('pending_revenue', async () => {
     const doc = event.data?.data();
     if (!doc) return;
@@ -179,7 +186,8 @@ export const onPendingRevenueCreated = onDocumentCreated('deals/{dealId}', async
 });
 
 /** 5. A member filed an issue report. */
-export const onAdminIssueCreated = onDocumentCreated('issueReports/{id}', async (event) => {
+export const onAdminIssueCreated = onDocumentCreated({ document: 'issueReports/{id}', ...secretParams() },
+  async (event) => {
   await guard('new_issue', async () => {
     const doc = event.data?.data();
     if (!doc) return;
@@ -201,7 +209,8 @@ export const onAdminIssueCreated = onDocumentCreated('issueReports/{id}', async 
  * the super admin about their own action. It is included because the brief was
  * "anything new"; delete this export to switch it off.
  */
-export const onMeetingCreated = onDocumentCreated('meetings/{id}', async (event) => {
+export const onMeetingCreated = onDocumentCreated({ document: 'meetings/{id}', ...secretParams() },
+  async (event) => {
   await guard('new_meeting', async () => {
     const doc = event.data?.data();
     if (!doc) return;
