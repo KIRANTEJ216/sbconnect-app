@@ -37,7 +37,7 @@ export function StrikeWarning({ uid, compact }: StrikeWarningProps) {
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-charcoal tracking-tight">Meeting Attendance Required</h3>
-              <span className="px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-[10px] font-bold text-danger tracking-tight">
+              <span className="px-2 py-0.5 rounded-full bg-danger/10 border border-danger/20 text-xs font-bold text-danger tracking-tight">
                 {missing} {missing > 1 ? 'Meetings' : 'Meeting'} Needed
               </span>
             </div>

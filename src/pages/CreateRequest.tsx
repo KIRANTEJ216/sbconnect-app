@@ -71,7 +71,7 @@ export default function CreateRequest() {
             <div>
               <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Category</label>
               <select
-                className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 required
@@ -98,7 +98,7 @@ export default function CreateRequest() {
                 <span className="text-muted font-normal"> ({description.length}/1000)</span>
               </label>
               <textarea
-                className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
+                className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
                 rows={5}
                 maxLength={1000}
                 placeholder="Describe what you're looking for..."

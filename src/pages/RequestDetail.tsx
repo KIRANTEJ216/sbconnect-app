@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getRequest, expressInterest, getInterests, awardDeal } from '../lib/firestore';
-import { getBusinessProfile } from '../lib/firestore';
+import {
+  getRequest, expressInterest, getInterests, awardDeal,
+  getBusinessProfile, getBusinessProfiles,
+} from '../lib/firestore';
 import { getUserProfile } from '../lib/auth';
 import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
 import type { Request, UserProfile, Interest } from '../types';
-import confetti from 'canvas-confetti';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -40,11 +41,12 @@ export default function RequestDetail() {
         ]);
         setRequester(up);
         setInterests(ints);
+        // One batched read instead of one getDoc per interested member.
+        const profiles = await getBusinessProfiles(ints.map((i) => i.uid));
         const phones: Record<string, string> = {};
-        await Promise.all(ints.map(async (int) => {
-          const bp = await getBusinessProfile(int.uid);
-          if (bp?.phone) phones[int.uid] = bp.phone;
-        }));
+        for (const [uid, bp] of Object.entries(profiles)) {
+          if (bp.phone) phones[uid] = bp.phone;
+        }
         setInterestPhones(phones);
       }
       setLoading(false);
@@ -71,12 +73,12 @@ export default function RequestDetail() {
       setShowInterestForm(false);
       const updatedInts = await getInterests(id);
       setInterests(updatedInts);
-      const phones: Record<string, string> = {};
-      await Promise.all(updatedInts.map(async (int) => {
-        const bp = await getBusinessProfile(int.uid);
-        if (bp?.phone) phones[int.uid] = bp.phone;
-      }));
-      setInterestPhones(phones);
+      const updatedProfiles = await getBusinessProfiles(updatedInts.map((i) => i.uid));
+      const updatedPhones: Record<string, string> = {};
+      for (const [uid, bp] of Object.entries(updatedProfiles)) {
+        if (bp.phone) updatedPhones[uid] = bp.phone;
+      }
+      setInterestPhones(updatedPhones);
     } catch (err) {
       console.error('Failed to express interest:', err);
       setError('Failed to submit. Try again.');
@@ -101,7 +103,13 @@ export default function RequestDetail() {
       );
       setRequest({ ...request, status: 'closed', awardedTo: interest.uid });
       setSuccess(`🎉 Congratulations! Deal awarded to ${interest.companyName}!`);
-      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+      // Deferred + motion-gated: 120 particles is a paint-heavy surprise for a
+      // user who has asked their OS for less motion.
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        void import('canvas-confetti')
+          .then(({ default: fire }) => fire({ particleCount: 120, spread: 80, origin: { y: 0.6 } }))
+          .catch(() => { /* celebration is optional; never surface a failure. */ });
+      }
     } catch (err) {
       console.error('Failed to award deal:', err);
       setError('Failed to award deal. Try again.');
@@ -114,7 +122,7 @@ export default function RequestDetail() {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="skeleton h-6 w-32" />
-        <div className="skeleton h-64 rounded-[2.5rem]" />
+        <div className="skeleton h-64 rounded-2xl" />
       </div>
     );
   }
@@ -200,7 +208,7 @@ export default function RequestDetail() {
                         {requester?.phone && (
                           <a
                             href={`tel:${requester.phone}`}
-                            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-[0.75rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md bg-primary text-white hover:bg-primary-hover transition-colors"
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -214,7 +222,7 @@ export default function RequestDetail() {
                         {requester?.phone && (
                           <a
                             href={`tel:${requester.phone}`}
-                            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-[0.75rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md bg-primary text-white hover:bg-primary-hover transition-colors"
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -247,7 +255,7 @@ export default function RequestDetail() {
           <CardContent className="p-4 sm:p-6 lg:p-8">
             <h3 className="font-semibold text-charcoal tracking-tight mb-4">Express Interest</h3>
             <textarea
-              className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
+              className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
               rows={3}
                placeholder="Tell the requester why you're interested and how you can help..."
               value={interestMessage}
@@ -286,7 +294,7 @@ export default function RequestDetail() {
                     {interestPhones[int.uid] && (
                       <a
                         href={`tel:${interestPhones[int.uid]}`}
-                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-[0.5rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                        className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-sm bg-primary text-white hover:bg-primary-hover transition-colors"
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
                           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />

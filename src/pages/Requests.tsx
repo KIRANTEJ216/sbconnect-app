@@ -5,6 +5,7 @@ import { formatDate, formatDateStr, formatCurrency } from '../lib/format';
 import type { Request } from '../types';
 import { REQUEST_CATEGORIES } from '../types';
 import { Card, CardContent } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,12 +23,13 @@ export default function Requests() {
   const [closingId, setClosingId] = useState<string | null>(null);
   const [pitching, setPitching] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [, setError] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
     getAllRequests()
       .then(setRequests)
+      .catch((err) => setError(err?.message || 'Could not load requests. Please retry.'))
       .finally(() => setLoading(false));
     if (user) {
       updateBusinessProfile(user.uid, { lastRequestsViewedAt: Date.now() }).catch(console.error);
@@ -45,6 +47,7 @@ export default function Requests() {
       return;
     }
     setPitching(req.id);
+    setError('');
     try {
       const bp = await getBusinessProfile(user.uid);
       const companyName = bp?.companyName || user.displayName || 'Unknown';
@@ -98,23 +101,34 @@ export default function Requests() {
   return (
     <AnimatedPage>
     <div className="max-w-5xl mx-auto space-y-3">
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-card border border-danger/25 bg-danger-light px-4 py-3"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5 text-danger-strong" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <p className="text-sm text-danger-strong font-medium">{error}</p>
+        </div>
+      )}
       <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
-        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+        <p className="text-xs font-semibold text-muted uppercase tracking-wider">SB Connect</p>
         <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">Requests</h1>
         <p className="text-steel text-sm">Browse business requests and opportunities</p>
         <div className="flex items-center justify-center gap-4 mt-2">
           <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">My Requests</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">My Requests</p>
             <p className="text-lg font-bold gradient-text">{myReqs.length}</p>
           </div>
           <div className="w-px h-6 bg-border" />
           <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Open Requests</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Open Requests</p>
             <p className="text-lg font-bold text-charcoal">{openReqs.length}</p>
           </div>
           <div className="w-px h-6 bg-border" />
           <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Awarded</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Awarded</p>
             <p className="text-lg font-bold text-success">{requests.filter(r => r.awardedTo).length}</p>
           </div>
         </div>
@@ -134,7 +148,7 @@ export default function Requests() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setSelectedCategory('')}
-          className={`px-4 py-2 text-sm rounded-[0.75rem] border transition-all duration-200 cursor-pointer ${
+          className={`px-4 py-2 text-sm rounded-md border transition-all duration-200 cursor-pointer ${
             !selectedCategory
               ? 'bg-primary text-white border-primary font-medium'
               : 'border-border text-steel hover:border-primary'
@@ -146,7 +160,7 @@ export default function Requests() {
           <button
             key={c}
             onClick={() => setSelectedCategory(c)}
-            className={`px-4 py-2 text-sm rounded-[0.75rem] border transition-all duration-200 cursor-pointer ${
+            className={`px-4 py-2 text-sm rounded-md border transition-all duration-200 cursor-pointer ${
               selectedCategory === c
                 ? 'bg-primary text-white border-primary font-medium'
                 : 'border-border text-steel hover:border-primary'
@@ -160,13 +174,25 @@ export default function Requests() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="skeleton h-24 rounded-[2.5rem]" />
+            <div key={i} className="skeleton h-24 rounded-2xl" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="p-14 text-center">
-            <p className="text-muted">No requests found{selectedCategory ? ` in ${selectedCategory}` : ''}.</p>
+            <EmptyState
+              noun="request"
+              title={
+                selectedCategory
+                  ? `No requests in ${selectedCategory}`
+                  : 'No open requests right now'
+              }
+              body={
+                selectedCategory
+                  ? 'Clear the filter to see requests in other categories.'
+                  : 'Post a request and members who can help will pitch to you.'
+              }
+            />
             <Link to="/requests/create" className="text-primary hover:text-primary-hover text-sm mt-3 inline-block transition-colors">
               Create the first request
             </Link>
@@ -188,7 +214,7 @@ export default function Requests() {
                     }`}
                   >
                     <TiltCard>
-                    <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+                    <div className="rounded-card bg-surface border border-border shadow-card">
                     <CardContent className="p-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -205,7 +231,7 @@ export default function Requests() {
                           </div>
                           <h3 className="font-semibold text-charcoal tracking-tight text-sm">{req.title}</h3>
                           <p className="text-xs text-steel mt-1 line-clamp-1">{req.description}</p>
-                          <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-muted tracking-tight">
+                          <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-muted tracking-tight">
                             <span>{req.companyName}</span>
                             <span>&middot;</span>
                             <span>{formatDate(req.createdAt)}</span>
@@ -278,7 +304,7 @@ export default function Requests() {
                     className="block transition-all duration-300 cursor-pointer hover:-translate-y-0.5"
                   >
                     <TiltCard>
-                    <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+                    <div className="rounded-card bg-surface border border-border shadow-card">
                     <CardContent className="p-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -293,7 +319,7 @@ export default function Requests() {
                           </div>
                           <h3 className="font-semibold text-charcoal tracking-tight text-sm">{req.title}</h3>
                           <p className="text-xs text-steel mt-1 line-clamp-1">{req.description}</p>
-                          <div className="flex items-center gap-3 mt-1.5 text-[11px] font-mono text-muted tracking-tight">
+                          <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-muted tracking-tight">
                             <span>{req.companyName}</span>
                             <span>&middot;</span>
                             <span>{formatDate(req.createdAt)}</span>
@@ -317,7 +343,7 @@ export default function Requests() {
                               {req.requesterPhone && (
                                 <a
                                   href={`tel:${req.requesterPhone}`}
-                                  className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-[0.5rem] bg-primary text-white hover:bg-primary-hover transition-colors"
+                                  className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-sm bg-primary text-white hover:bg-primary-hover transition-colors"
                                 >
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-1">
                                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />

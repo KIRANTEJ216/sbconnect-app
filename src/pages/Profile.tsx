@@ -220,6 +220,18 @@ export default function Profile() {
   const handleSave = async () => {
     setError('');
     if (!user || !profile) return;
+    // Defence in depth: never write unless the loaded profile and the target are
+    // the same document, and never write to the session user while viewing
+    // someone else's profile. This is the check whose absence caused an admin's
+    // own profile to be overwritten with a member's details.
+    if (!targetUid || (profile.uid && profile.uid !== targetUid)) {
+      setError('Could not verify which profile to save. Reopen the profile and try again.');
+      return;
+    }
+    if (!isOwnProfile && targetUid === user.uid) {
+      setError('Refusing to save: this would overwrite your own profile.');
+      return;
+    }
     if (!form.companyName.trim()) {
       setError('Company name is required.');
       return;
@@ -260,8 +272,8 @@ export default function Profile() {
       getProfileByContactEmail(cleanEmail),
       getProfileByPhone(normalizedPhone),
     ]);
-    if (existingEmail && existingEmail.uid !== user.uid && existingEmail.uid !== profile?.uid) { setError('This email is already registered to another business.'); setSaving(false); return; }
-    if (existingPhone && existingPhone.uid !== user.uid && existingPhone.uid !== profile?.uid) { setError('This phone number is already registered to another business.'); setSaving(false); return; }
+    if (existingEmail && existingEmail.uid !== targetUid) { setError('This email is already registered to another business.'); setSaving(false); return; }
+    if (existingPhone && existingPhone.uid !== targetUid) { setError('This phone number is already registered to another business.'); setSaving(false); return; }
 
     setSaving(true);
     try {
@@ -271,17 +283,17 @@ export default function Profile() {
       const locked = isAdminViewer ? profile.locked : newEditCount >= 3;
 
       if (photoFile) {
-        photoURL = await replaceProfilePhoto(user.uid, photoFile, profile.photoURL || '');
+        photoURL = await replaceProfilePhoto(targetUid, photoFile, profile.photoURL || '');
       }
       if (catalogFiles.length > 0) {
-        catalogURLs = await uploadCatalogFiles(user.uid, catalogFiles);
+        catalogURLs = await uploadCatalogFiles(targetUid, catalogFiles);
       }
 
       const finalCategories = form.categories
         .filter((c) => c !== 'Other')
         .concat(customCategory.trim() ? [customCategory.trim()] : []);
 
-      await updateBusinessProfile(user.uid, {
+      await updateBusinessProfile(targetUid, {
         ownerName: form.ownerName,
         ownerSurname: form.ownerSurname,
         phone: form.phone,
@@ -323,7 +335,7 @@ export default function Profile() {
         editCount: newEditCount,
         locked,
       });
-      queryClient.invalidateQueries({ queryKey: ['businessProfile', user.uid] });
+      queryClient.invalidateQueries({ queryKey: ['businessProfile', targetUid] });
       setEditing(false);
       setPhotoFile(null);
       setCatalogFiles([]);
@@ -344,19 +356,24 @@ export default function Profile() {
   const handleSaveMembership = async () => {
     setError('');
     if (!user || !profile) return;
+    if (!targetUid) { setError('Could not verify which profile to save.'); return; }
+    if (!isOwnProfile && targetUid === user.uid) {
+      setError('Refusing to save: this would overwrite your own profile.');
+      return;
+    }
     setSaving(true);
     try {
       const paidTimestamp = new Date(editPaidDate).getTime();
       const expiryTimestamp = paidTimestamp + 364 * 24 * 60 * 60 * 1000;
       const derivedStatus = Date.now() >= expiryTimestamp ? 'expired' : 'active' as const;
-      await updateBusinessProfile(user.uid, {
+      await updateBusinessProfile(targetUid, {
         membershipStatus: derivedStatus,
         paidDate: paidTimestamp,
         membershipDate: paidTimestamp,
         membershipExpiry: expiryTimestamp,
       });
       setProfile({ ...profile, membershipStatus: derivedStatus, paidDate: paidTimestamp, membershipDate: paidTimestamp, membershipExpiry: expiryTimestamp });
-      queryClient.invalidateQueries({ queryKey: ['businessProfile', user.uid] });
+      queryClient.invalidateQueries({ queryKey: ['businessProfile', targetUid] });
       setEditingMembership(false);
     } catch (err) {
       console.error('Failed to update membership:', err);
@@ -401,16 +418,22 @@ export default function Profile() {
   const isSuperAdminUser = isSuperAdmin(authProfile?.role);
   const canEdit = isOwnProfile || isSuperAdminUser;
 
+  // The document a save is allowed to touch. Derived from the profile that was
+  // actually loaded into the form — NOT from the session. Using `user.uid` here
+  // meant an admin editing a member overwrote their *own* profile with the
+  // member's details, which is what this guard exists to prevent.
+  const targetUid = profile?.uid || id || '';
+
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="skeleton h-8 w-48" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <div className="skeleton h-48 rounded-[2.5rem]" />
-            <div className="skeleton h-32 rounded-[2.5rem]" />
+            <div className="skeleton h-48 rounded-2xl" />
+            <div className="skeleton h-32 rounded-2xl" />
           </div>
-          <div className="skeleton h-64 rounded-[2.5rem]" />
+          <div className="skeleton h-64 rounded-2xl" />
         </div>
       </div>
     );
@@ -425,7 +448,7 @@ export default function Profile() {
           {(isOwnProfile || isAdminViewer) && (
             <Link
               to="/create-profile"
-              className="inline-flex items-center px-5 py-2 bg-primary text-white rounded-[0.75rem] hover:bg-primary-hover text-sm font-medium transition-all active:scale-[0.97]"
+              className="inline-flex items-center px-5 py-2 bg-primary text-white rounded-md hover:bg-primary-hover text-sm font-medium transition-all active:scale-[0.97]"
             >
               Create Profile
             </Link>
@@ -443,39 +466,39 @@ export default function Profile() {
     <AnimatedPage>
     <div className="max-w-4xl mx-auto space-y-3">
       <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
-        <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+        <p className="text-xs font-semibold text-muted uppercase tracking-wider">SB Connect</p>
         <div className="flex items-center justify-center gap-2">
           <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">
             {profile.companyName || 'Business Profile'}
           </h1>
           {profile.verified ? (
-            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-success-light text-success border border-success/20">Verified</span>
+            <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-success-light text-success border border-success/20">Verified</span>
           ) : (
-            <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-warning-light text-warning border border-warning/20">Pending</span>
+            <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-warning-light text-warning border border-warning/20">Pending</span>
           )}
         </div>
         <p className="text-steel text-sm">{profile.ownerName} {profile.ownerSurname} · {profile.location}</p>
         <div className="flex items-center justify-center gap-4 mt-2">
           <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Member Since</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Member Since</p>
             <p className="text-sm font-bold text-charcoal">{profile.membershipDate ? formatDate(profile.membershipDate) : '—'}</p>
           </div>
           <div className="w-px h-6 bg-border" />
           <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Status</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Status</p>
             <p className={`text-sm font-bold capitalize ${profile.membershipStatus === 'active' ? 'text-success' : profile.membershipStatus === 'expired' ? 'text-danger' : 'text-muted'}`}>{profile.membershipStatus || '—'}</p>
           </div>
           <div className="w-px h-6 bg-border" />
           <div>
-            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Size</p>
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider">Size</p>
             <p className="text-sm font-bold text-primary">{profile.companySize || '—'}</p>
           </div>
         </div>
         {profile.locked && (
-          <p className="text-[10px] text-danger mt-1">Profile locked — max 3 edits reached</p>
+          <p className="text-xs text-danger mt-1">Profile locked — max 3 edits reached</p>
         )}
         {isOwnProfile && !profile.locked && (
-          <p className="text-[10px] text-muted mt-1">Edits remaining: {Math.max(0, 3 - (profile.editCount || 0))} of 3</p>
+          <p className="text-xs text-muted mt-1">Edits remaining: {Math.max(0, 3 - (profile.editCount || 0))} of 3</p>
         )}
         <div className="flex items-center justify-center gap-2 mt-2">
           {canEdit && !editing && (
@@ -521,7 +544,7 @@ export default function Profile() {
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Phone Number <span className="text-danger">*</span></label>
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-2.5 rounded-[0.75rem] border border-border bg-muted-bg text-sm text-charcoal font-medium shrink-0">+91</span>
+                    <span className="px-3 py-2.5 rounded-md border border-border bg-muted-bg text-sm text-charcoal font-medium shrink-0">+91</span>
                     <input
                       type="tel"
                       placeholder="9876543210"
@@ -529,7 +552,7 @@ export default function Profile() {
                       onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                       onBlur={(e) => { const n = normalizePhone(e.target.value); if (n !== e.target.value) update('phone', n); }}
                       required
-                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                      className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                     />
                   </div>
                 </div>
@@ -607,7 +630,7 @@ export default function Profile() {
                       if (filtered.length > 0) setShowLocationDropdown(true);
                     }}
                     required
-                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                   />
                   {showLocationDropdown && (
                     <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
@@ -645,9 +668,9 @@ export default function Profile() {
                       onChange={(e) => setKeywordInput(e.target.value)}
                       onKeyDown={handleKeywordKeyDown}
                       onBlur={() => { if (keywordInput.trim()) { addKeyword(keywordInput); setKeywordInput(''); } }}
-                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                      className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted font-mono">Enter</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted font-mono">Enter</span>
                   </div>
                   <p className="text-xs text-muted mt-1.5">Type a keyword and press Enter. e.g. steel-supply, it-services, pvc-pipes, packaging, solar-panels</p>
                 </div>
@@ -708,16 +731,17 @@ export default function Profile() {
                             alt={`Catalog ${i + 1}`}
                             className="w-full h-full object-cover"
                           />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="absolute inset-0 bg-black/40 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <button
                               type="button"
+                              aria-label={`Remove catalog image ${i + 1}`}
                               onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))}
-                              className="w-7 h-7 rounded-full bg-white/90 text-danger flex items-center justify-center hover:bg-white transition-colors cursor-pointer"
+                              className="min-w-11 min-h-11 w-11 h-11 rounded-full bg-white/90 text-danger flex items-center justify-center hover:bg-white transition-colors cursor-pointer"
                             >
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                             </button>
                           </div>
-                          <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] font-medium bg-black/50 text-white rounded-md">compressed</div>
+                          <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-micro font-medium bg-black/50 text-white rounded-md">compressed</div>
                         </div>
                       ))}
                     </div>
@@ -764,7 +788,7 @@ export default function Profile() {
                       }
                     }}
                     list="referred-list"
-                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                   />
                   <datalist id="referred-list">
                     {referralOptions.map((r) => (
@@ -778,7 +802,7 @@ export default function Profile() {
                           key={r.phone}
                           type="button"
                           onClick={() => selectReferral(r.name, r.phone)}
-                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors cursor-pointer ${
+                          className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
                             form.referredByPhone === r.phone
                               ? 'bg-primary-light text-primary border-primary'
                               : 'bg-canvas text-muted border-border hover:border-primary hover:text-primary'
@@ -802,7 +826,7 @@ export default function Profile() {
                     <span className="text-muted font-normal"> ({form.description.length}/500)</span>
                   </label>
                   <textarea
-                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
+                    className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
                     rows={4}
                     maxLength={500}
                     value={form.description}
@@ -835,7 +859,7 @@ export default function Profile() {
                       <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Categories</h3>
                       <div className="flex flex-wrap gap-1">
                         {(profile.categories ?? []).map((cat) => (
-                          <span key={cat} className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-primary-light text-primary border border-primary/20">{cat}</span>
+                          <span key={cat} className="px-2 py-0.5 text-xs font-medium rounded-lg bg-primary-light text-primary border border-primary/20">{cat}</span>
                         ))}
                       </div>
                     </div>
@@ -845,7 +869,7 @@ export default function Profile() {
                       <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">Keywords</h3>
                       <div className="flex flex-wrap gap-1">
                         {(profile.keywords ?? []).map((kw) => (
-                          <span key={kw} className="px-2 py-0.5 text-[11px] font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
+                          <span key={kw} className="px-2 py-0.5 text-xs font-medium rounded-lg bg-canvas text-muted border border-border">{kw}</span>
                         ))}
                       </div>
                     </div>
@@ -887,7 +911,7 @@ export default function Profile() {
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <polyline points="14 2 14 8 20 8" />
                           </svg>
-                          <span className="text-[9px] text-muted font-mono">PDF</span>
+                          <span className="text-micro text-muted font-mono">PDF</span>
                         </button>
                       ) : (
                         <button key={i} type="button" onClick={() => downloadCatalogFile(url, i)} className="shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-border hover:opacity-90 transition-opacity cursor-pointer">
@@ -919,7 +943,7 @@ export default function Profile() {
                 )}
                 <Input label="Date Paid" type="date" value={editPaidDate} onChange={(e) => setEditPaidDate(e.target.value)} />
                 {editPaidDate && (
-                  <p className="text-[11px] text-steel">Expires: {new Date(new Date(editPaidDate).getTime() + 364 * 86400000).toLocaleDateString('en-IN')}</p>
+                  <p className="text-xs text-steel">Expires: {new Date(new Date(editPaidDate).getTime() + 364 * 86400000).toLocaleDateString('en-IN')}</p>
                 )}
                 <Button onClick={handleSaveMembership} loading={saving} className="w-full">Save</Button>
               </div>

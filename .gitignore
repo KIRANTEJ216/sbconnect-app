@@ -56,3 +56,8 @@ screenshots/
 # This is local-only, so the key is portable-unsafe on a fresh clone. The
 # correct fix is Secret Manager + defineSecret (requires enabling
 # secretmanager.googleapis.com, currently disabled -> 403).
+
+# One-off scratch scripts and generated release summaries.
+/fix-admin.mjs
+/mpt_agent.py
+/SBConnect-Release-Summary.pdf

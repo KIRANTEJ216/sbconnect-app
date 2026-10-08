@@ -35,17 +35,9 @@ export default function ReportIssue() {
 
   return (
     <>
-      <style>{`
-        @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-        @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(59,130,246,.4); } 70% { box-shadow: 0 0 0 14px rgba(59,130,246,0); } 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); } }
-        @keyframes wiggle { 0%,100% { transform: rotate(0deg); } 20% { transform: rotate(-10deg); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(4deg); } }
-        @keyframes antenna-l { 0%,100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
-        @keyframes antenna-r { 0%,100% { transform: rotate(5deg); } 50% { transform: rotate(-5deg); } }
-        .issue-btn { animation: float 3s ease-in-out infinite, pulse-ring 2s ease-in-out infinite; }
-        .issue-btn:hover { animation: wiggle 0.5s ease-in-out; }
-        .ant-l { transform-origin: 8px 10px; animation: antenna-l 2s ease-in-out infinite; }
-        .ant-r { transform-origin: 16px 10px; animation: antenna-r 2s ease-in-out infinite; }
-      `}</style>
+      {/* The keyframes used to be injected here via a <style> tag, on every
+          render of a globally-mounted component. They now live in index.css:
+          parsed once, cached, and namespaced so they cannot collide. */}
       <button
         onClick={() => setOpen(true)}
         className="issue-btn fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary-dark text-white shadow-btn hover:shadow-btn-hover transition-all duration-200 flex items-center justify-center"
@@ -100,7 +92,7 @@ export default function ReportIssue() {
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder="e.g. Can't upload photo"
-                      className="w-full rounded-[0.625rem] border border-border px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
+                      className="w-full rounded-input border border-border px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
                       maxLength={100}
                     />
                   </div>
@@ -111,15 +103,15 @@ export default function ReportIssue() {
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="What happened? What were you trying to do?"
                       rows={4}
-                      className="w-full rounded-[0.625rem] border border-border px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring resize-none"
+                      className="w-full rounded-input border border-border px-3 py-2 text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring resize-none"
                       maxLength={1000}
                     />
-                    <p className="text-[10px] text-muted text-right mt-0.5">{description.length}/1000</p>
+                    <p className="text-xs text-muted text-right mt-0.5">{description.length}/1000</p>
                   </div>
                   <button
                     onClick={handleSubmit}
                     disabled={!subject.trim() || !description.trim() || sending}
-                    className="w-full rounded-[0.625rem] bg-primary text-white font-semibold text-sm px-5 py-2.5 shadow-btn hover:shadow-btn-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full rounded-input bg-primary text-white font-semibold text-sm px-5 py-2.5 shadow-btn hover:shadow-btn-hover transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {sending ? 'Submitting...' : 'Submit'}
                   </button>
