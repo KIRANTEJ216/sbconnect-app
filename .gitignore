@@ -27,3 +27,32 @@ dist-ssr
 .playwright-mcp/
 screenshots/
 .nsprc
+.env*
+
+# --- Added: local scratch & QA artefacts (never commit) -----------------
+# Screenshots and clips produced while verifying a change in a browser.
+shots/
+screenshots/
+/tmp/
+/reports/
+/dev.log
+
+# Generated deliverables (PDF/HTML/pptx reports + decks) are build output.
+/output/
+
+# Local tool caches: Firebase CLI build cache, agent workflow state.
+.firebase/
+.claude-flow/
+
+# !! DELIBERATELY NOT LISTED HERE: functions/runtime-env.json !!
+# It must NOT be in .gitignore. The Firebase CLI honours .gitignore when
+# packaging a deploy, so listing it here would exclude it from the deployment
+# artifact and silently disable ALL outbound email (every send then no-ops
+# with "RESEND_API_KEY is not set").
+# It is instead ignored via .git/info/exclude: git honours that file, the
+# Firebase CLI does not read it. Verified empirically -- email worked only
+# while the file was absent from .gitignore.
+#
+# This is local-only, so the key is portable-unsafe on a fresh clone. The
+# correct fix is Secret Manager + defineSecret (requires enabling
+# secretmanager.googleapis.com, currently disabled -> 403).
