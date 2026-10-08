@@ -1,3 +1,6 @@
+// Side-effect import: populates process.env from functions/runtime-env.json
+// BEFORE the module-scope constants below read it. Keep it first.
+import './runtimeEnv';
 import * as functions from 'firebase-functions/v2';
 import * as callable from 'firebase-functions/v2/https';
 import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -8,19 +11,34 @@ import { v1 } from '@google-cloud/firestore';
 import { Resend } from 'resend';
 import { randomInt } from 'crypto';
 import { checkRateLimit } from './rateLimit';
+import { sanitize } from './html';
+
+// Re-exports so every trigger is registered with the Functions runtime on deploy.
+export { onDealWritten, reconcileRevenueStats, rebuildRevenueStats } from './revenueStats';
+
+// Admin email alerts. See ./events.ts — each is an onDocumentCreated that mails
+// the super admin when something new needs an admin.
+export {
+  onRequestDigest,
+  onProfileCreated,
+  onInterestCreated,
+  onPendingRevenueCreated,
+  onAdminIssueCreated,
+  onMeetingCreated,
+} from './events';
 
 admin.initializeApp();
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
 
-function sanitize(input: string): string {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
+// Surfaced once at cold start: an unset key makes every email silently no-op,
+// and that is otherwise only visible in per-send logs.
+if (!RESEND_API_KEY) {
+  functions.logger.warn(
+    'RESEND_API_KEY is not set — all outbound email is disabled. ' +
+      'Set it in functions/runtime-env.json or as a platform env var.',
+  );
 }
 
 const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
