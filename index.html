@@ -3,11 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover opts the page into the iPhone safe area. Without it
+      env(safe-area-inset-bottom) resolves to 0, so the safe-area-bottom utility
+      on BottomNav is inert and the nav sits underneath the home indicator.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#2A11A6" />
+    <meta name="color-scheme" content="light" />
+    <meta name="description" content="SB Connect — business networking, referrals and membership management for the SB Connect community." />
+
     <title>SB Connect — Business Network</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Open+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!--
+      Instrument Sans drives display + headings; JetBrains Mono drives figures.
+      Inter is self-hosted in src/index.css as the text fallback.
+
+      display=swap is required: without it this stylesheet is a blocking request
+      that holds first paint while Google resolves two families.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+
+    <!--
+      The body font of the entire app. It is self-hosted, but until index.css is
+      parsed nothing knows the URL exists, so without this preload the first paint
+      renders in a fallback face (FOUT).
+    -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <noscript>
+      <!-- The async font pattern above uses onload, which needs JavaScript. -->
+      <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>

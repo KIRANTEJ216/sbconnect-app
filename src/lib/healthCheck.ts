@@ -2,6 +2,7 @@ import { collection, getDocs, query, limit, doc, getDoc, setDoc, deleteDoc } fro
 import { db } from './firebase';
 import { getAuth } from 'firebase/auth';
 import { loadErrors } from './errorTracker';
+import { getRevenueSummary } from './firestore';
 
 export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -133,19 +134,77 @@ async function checkDealAmounts(): Promise<HealthCheckResult> {
   try {
     const snap = await getDocs(collection(db, 'deals'));
     let invalid = 0;
+    let pending = 0;
+    let pendingValue = 0;
     snap.docs.forEach((d) => {
-      const amount = String(d.data().amount || '');
+      const data = d.data();
+      const amount = String(data.amount || '');
       if (!amount || parseFloat(amount.replace(/[^0-9.]/g, '')) <= 0) invalid++;
+      if (data.status === 'pending') {
+        pending++;
+        pendingValue += parseFloat(String(data.amount || '0').replace(/[^0-9.]/g, '')) || 0;
+      }
     });
-    const status = invalid > 0 ? 'degraded' : 'healthy';
+    const stale = snap.docs.filter((d) => {
+      const data = d.data();
+      return data.status === 'pending' && Date.now() - (data.createdAt || 0) > 7 * 86400000;
+    }).length;
+    const status = invalid > 0 || stale > 0 ? 'degraded' : 'healthy';
+    const detail = pending > 0
+      ? `${snap.size} entries — ${invalid} invalid · ${pending} awaiting verification (₹${Math.round(pendingValue).toLocaleString('en-IN')})${stale > 0 ? ` · ${stale} older than 7 days` : ''}`
+      : `${snap.size} entries — ${invalid} with missing/invalid amount`;
     return {
       status,
       label: 'Deal Amounts',
-      detail: `${snap.size} deals — ${invalid} with missing/invalid amount`,
+      detail,
       timestamp: Date.now(),
     };
   } catch (e) {
     return { status: 'unhealthy', label: 'Deal Amounts', detail: `Check failed: ${e instanceof Error ? e.message : e}`, timestamp: Date.now() };
+  }
+}
+
+/**
+ * The dashboard derives every figure from the ledger, so `stats/*` drift no longer
+ * affects what members see. This reports the drift anyway so the cached snapshot
+ * can be rebuilt, rather than leaving a wrong number sitting in the database.
+ */
+async function checkRevenueCacheDrift(): Promise<HealthCheckResult> {
+  try {
+    const [summary, dealsCache, referralCache] = await Promise.all([
+      getRevenueSummary(),
+      getDoc(doc(db, 'stats', 'deals')),
+      getDoc(doc(db, 'stats', 'referralRevenue')),
+    ]);
+    const drift: string[] = [];
+    if (dealsCache.exists()) {
+      const cached = (dealsCache.data()?.totalValue as number) || 0;
+      if (cached !== summary.verifiedDeals) {
+        drift.push(`deals cached ₹${cached.toLocaleString('en-IN')} vs ledger ₹${summary.verifiedDeals.toLocaleString('en-IN')}`);
+      }
+    }
+    if (referralCache.exists()) {
+      const cached = (referralCache.data()?.totalValue as number) || 0;
+      if (cached !== summary.verifiedReferrals) {
+        drift.push(`referrals cached ₹${cached.toLocaleString('en-IN')} vs ledger ₹${summary.verifiedReferrals.toLocaleString('en-IN')}`);
+      }
+    }
+    if (drift.length === 0) {
+      return {
+        status: 'healthy',
+        label: 'Revenue Cache',
+        detail: `Cached totals match the ledger (₹${summary.verifiedDeals.toLocaleString('en-IN')} deals, ₹${summary.verifiedReferrals.toLocaleString('en-IN')} referrals).`,
+        timestamp: Date.now(),
+      };
+    }
+    return {
+      status: 'degraded',
+      label: 'Revenue Cache',
+      detail: `Cache drift (display unaffected — totals read from the ledger): ${drift.join('; ')}. Use "Rebuild Totals From Ledger" to resync.`,
+      timestamp: Date.now(),
+    };
+  } catch (e) {
+    return { status: 'unhealthy', label: 'Revenue Cache', detail: `Check failed: ${e instanceof Error ? e.message : e}`, timestamp: Date.now() };
   }
 }
 
@@ -191,6 +250,7 @@ export async function runHealthCheck(): Promise<HealthReport> {
     checkRSVPs(),
     checkAttendanceAgainstMeetings(),
     checkDealAmounts(),
+    checkRevenueCacheDrift(),
     checkRequestCompliance(),
   ]);
 

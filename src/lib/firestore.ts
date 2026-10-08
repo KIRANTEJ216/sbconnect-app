@@ -17,10 +17,56 @@ async function requireSuperAdmin(): Promise<string> {
   return user.uid;
 }
 import type {
-  BusinessProfile, Request, Conversation, Message,
+  BusinessProfile, Request,
   Interest, Deal, LeaderboardEntry, UserProfile,
   Meeting, Attendance, AppNotification, MeetingRSVP, IssueReport, IssueReply, UserNotification, RevenueConfig,
+  ReferralLeaderboardEntry, ReferralRevenueTotal, ReferralDealBreakdown, DealStatus,
 } from '../types';
+import { byCompanyName } from './format';
+
+/**
+ * Parses an amount a member actually types. Handles currency symbols, thousands
+ * separators and Indian shorthand (1.5L / 2cr / 50k) instead of the bare
+ * `replace(/[^0-9.]/g,'')` this codebase used, which turned "1.5L" into 1.5.
+ */
+export function parseAmount(input: string | number): number {
+  if (typeof input === 'number') return Number.isFinite(input) ? input : 0;
+  const cleaned = String(input).trim().replace(/,/g, '').replace(/[₹$€£\s]/g, '');
+  // Longest alternatives first, or "crore" would match "cr" and leave "ore" behind.
+  const match = cleaned.match(/^(-?\d*\.?\d+)\s*(lakh|lac|crore|l|cr|k)?/i);
+  if (!match) return 0;
+  const base = parseFloat(match[1]);
+  if (!Number.isFinite(base)) return 0;
+  const suffix = (match[2] || '').toLowerCase();
+  const multiplier = suffix === 'k' ? 1e3
+    : suffix === 'lakh' || suffix === 'lac' || suffix === 'l' ? 1e5
+      : suffix === 'cr' || suffix === 'crore' ? 1e7
+        : 1;
+  return Math.round(base * multiplier * 100) / 100;
+}
+
+/**
+ * Legacy-safe discriminators. Every deal document written before revenue approval
+ * existed has neither `source` nor `status`, so absence must read as
+ * 'deal' / 'approved' or every historical deal would drop out of every total.
+ */
+export const isReferralDeal = (d: Deal): boolean => d.source === 'referral';
+export const isApprovedDeal = (d: Deal): boolean => d.status === undefined || d.status === 'approved';
+export const isPendingDeal = (d: Deal): boolean => d.status === 'pending';
+
+/** Prefer the numeric amount; fall back to parsing the legacy display string. */
+export function dealAmountValue(d: Deal): number {
+  if (typeof d.amountValue === 'number' && Number.isFinite(d.amountValue)) return d.amountValue;
+  return parseFloat(String(d.amount || '0').replace(/[^0-9.]/g, '')) || 0;
+}
+
+/** A revenue row counts toward a total only once it is a plain deal that has been approved. */
+export function countsTowardDealsTotal(d: Deal): boolean {
+  return !isReferralDeal(d) && isApprovedDeal(d);
+}
+export function countsTowardReferralTotal(d: Deal): boolean {
+  return isReferralDeal(d) && isApprovedDeal(d);
+}
 
 export async function createBusinessProfile(
   uid: string,
@@ -99,6 +145,31 @@ export async function getBusinessProfile(uid: string): Promise<BusinessProfile |
   return fillDefaults(snap.data());
 }
 
+/**
+ * Fetch many profiles in ONE round trip.
+ *
+ * Callers previously did `Promise.all(uids.map(getBusinessProfile))`, which is
+ * N separate `getDoc` RPCs — 30 interests meant 30 reads, on a page every member
+ * can reach, and it ran twice per visit (on mount and after submitting). Firestore
+ * caps an `in` clause at 30 values, so this chunks and issues one query per chunk.
+ */
+export async function getBusinessProfiles(uids: string[]): Promise<Record<string, BusinessProfile>> {
+  const unique = Array.from(new Set(uids.filter(Boolean)));
+  const out: Record<string, BusinessProfile> = {};
+  if (unique.length === 0) return out;
+
+  // Firestore's `in` operator accepts at most 30 values per query.
+  const CHUNK = 30;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const snap = await getDocs(query(collection(db, 'profiles'), where('__name__', 'in', chunk)));
+    for (const d of snap.docs) {
+      out[d.id] = fillDefaults(d.data());
+    }
+  }
+  return out;
+}
+
 export async function updateBusinessProfile(uid: string, data: Partial<BusinessProfile>) {
   await updateDoc(doc(db, 'profiles', uid), { ...data, updatedAt: Date.now() });
 }
@@ -136,7 +207,9 @@ export async function getAllProfiles(max = 999, verifiedOnly = false): Promise<B
   if (verifiedOnly) constraints.push(where('verified', '==', true));
   const q = query(collection(db, 'profiles'), ...constraints);
   const snap = await getDocs(q);
-  return snap.docs.map((d) => fillDefaults(d.data()));
+  // Firestore returns documents in unspecified order (effectively id order), so
+  // every directory view sorts here once rather than in each screen.
+  return snap.docs.map((d) => fillDefaults(d.data())).sort(byCompanyName);
 }
 
 // ─── Requests ───
@@ -164,15 +237,6 @@ export async function createRequest(
     updatedAt: Date.now(),
   });
   return ref.id;
-}
-
-export async function getRequests(category?: string): Promise<Request[]> {
-  const constraints = [];
-  if (category) constraints.push(where('category', '==', category));
-  constraints.push(orderBy('createdAt', 'desc'));
-  const q = query(collection(db, 'requests'), ...constraints);
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Request));
 }
 
 export async function getRequest(id: string): Promise<Request | null> {
@@ -215,9 +279,18 @@ export async function expressInterest(requestId: string, uid: string, companyNam
   const snap = await getDoc(reqRef);
   if (!snap.exists()) throw new Error('Request not found');
   const data = snap.data();
-  if ((data.interestedUids ?? []).includes(uid)) {
+
+  // Check the subcollection, not `interestedUids` on the parent. That array was
+  // never persisted — `expressInterest` only ever wrote the subcollection — so it
+  // stayed `[]` forever and this guard never fired, letting a member pitch the
+  // same request repeatedly. The parent array is now maintained server-side by
+  // the `onInterestCreated` trigger, but the subcollection is the source of
+  // truth, so that is what a correctness check must consult.
+  const existingInterests = await getDocs(collection(db, 'requests', requestId, 'interests'));
+  if (existingInterests.docs.some((d) => d.data().uid === uid)) {
     throw new Error('You have already pitched for this request');
   }
+
   const requestOwnerUid = data.uid;
   const requestTitle = data.title || '';
   const ref = doc(collection(db, 'requests', requestId, 'interests'));
@@ -254,6 +327,8 @@ export async function awardDeal(
   if (user.uid !== giverUid) {
     await requireSuperAdmin();
   }
+  const parsed = parseAmount(amount);
+  // Admin-initiated: recorded by the chapter, so it is approved on entry.
   const dealRef = await addDoc(collection(db, 'deals'), {
     requestId,
     requestTitle,
@@ -262,10 +337,15 @@ export async function awardDeal(
     receiverUid,
     receiverCompanyName,
     amount,
+    amountValue: parsed,
+    source: 'deal',
+    status: 'approved',
+    submittedByRole: 'admin',
+    reviewedBy: user.uid,
+    reviewedAt: Date.now(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
-  const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
   if (parsed > 0) {
     await runTransaction(db, async (tx) => {
       const statsRef = doc(db, 'stats', 'deals');
@@ -291,6 +371,14 @@ export async function recordDeal(
   amount: string,
   description?: string,
 ) {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const parsed = parseAmount(amount);
+  if (parsed <= 0) throw new Error('Enter a valid amount greater than zero.');
+
+  // Member-submitted: held as pending until an admin verifies it. Nothing touches
+  // the public total or the leaderboard until then.
   const ref = await addDoc(collection(db, 'deals'), {
     requestId: '',
     requestTitle: description || 'Direct Deal',
@@ -299,37 +387,27 @@ export async function recordDeal(
     receiverUid,
     receiverCompanyName,
     amount,
+    amountValue: parsed,
+    source: 'deal',
+    status: 'pending',
+    submittedBy: user.uid,
+    submittedByRole: 'member',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
-  console.log('[recordDeal] Deal created:', ref.id, { giverUid, giverCompanyName, receiverUid, receiverCompanyName, amount });
-  const parsed = parseFloat(String(amount).replace(/[^0-9.]/g, '')) || 0;
-  console.log('[recordDeal] Parsed amount:', parsed);
-  if (parsed > 0) {
-    try {
-      await runTransaction(db, async (tx) => {
-        const statsRef = doc(db, 'stats', 'deals');
-        const snap = await tx.get(statsRef);
-        console.log('[recordDeal] Stats snapshot exists:', snap.exists(), 'current value:', snap.data()?.totalValue);
-        if (snap.exists()) {
-          tx.update(statsRef, { totalValue: increment(parsed), updatedAt: Date.now() });
-        } else {
-          tx.set(statsRef, { totalValue: parsed, updatedAt: Date.now() });
-        }
-      });
-      console.log('[recordDeal] Transaction committed successfully');
-    } catch (error) {
-      console.error('[recordDeal] Failed to update total business value:', error);
-      throw error;
-    }
-  }
-  // Notify the giver that business was given to receiver
+  sendUserNotification(
+    receiverUid,
+    'revenue_submitted',
+    'Submitted for verification',
+    `Your submission of ${amount} from ${giverCompanyName} is awaiting admin verification.`,
+    ref.id,
+  ).catch(() => {});
   sendUserNotification(
     giverUid,
-    'business_given',
-    'Business Given',
-    `${receiverCompanyName} recorded a deal of ${amount} from you`,
-    ref.id
+    'revenue_submitted',
+    'Revenue submitted in your name',
+    `${receiverCompanyName} submitted a revenue entry of ${amount}. An admin will verify it.`,
+    ref.id,
   ).catch(() => {});
   return ref.id;
 }
@@ -339,41 +417,714 @@ export async function recalculateTotalBusinessValue(): Promise<void> {
   const dealsSnap = await getDocs(collection(db, 'deals'));
   let total = 0;
   for (const d of dealsSnap.docs) {
-    total += parseFloat(String(d.data().amount || '0').replace(/[^0-9.]/g, '')) || 0;
+    const deal = d.data() as Deal;
+    if (countsTowardDealsTotal(deal)) total += dealAmountValue(deal);
   }
   await setDoc(ref, { totalValue: total, updatedAt: Date.now() });
 }
 
-export async function getTotalBusinessValue(): Promise<number> {
-  const snap = await getDoc(doc(db, 'stats', 'deals'));
-  if (snap.exists()) return (snap.data()?.totalValue as number) || 0;
-  const dealsSnap = await getDocs(collection(db, 'deals'));
-  let total = 0;
-  for (const d of dealsSnap.docs) {
-    total += parseFloat(String(d.data().amount || '0').replace(/[^0-9.]/g, '')) || 0;
-  }
-  try { await setDoc(doc(db, 'stats', 'deals'), { totalValue: total, updatedAt: Date.now() }); } catch {}
-  return total;
+export interface RevenueSummary {
+  verifiedDeals: number;
+  verifiedDealsCount: number;
+  verifiedReferrals: number;
+  verifiedReferralsCount: number;
+  pendingDeals: number;
+  pendingDealsCount: number;
+  pendingReferrals: number;
+  pendingReferralsCount: number;
+  rejectedTotal: number;
+  rejectedCount: number;
+  entryCount: number;
+  /** verified + pending, i.e. the figure shown as "raised" on the dashboard. */
+  headline: number;
 }
 
-export async function getUserDealStats(uid: string): Promise<{ given: number; got: number; givenCount: number; gotCount: number }> {
-  const snap = await getDocs(collection(db, 'deals'));
-  let given = 0, got = 0, givenCount = 0, gotCount = 0;
-  for (const d of snap.docs) {
-    const data = d.data();
-    const amount = parseFloat(String(data.amount || '0').replace(/[^0-9.]/g, '')) || 0;
-    if (data.giverUid === uid) { given += amount; givenCount++; }
-    if (data.receiverUid === uid) { got += amount; gotCount++; }
+/**
+ * Materialized aggregate maintained by the `onDealWritten` Cloud Function in
+ * functions/src/revenueStats.ts. One document per financial year; reading it
+ * costs a single fixed-size document instead of scanning the whole ledger.
+ */
+interface RevenueStatsAggregate {
+  verifiedDeals: { value: number; count: number };
+  verifiedReferrals: { value: number; count: number };
+  pendingDeals: { value: number; count: number };
+  pendingReferrals: { value: number; count: number };
+  rejected: { value: number; count: number };
+  totalRaised: number;
+  dealCount: number;
+}
+
+/** "FY 26-27" -> "FY2627", matching the Cloud Function's key format. */
+function currentFYKey(): string {
+  const now = new Date();
+  const fyStartYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  return `FY${String(fyStartYear).slice(-2)}${String(fyStartYear + 1).slice(-2)}`;
+}
+
+/**
+ * Every revenue aggregate, derived from the deal ledger in one read.
+ *
+ * `stats/deals.totalValue` is a denormalised cache and it drifts: the previous
+ * implementation both incremented it on insert and overwrote it from a fresh sum,
+ * so a race could silently drop an entry. A ₹240,000 deal went missing from the
+ * headline for exactly that reason. The ledger is the only source of truth, so
+ * every displayed figure derives from here and the cache is never trusted.
+ */
+export async function getRevenueSummary(): Promise<RevenueSummary> {
+  // Fast path: one fixed-size document read maintained by a Cloud Function.
+  // Before the function is deployed (or for an FY with no writes yet) this
+  // misses and we fall through to the authoritative ledger scan below, so the
+  // headline is never wrong — only slower until the function is live.
+  try {
+    const statsSnap = await getDoc(doc(db, 'revenueStats', currentFYKey()));
+    if (statsSnap.exists()) {
+      const agg = statsSnap.data() as RevenueStatsAggregate;
+      if (typeof agg?.totalRaised === 'number' && typeof agg?.dealCount === 'number') {
+        const verifiedDeals = agg.verifiedDeals?.value ?? 0;
+        const verifiedReferrals = agg.verifiedReferrals?.value ?? 0;
+        const pendingDeals = agg.pendingDeals?.value ?? 0;
+        const pendingReferrals = agg.pendingReferrals?.value ?? 0;
+        return {
+          verifiedDeals,
+          verifiedDealsCount: agg.verifiedDeals?.count ?? 0,
+          verifiedReferrals,
+          verifiedReferralsCount: agg.verifiedReferrals?.count ?? 0,
+          pendingDeals,
+          pendingDealsCount: agg.pendingDeals?.count ?? 0,
+          pendingReferrals,
+          pendingReferralsCount: agg.pendingReferrals?.count ?? 0,
+          rejectedTotal: agg.rejected?.value ?? 0,
+          rejectedCount: agg.rejected?.count ?? 0,
+          entryCount:
+            (agg.verifiedDeals?.count ?? 0) +
+            (agg.verifiedReferrals?.count ?? 0) +
+            (agg.pendingDeals?.count ?? 0) +
+            (agg.pendingReferrals?.count ?? 0) +
+            (agg.rejected?.count ?? 0),
+          headline: verifiedDeals + verifiedReferrals + pendingDeals + pendingReferrals,
+        };
+      }
+    }
+  } catch {
+    // Missing permission or offline — fall back to the ledger scan.
   }
-  return { given, got, givenCount, gotCount };
+
+  return getRevenueSummaryFromLedger();
+}
+
+/**
+ * Authoritative fallback: derive every figure by scanning the ledger. Kept as a
+ * separate function so the correctness path stays available even if the
+ * aggregate is unavailable, and so tests can exercise it directly.
+ */
+export async function getRevenueSummaryFromLedger(): Promise<RevenueSummary> {
+  const snap = await getDocs(collection(db, 'deals'));
+  let verifiedDeals = 0, verifiedDealsCount = 0;
+  let verifiedReferrals = 0, verifiedReferralsCount = 0;
+  let pendingDeals = 0, pendingDealsCount = 0;
+  let pendingReferrals = 0, pendingReferralsCount = 0;
+  let rejectedTotal = 0, rejectedCount = 0;
+
+  for (const d of snap.docs) {
+    const deal = d.data() as Deal;
+    const value = dealAmountValue(deal);
+    const referral = isReferralDeal(deal);
+    if (isPendingDeal(deal)) {
+      if (referral) { pendingReferrals += value; pendingReferralsCount++; }
+      else { pendingDeals += value; pendingDealsCount++; }
+    } else if (!isApprovedDeal(deal)) {
+      rejectedTotal += value; rejectedCount++;
+    } else if (referral) {
+      verifiedReferrals += value; verifiedReferralsCount++;
+    } else {
+      verifiedDeals += value; verifiedDealsCount++;
+    }
+  }
+
+  return {
+    verifiedDeals,
+    verifiedDealsCount,
+    verifiedReferrals,
+    verifiedReferralsCount,
+    pendingDeals,
+    pendingDealsCount,
+    pendingReferrals,
+    pendingReferralsCount,
+    rejectedTotal,
+    rejectedCount,
+    entryCount: snap.size,
+    headline:
+      verifiedDeals + verifiedReferrals + pendingDeals + pendingReferrals,
+  };
+}
+
+/**
+ * Verifies (or rejects) a member-submitted revenue entry and moves it into the
+ * matching public total. This is the single place member-entered money becomes
+ * visible, so it is the single place that fans notifications out.
+ */
+export async function reviewRevenueEntry(
+  dealId: string,
+  approve: boolean,
+  note?: string,
+): Promise<void> {
+  const adminUid = await requireSuperAdmin();
+  const ref = doc(db, 'deals', dealId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Entry not found');
+  const deal = snap.data() as Deal;
+  if (isApprovedDeal(deal) || deal.status === 'rejected') {
+    throw new Error('This entry has already been reviewed.');
+  }
+
+  const value = dealAmountValue(deal);
+  await updateDoc(ref, {
+    status: approve ? 'approved' : 'rejected',
+    reviewedBy: adminUid,
+    reviewedAt: Date.now(),
+    reviewNote: note?.trim() || '',
+    updatedAt: Date.now(),
+  });
+
+  if (deal.source === 'referral') {
+    await runTransaction(db, async (tx) => {
+      const statsRef = doc(db, 'stats', 'referralRevenue');
+      const s = await tx.get(statsRef);
+      if (!s.exists()) {
+        tx.set(statsRef, { totalValue: approve ? value : 0, updatedAt: Date.now() });
+        return;
+      }
+      const totalValue = approve
+        ? ((s.data()?.totalValue as number) || 0) + value
+        : ((s.data()?.totalValue as number) || 0);
+      tx.update(statsRef, { totalValue, updatedAt: Date.now() });
+    });
+  } else {
+    // Pending deals were never added, so approving is a straight increment.
+    if (approve && value > 0) {
+      await runTransaction(db, async (tx) => {
+        const statsRef = doc(db, 'stats', 'deals');
+        const s = await tx.get(statsRef);
+        if (s.exists()) {
+          tx.update(statsRef, { totalValue: increment(value), updatedAt: Date.now() });
+        } else {
+          tx.set(statsRef, { totalValue: value, updatedAt: Date.now() });
+        }
+      });
+    }
+  }
+
+  const who = deal.receiverCompanyName || 'A member';
+  if (deal.source === 'referral') {
+    const referrer = deal.referrerName || 'your referrer';
+    if (approve) {
+      sendUserNotification(deal.referredMemberUid || deal.receiverUid, 'revenue_approved', '✅ Referral revenue verified', `${value} in referral revenue attributed to ${referrer} was verified.`, dealId).catch(() => {});
+      if (deal.referrerUid) {
+        sendUserNotification(deal.referrerUid, 'referral_credited', '🎉 Referral revenue credited', `Your referral ${who} generated ${value}, now credited to you on the referral leaderboard.`, dealId).catch(() => {});
+      }
+    } else {
+      sendUserNotification(deal.referredMemberUid || deal.receiverUid, 'revenue_rejected', 'Referral revenue not verified', `Your submission of ${value} was not verified.${note?.trim() ? ` Note: ${note.trim()}` : ''}`, dealId).catch(() => {});
+    }
+    return;
+  }
+
+  sendUserNotification(
+    deal.receiverUid,
+    approve ? 'revenue_approved' : 'revenue_rejected',
+    approve ? '✅ Revenue verified' : 'Revenue not verified',
+    approve
+      ? `Your revenue entry of ${value} from ${deal.giverCompanyName} was verified and added to the total.`
+      : `Your revenue entry of ${value} was not verified.${note?.trim() ? ` Note: ${note.trim()}` : ''}`,
+    dealId,
+  ).catch(() => {});
+}
+
+/**
+ * Member-submitted revenue that has not been verified yet. Derived from the deal
+ * collection rather than stored, because members cannot write `stats/*` under the
+ * Firestore rules — and a member's submission must never be able to inflate the
+ * headline total by itself.
+ */
+  /**
+ * Pending-only read. Previously this downloaded the entire ledger and filtered
+ * in JS; the server can filter `status == 'pending'` directly, so the payload is
+ * proportional to the review queue rather than to lifetime revenue.
+ */
+export async function getPendingRevenueEntries(): Promise<Deal[]> {
+  const snap = await getDocs(
+    query(collection(db, 'deals'), where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal)).filter(isPendingDeal);
+}
+
+export async function recalculateReferralRevenueTotals(): Promise<ReferralRevenueTotal> {
+  const snap = await getDocs(collection(db, 'deals'));
+  let totalValue = 0;
+  let pendingValue = 0;
+  for (const d of snap.docs) {
+    const deal = d.data() as Deal;
+    if (!isReferralDeal(deal)) continue;
+    const value = dealAmountValue(deal);
+    if (isApprovedDeal(deal)) totalValue += value;
+    else if (isPendingDeal(deal)) pendingValue += value;
+  }
+  await setDoc(doc(db, 'stats', 'referralRevenue'), { totalValue, updatedAt: Date.now() });
+  return { totalValue, pendingValue };
+}
+
+/**
+ * `totalValue` is the cached, admin-written aggregate. `pendingValue` is always
+ * derived from the deal collection rather than stored, so a member can never
+ * write a number into it — Firestore rules reserve `stats/*` for admins.
+ */
+/** Referral-only read — filtered server-side rather than by a full ledger scan. */
+export async function getReferralRevenueEntries(): Promise<Deal[]> {
+  const snap = await getDocs(
+    query(collection(db, 'deals'), where('source', '==', 'referral'), orderBy('createdAt', 'desc')),
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal)).filter(isReferralDeal);
+}
+
+/**
+ * One member's referral revenue. Sourced from `revenueEntries/{uid}` — a
+ * per-user subcollection the writer maintains — instead of reading every referral
+ * deal ever recorded and filtering in JS. Falls back to the old scan if the
+ * subcollection is empty for a member with referral history.
+ */
+export async function getUserRevenueEntries(uid: string): Promise<Deal[]> {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'users', uid, 'revenueEntries'), orderBy('createdAt', 'desc')),
+    );
+    if (!snap.empty) {
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal));
+    }
+  } catch {
+    // Rules or offline — fall through.
+  }
+
+  const entries = await getReferralRevenueEntries();
+  return entries.filter((d) => d.referredMemberUid === uid || d.referrerUid === uid);
+}
+
+/**
+ * Revenue-ranked referral board. Approved revenue is what ranks; referral count is
+ * carried alongside because it is the funnel, not the score.
+ */
+export async function getReferralLeaderboard(): Promise<ReferralLeaderboardEntry[]> {
+  const [entriesSnap, profilesSnap] = await Promise.all([
+    getDocs(collection(db, 'deals')),
+    getDocs(query(collection(db, 'profiles'), where('verified', '==', true))),
+  ]);
+
+  const byPhone = new Map<string, BusinessProfile>();
+  const byUid = new Map<string, BusinessProfile>();
+  for (const p of profilesSnap.docs) {
+    const profile = fillDefaults(p.data());
+    byUid.set(profile.uid, profile);
+    if (profile.phone) byPhone.set(profile.phone, profile);
+    const digits = profile.phone.replace(/\D/g, '');
+    if (digits && !byPhone.has(digits)) byPhone.set(digits, profile);
+  }
+
+  const accrual = new Map<string, {
+    approvedRevenue: number; approvedCount: number; pendingRevenue: number; pendingCount: number;
+    referralCount: number; profile?: BusinessProfile;
+    displayName: string; displayCompany: string; isExternal: boolean;
+    deals: ReferralDealBreakdown[];
+  }>();
+
+  // Referrers are bucketed by uid when they are a member, and by lowercased
+  // company name when the admin entered them as "Others". Without the second
+  // path, off-platform referrers were silently dropped from the board.
+  const ensureBucket = (key: string) => {
+    if (!accrual.has(key)) {
+      accrual.set(key, {
+        approvedRevenue: 0, approvedCount: 0, pendingRevenue: 0, pendingCount: 0,
+        referralCount: 0, displayName: '', displayCompany: '', isExternal: false, deals: [],
+      });
+    }
+    return accrual.get(key)!;
+  };
+
+  const bucketFor = (profile?: BusinessProfile | null) => {
+    const key = profile?.uid;
+    if (!key) return null;
+    const b = ensureBucket(`uid:${key}`);
+    if (!b.profile && profile) b.profile = profile;
+    if (!b.displayName) {
+      b.displayName = `${profile.ownerName} ${profile.ownerSurname || ''}`.trim();
+      b.displayCompany = profile.companyName || '';
+    }
+    return b;
+  };
+
+  // Every verified profile contributes a row so referrers with no revenue still appear.
+  for (const p of profilesSnap.docs) {
+    bucketFor(fillDefaults(p.data()));
+  }
+
+  for (const p of profilesSnap.docs) {
+    const profile = fillDefaults(p.data());
+    if (!profile.referredByPhone) continue;
+    const referrer = byPhone.get(profile.referredByPhone)
+      || byPhone.get(profile.referredByPhone.replace(/\D/g, ''));
+    const b = bucketFor(referrer);
+    if (b) b.referralCount += 1;
+  }
+
+  for (const d of entriesSnap.docs) {
+    const deal = d.data() as Deal;
+    if (!isReferralDeal(deal)) continue;
+
+    const memberBucket = deal.referrerUid ? bucketFor(byUid.get(deal.referrerUid)) : null;
+    const referrerName = (deal.referrerName || deal.referrerCompanyName || '').trim();
+    const referrerCompany = (deal.referrerCompanyName || referrerName).trim();
+
+    const b = memberBucket
+      || (referrerName
+        ? (() => {
+          const k = `name:${referrerCompany.toLowerCase() || referrerName.toLowerCase()}`;
+          const bucket = ensureBucket(k);
+          bucket.isExternal = true;
+          if (!bucket.displayName) bucket.displayName = referrerName;
+          if (!bucket.displayCompany) bucket.displayCompany = referrerCompany;
+          return bucket;
+        })()
+        : null);
+    if (!b) continue;
+
+    const value = dealAmountValue(deal);
+    const status: DealStatus = deal.status || 'approved';
+    if (status === 'approved') { b.approvedRevenue += value; b.approvedCount += 1; }
+    else if (status === 'pending') { b.pendingRevenue += value; b.pendingCount += 1; }
+
+    b.deals.push({
+      id: d.id,
+      receivedBy: deal.referredMemberName
+        ? `${deal.receiverCompanyName || ''}`.trim() || deal.referredMemberName
+        : (deal.receiverCompanyName || deal.referredMemberName || '—'),
+      givenBy: deal.clientCompanyName || deal.giverCompanyName || '—',
+      value,
+      status,
+      createdAt: deal.createdAt,
+    });
+  }
+
+  return Array.from(accrual.entries())
+    .filter(([, b]) => b.referralCount > 0 || b.approvedRevenue > 0 || b.pendingRevenue > 0)
+    .map(([key, b]) => ({
+      uid: b.profile?.uid || key,
+      name: b.displayName,
+      companyName: b.displayCompany,
+      phone: b.profile?.phone || '',
+      isExternal: b.isExternal,
+      referralCount: b.referralCount,
+      approvedRevenue: b.approvedRevenue,
+      approvedCount: b.approvedCount,
+      pendingRevenue: b.pendingRevenue,
+      pendingCount: b.pendingCount,
+      deals: b.deals.sort((x, y) => y.createdAt - x.createdAt),
+    }))
+    .sort((a, b) => b.approvedRevenue - a.approvedRevenue || b.referralCount - a.referralCount);
+}
+
+/**
+ * Records a deal on a member's behalf — a member received business from a client,
+ * but nobody entered it. Without this, the only admin-side entry point was the
+ * referral form, which forces a referrer and files the row as `source: 'referral'`;
+ * that hides a genuine deal from the Business Leaderboard and puts it in the wrong
+ * total bucket.
+ *
+ * Admin-entered revenue is approved on entry, consistent with
+ * `submitReferralRevenueAsAdmin`. Totals derive from the ledger, so there is no
+ * cache write here.
+ */
+export async function submitDealAsAdmin(input: {
+  memberUid: string;
+  giverUid?: string;
+  giverName: string;
+  clientName: string;
+  amount: string;
+  note?: string;
+}): Promise<string> {
+  const adminUid = await requireSuperAdmin();
+  if (!input.memberUid) throw new Error('Select the member who received the business.');
+  const giverName = input.giverName.trim();
+  if (!giverName) throw new Error('Select or enter the client / business that gave the work.');
+  const clientName = input.clientName.trim() || giverName;
+
+  const memberSnap = await getDoc(doc(db, 'profiles', input.memberUid));
+  if (!memberSnap.exists()) throw new Error('Member not found');
+  const member = fillDefaults(memberSnap.data());
+
+  const parsed = parseAmount(input.amount);
+  if (parsed <= 0) throw new Error('Enter a valid amount greater than zero.');
+
+  const value = parsed;
+  const isExternal = !input.giverUid;
+
+  return (await addDoc(collection(db, 'deals'), {
+    requestId: '',
+    requestTitle: clientName,
+    clientUid: isExternal ? '' : input.giverUid,
+    clientCompanyName: clientName,
+    clientIsExternal: isExternal,
+    giverUid: input.giverUid || `external_${value}`,
+    giverCompanyName: giverName,
+    receiverUid: member.uid,
+    receiverCompanyName: member.companyName,
+    amount: formatCurrencyValue(value),
+    amountValue: value,
+    source: 'deal',
+    status: 'approved',
+    reviewNote: input.note?.trim() || '',
+    submittedBy: adminUid,
+    submittedByRole: 'admin',
+    reviewedBy: adminUid,
+    reviewedAt: Date.now(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  })).id;
+}
+
+/**
+ * Records referral revenue on a member's behalf — business that arrived *because
+ * of* a referral, so the referrer takes the credit.
+ *
+ * Admin-entered revenue is approved on entry: an admin approving their own entry
+ * adds no control, and the submittedByRole/reviewedBy trail keeps it visible.
+ *
+ * The referrer is supplied explicitly rather than read off the member's profile,
+ * because members referred verbally often have nothing on file. Set
+ * `alsoSaveReferrerToProfile` to backfill the profile at the same time.
+ *
+ * For a plain deal where someone just did business with a client, use
+ * `submitDealAsAdmin` instead — filing those here is what previously hid them
+ * from the Business Leaderboard.
+ */
+export async function submitReferralRevenueAsAdmin(input: {
+  memberUid?: string;
+  /** Company name typed in when the member is not a registered profile ("Others"). */
+  memberCompanyName?: string;
+  referrerUid?: string;
+  /** Referrer name typed in for an external/off-platform referrer. */
+  referrerCompanyName?: string;
+  amount: string;
+  clientUid?: string;
+  clientName: string;
+  clientIsExternal: boolean;
+  note?: string;
+  alsoSaveReferrerToProfile?: boolean;
+}): Promise<string> {
+  const adminUid = await requireSuperAdmin();
+
+  // Either a registered profile or a typed company name is acceptable for both
+  // ends, because referrals frequently come from people outside the network.
+  const memberUid = input.memberUid || '';
+  const memberTyped = (input.memberCompanyName || '').trim();
+  const referrerUid = input.referrerUid || '';
+  const referrerTyped = (input.referrerCompanyName || '').trim();
+
+  if (!memberUid && !memberTyped) {
+    throw new Error('Select the member who received the business, or choose Others and enter the company name.');
+  }
+  if (!referrerUid && !referrerTyped) {
+    throw new Error('Select the referrer to credit, or choose Others and enter the name.');
+  }
+  if (memberUid && referrerUid && memberUid === referrerUid) {
+    throw new Error('A member cannot be their own referrer.');
+  }
+  if (!referrerUid && memberTyped && referrerTyped.toLowerCase() === memberTyped.toLowerCase()) {
+    throw new Error('A company cannot be its own referrer.');
+  }
+
+  let memberCompanyName = memberTyped;
+  let memberOwnerName = memberTyped;
+  let memberPhone = '';
+
+  if (memberUid) {
+    const memberSnap = await getDoc(doc(db, 'profiles', memberUid));
+    if (!memberSnap.exists()) throw new Error('Member not found');
+    const member = fillDefaults(memberSnap.data());
+    memberCompanyName = member.companyName || memberTyped;
+    memberOwnerName = `${member.ownerName} ${member.ownerSurname || ''}`.trim();
+    memberPhone = member.phone || '';
+  }
+
+  let referrerCompany = referrerTyped;
+  let referrerName = referrerTyped;
+  let referrerPhone = '';
+
+  if (referrerUid) {
+    const referrerSnap = await getDoc(doc(db, 'profiles', referrerUid));
+    if (!referrerSnap.exists()) throw new Error('Referrer profile not found');
+    const referrer = fillDefaults(referrerSnap.data());
+    referrerCompany = referrer.companyName || referrerTyped;
+    referrerName = `${referrer.ownerName} ${referrer.ownerSurname || ''}`.trim();
+    referrerPhone = referrer.phone || '';
+  }
+
+  const clientName = input.clientName.trim();
+  if (!clientName) throw new Error('Select or enter the client / business.');
+
+  const parsed = parseAmount(input.amount);
+  if (parsed <= 0) throw new Error('Enter a valid amount greater than zero.');
+
+  const value = parsed;
+
+  // Optional: make the attribution permanent so referralCount and future
+  // self-reporting both work. Only possible when both ends are real profiles.
+  if (input.alsoSaveReferrerToProfile && memberUid && referrerUid && memberPhone !== referrerPhone) {
+    await updateDoc(doc(db, 'profiles', memberUid), {
+      referredByPhone: referrerPhone,
+      referredByName: referrerName,
+      updatedAt: Date.now(),
+    });
+  }
+
+  const ref = await addDoc(collection(db, 'deals'), {
+    requestId: '',
+    requestTitle: clientName,
+    clientUid: input.clientIsExternal ? '' : (input.clientUid || ''),
+    clientCompanyName: clientName,
+    clientIsExternal: input.clientIsExternal,
+    // "Given By" on the referral ledger is the client; "Received By" is the
+    // member. When either side is typed in rather than picked, the uid is blank
+    // and the name is the only identity we have.
+    giverUid: referrerUid,
+    giverCompanyName: referrerCompany,
+    receiverUid: memberUid,
+    receiverCompanyName: memberCompanyName,
+    amount: formatCurrencyValue(value),
+    amountValue: value,
+    source: 'referral',
+    status: 'approved',
+    referrerUid,
+    referrerName,
+    referrerCompanyName: referrerCompany,
+    referredMemberUid: memberUid,
+    referredMemberName: memberOwnerName,
+    reviewNote: input.note?.trim() || '',
+    submittedBy: adminUid,
+    submittedByRole: 'admin',
+    reviewedBy: adminUid,
+    reviewedAt: Date.now(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+
+  if (value > 0) {
+    await runTransaction(db, async (tx) => {
+      const statsRef = doc(db, 'stats', 'referralRevenue');
+      const s = await tx.get(statsRef);
+      if (s.exists()) {
+        tx.update(statsRef, { totalValue: increment(value), updatedAt: Date.now() });
+      } else {
+        tx.set(statsRef, { totalValue: value, updatedAt: Date.now() });
+      }
+    });
+  }
+
+  // Notifications only make sense for members with a real account.
+  if (referrerUid) {
+    sendUserNotification(referrerUid, 'referral_credited', '🎉 Referral revenue credited', `${memberCompanyName} generated ${formatCurrencyValue(value)} from ${clientName} through your referral. Credited to you.`, ref.id).catch(() => {});
+  }
+  if (memberUid) {
+    sendUserNotification(memberUid, 'revenue_approved', '✅ Referral revenue recorded', `Revenue of ${formatCurrencyValue(value)} from ${clientName} was recorded on your behalf and credited to ${referrerName}.`, ref.id).catch(() => {});
+  }
+  return ref.id;
+}
+
+function formatCurrencyValue(value: number): string {
+  return `₹${value.toLocaleString('en-IN')}`;
+}
+
+  /**
+ * Member-reported referral revenue. Always lands pending — a member must not be
+ * able to approve revenue that pays a referrer, and must not be able to name
+ * their own referrer (the profile's referrer is used as-is).
+ */
+export async function submitReferralRevenue(input: {
+  amount: string;
+  clientUid?: string;
+  clientName: string;
+  clientIsExternal: boolean;
+  note?: string;
+}): Promise<string> {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const selfSnap = await getDoc(doc(db, 'profiles', user.uid));
+  if (!selfSnap.exists()) throw new Error('Complete your business profile first.');
+  const self = fillDefaults(selfSnap.data());
+  if (!self.referredByPhone) {
+    throw new Error('You do not have a referrer on your profile, so referral revenue cannot be attributed. Ask an admin to add it.');
+  }
+
+  const clientName = input.clientName.trim();
+  if (!clientName) throw new Error('Select or enter the client / business.');
+
+  const parsed = parseAmount(input.amount);
+  if (parsed <= 0) throw new Error('Enter a valid amount greater than zero.');
+
+  let referrerName = self.referredByName;
+  let referrerCompanyName = '';
+  let referrerUid = '';
+  const referrerSnap = await getDoc(doc(db, 'profiles', self.referredByPhone));
+  if (referrerSnap.exists()) {
+    const referrer = fillDefaults(referrerSnap.data());
+    referrerUid = referrer.uid;
+    referrerName = `${referrer.ownerName} ${referrer.ownerSurname || ''}`.trim();
+    referrerCompanyName = referrer.companyName;
+  }
+
+  const value = parsed;
+  const referredName = `${self.ownerName} ${self.ownerSurname || ''}`.trim();
+  const ref = await addDoc(collection(db, 'deals'), {
+    requestId: '',
+    requestTitle: clientName,
+    clientUid: input.clientIsExternal ? '' : (input.clientUid || ''),
+    clientCompanyName: clientName,
+    clientIsExternal: input.clientIsExternal,
+    giverUid: referrerUid || self.referredByPhone,
+    giverCompanyName: referrerCompanyName,
+    receiverUid: self.uid,
+    receiverCompanyName: self.companyName,
+    amount: formatCurrencyValue(value),
+    amountValue: value,
+    source: 'referral',
+    status: 'pending',
+    referrerUid,
+    referrerName,
+    referrerCompanyName,
+    referredMemberUid: self.uid,
+    referredMemberName: referredName,
+    reviewNote: input.note?.trim() || '',
+    submittedBy: user.uid,
+    submittedByRole: 'member',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+
+  // No stats write here on purpose: a member cannot touch stats/* under the
+  // Firestore rules, and pending totals are derived rather than stored.
+  sendUserNotification(
+    self.uid,
+    'revenue_submitted',
+    'Submitted for verification',
+    `Your referral revenue of ${formatCurrencyValue(value)} from ${clientName} is awaiting admin verification.`,
+    ref.id,
+  ).catch(() => {});
+  return ref.id;
 }
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
   const snap = await getDocs(collection(db, 'deals'));
-  const deals = snap.docs.map((d) => d.data() as Deal);
+  const deals = snap.docs.map((d) => d.data() as Deal).filter(countsTowardDealsTotal);
   const map = new Map<string, { companyName: string; totalRevenue: number; dealCount: number }>();
   for (const d of deals) {
-    const amount = parseFloat(d.amount.replace(/[^0-9.]/g, '')) || 0;
+    const amount = dealAmountValue(d);
     const entry = map.get(d.giverUid) || { companyName: d.giverCompanyName, totalRevenue: 0, dealCount: 0 };
     entry.totalRevenue += amount;
     entry.dealCount += 1;
@@ -395,16 +1146,6 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
 export async function getDeals(): Promise<Deal[]> {
   const snap = await getDocs(collection(db, 'deals'));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal));
-}
-
-export async function getUserDeals(uid: string): Promise<Deal[]> {
-  const giverQ = query(collection(db, 'deals'), where('giverUid', '==', uid));
-  const receiverQ = query(collection(db, 'deals'), where('receiverUid', '==', uid));
-  const [giverSnap, receiverSnap] = await Promise.all([getDocs(giverQ), getDocs(receiverQ)]);
-  return [
-    ...giverSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal)),
-    ...receiverSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Deal)),
-  ];
 }
 
 export async function getRevenueConfig(): Promise<RevenueConfig | null> {
@@ -440,117 +1181,8 @@ export async function resetProductionData(adminUid: string): Promise<void> {
   await deleteCollection('profiles');
   const fy = new Date().getFullYear() + (new Date().getMonth() >= 3 ? 0 : -1);
   await setDoc(doc(db, 'stats', 'deals'), { totalValue: 0, updatedAt: Date.now() });
+  await setDoc(doc(db, 'stats', 'referralRevenue'), { totalValue: 0, updatedAt: Date.now() });
   await setDoc(doc(db, 'settings', 'revenue'), { target: 0, financialYear: `FY ${String(fy).slice(-2)}-${String(fy + 1).slice(-2)}`, updatedBy: adminUid, updatedAt: Date.now(), createdAt: Date.now() });
-}
-
-// ─── Chat ───
-
-export async function getOrCreateConversation(uid1: string, uid2: string): Promise<string> {
-  const q = query(
-    collection(db, 'conversations'),
-    where('participants', 'array-contains', uid1),
-  );
-  const snap = await getDocs(q);
-  const existing = snap.docs.find((d) => {
-    const p = d.data().participants as string[];
-    return p.includes(uid1) && p.includes(uid2);
-  });
-  if (existing) return existing.id;
-
-  const ref = await addDoc(collection(db, 'conversations'), {
-    participants: [uid1, uid2],
-    participantNames: {},
-    participantPhotos: {},
-    lastMessage: '',
-    lastMessageAt: Date.now(),
-    lastSenderId: '',
-    unreadCount: { [uid1]: 0, [uid2]: 0 },
-    createdAt: Date.now(),
-  });
-  return ref.id;
-}
-
-export async function sendMessage(conversationId: string, senderId: string, text: string) {
-  const convRef = doc(db, 'conversations', conversationId);
-  const msgRef = doc(collection(db, 'conversations', conversationId, 'messages'));
-  await runTransaction(db, async (transaction) => {
-    const convSnap = await transaction.get(convRef);
-    if (!convSnap.exists()) throw new Error('Conversation not found');
-
-    const convData = convSnap.data();
-    const participants = convData.participants as string[];
-    const unreadCount = { ...(convData.unreadCount ?? {}) } as Record<string, number>;
-    const otherUid = participants.find((p: string) => p !== senderId);
-    if (otherUid) {
-      unreadCount[otherUid] = (unreadCount[otherUid] || 0) + 1;
-    }
-
-    transaction.set(msgRef, {
-      senderId,
-      text,
-      timestamp: Date.now(),
-      read: false,
-    });
-    transaction.update(convRef, {
-      lastMessage: text,
-      lastMessageAt: Date.now(),
-      lastSenderId: senderId,
-      unreadCount,
-    });
-  });
-}
-
-export function subscribeToConversations(uid: string, callback: (convs: Conversation[]) => void) {
-  const q = query(
-    collection(db, 'conversations'),
-    where('participants', 'array-contains', uid),
-    orderBy('lastMessageAt', 'desc'),
-  );
-  return onSnapshot(q, (snap) => {
-    const convs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Conversation));
-    callback(convs);
-  });
-}
-
-export function subscribeToMessages(conversationId: string, callback: (msgs: Message[]) => void) {
-  const q = query(
-    collection(db, 'conversations', conversationId, 'messages'),
-    orderBy('timestamp', 'asc'),
-  );
-  return onSnapshot(q, (snap) => {
-    const msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Message));
-    callback(msgs);
-  });
-}
-
-export async function markConversationRead(conversationId: string, uid: string) {
-  const convRef = doc(db, 'conversations', conversationId);
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(convRef);
-    if (!snap.exists()) return;
-    const unreadCount = { ...snap.data().unreadCount } as Record<string, number>;
-    unreadCount[uid] = 0;
-    transaction.update(convRef, { unreadCount });
-  });
-}
-
-export async function markMessageRead(conversationId: string, messageId: string) {
-  await updateDoc(doc(db, 'conversations', conversationId, 'messages', messageId), { read: true });
-}
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
-export async function deleteOldMessages(conversationId: string) {
-  const cutoff = Date.now() - THIRTY_DAYS_MS;
-  const q = query(
-    collection(db, 'conversations', conversationId, 'messages'),
-    where('timestamp', '<', cutoff),
-  );
-  const snap = await getDocs(q);
-  if (snap.empty) return;
-  const batch = writeBatch(db);
-  snap.docs.forEach((d) => batch.delete(d.ref));
-  await batch.commit();
 }
 
 // ─── Admin ───
@@ -699,23 +1331,52 @@ export async function getAttendanceCompliance(uid: string): Promise<{
 
 // ─── RSVP ───
 
+/**
+ * Write an RSVP.
+ *
+ * The RSVP doc id is now the member's uid instead of an `addDoc` random id, so
+ * responding twice updates in place instead of costing a read to find the old
+ * row. The same payload is mirrored to `users/{uid}/rsvps/{meetingId}`, which is
+ * what makes `getUserRSVPs` a single query instead of an N+1.
+ */
 export async function submitRSVP(meetingId: string, uid: string, displayName: string, companyName: string, response: 'yes' | 'no' | 'maybe', guestCount: number = 0) {
-  const existing = query(
-    collection(db, 'meetings', meetingId, 'rsvps'),
-    where('uid', '==', uid),
-  );
-  const snap = await getDocs(existing);
-  if (!snap.empty) {
-    await updateDoc(doc(db, 'meetings', meetingId, 'rsvps', snap.docs[0].id), { response, guestCount, respondedAt: Date.now() });
-    return { updated: true };
-  }
-  await addDoc(collection(db, 'meetings', meetingId, 'rsvps'), {
+  const payload = {
     meetingId, uid, displayName, companyName, response, guestCount, respondedAt: Date.now(),
-  });
-  return { updated: false };
+  };
+  const meetingRef = doc(db, 'meetings', meetingId, 'rsvps', uid);
+  const mirrorRef = doc(db, 'users', uid, 'rsvps', meetingId);
+
+  const existed = (await getDoc(meetingRef)).exists();
+
+  const batch = writeBatch(db);
+  batch.set(meetingRef, payload);
+  batch.set(mirrorRef, payload);
+  await batch.commit();
+
+  return { updated: existed };
 }
 
+/**
+ * One member's RSVPs across all meetings.
+ *
+ * This used to be 1 + N reads (fetch every meeting, then every meeting's RSVPs)
+ * and it was re-run every 30 seconds — with 50 historical meetings that is ~100
+ * reads a minute for a panel showing 3 upcoming meetings. Now it reads the
+ * member's own RSVP subcollection once.
+ */
 export async function getUserRSVPs(uid: string): Promise<MeetingRSVP[]> {
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'users', uid, 'rsvps'), orderBy('respondedAt', 'desc')),
+    );
+    if (!snap.empty) {
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as MeetingRSVP));
+    }
+  } catch {
+    // Rules or offline — fall through to the scan.
+  }
+
+  // Legacy data written before the mirror existed.
   const meetings = await getMeetings();
   const results = await Promise.all(meetings.map((m) => getMeetingRSVPs(m.id)));
   return results.flat().filter((r) => r.uid === uid).sort((a, b) => b.respondedAt - a.respondedAt);
@@ -728,8 +1389,20 @@ export async function getMeetingRSVPs(meetingId: string): Promise<MeetingRSVP[]>
 
 // ─── Notifications ───
 
+/**
+ * Live list of active notifications, newest first.
+ *
+ * Bounded to 20: the only consumer is the marquee bar, which renders a single
+ * line, and this listener is mounted app-wide for the whole session. Without a
+ * limit the payload grows without bound as notifications accumulate.
+ */
 export function subscribeToNotifications(callback: (notifs: AppNotification[]) => void) {
-  const q = query(collection(db, 'notifications'), where('active', '==', true), orderBy('createdAt', 'desc'));
+  const q = query(
+    collection(db, 'notifications'),
+    where('active', '==', true),
+    orderBy('createdAt', 'desc'),
+    limit(20),
+  );
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification)));
   }, (error) => {
@@ -782,12 +1455,6 @@ export async function addIssueReply(issueId: string, text: string, authorUid: st
   return reply;
 }
 
-export async function getUserIssueReports(uid: string): Promise<IssueReport[]> {
-  const q = query(collection(db, 'issueReports'), where('uid', '==', uid), orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as IssueReport));
-}
-
 export async function notifyAdmins(type: UserNotification['type'], title: string, message: string, relatedId: string) {
   const userSnap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['admin', 'super_admin'])));
   const promises = userSnap.docs.map((d) => sendUserNotification(d.id, type, title, message, relatedId));
@@ -796,7 +1463,7 @@ export async function notifyAdmins(type: UserNotification['type'], title: string
 
 export async function getIssueReports(): Promise<IssueReport[]> {
   await requireSuperAdmin();
-  const q = query(collection(db, 'issueReports'), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, 'issueReports'), orderBy('createdAt', 'desc'), limit(500));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as IssueReport));
 }
@@ -816,10 +1483,6 @@ export async function addNotification(text: string) {
   await addDoc(collection(db, 'notifications'), { text, active: true, createdAt: Date.now(), updatedAt: Date.now() });
 }
 
-export async function toggleNotification(id: string, active: boolean) {
-  await updateDoc(doc(db, 'notifications', id), { active, updatedAt: Date.now() });
-}
-
 export async function deleteNotification(id: string) {
   await requireSuperAdmin();
   await deleteDoc(doc(db, 'notifications', id));
@@ -830,8 +1493,12 @@ export async function deleteMeeting(id: string) {
   await deleteDoc(doc(db, 'meetings', id));
 }
 
+/**
+ * Live meeting list, newest first. Bounded to 50 — the dashboard panels only
+ * render a handful of upcoming meetings, and this was previously unbounded.
+ */
 export function subscribeToMeetings(callback: (meetings: Meeting[]) => void) {
-  const q = query(collection(db, 'meetings'), orderBy('date', 'desc'));
+  const q = query(collection(db, 'meetings'), orderBy('date', 'desc'), limit(50));
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Meeting)));
   }, (error) => {
@@ -947,10 +1614,6 @@ export async function getMyNotifications(): Promise<UserNotification[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as UserNotification));
 }
 
-export async function markNotificationRead(id: string) {
-  await updateDoc(doc(db, 'userNotifications', id), { read: true, updatedAt: Date.now() });
-}
-
 export interface ImportProfileEntry {
   ownerName: string;
   ownerSurname?: string;
@@ -971,20 +1634,41 @@ export async function bulkImportProfiles(entries: ImportProfileEntry[]): Promise
   const errors: string[] = [];
   let success = 0;
 
+  // Validate first, then batch. The old loop did `await getDoc` + `await setDoc`
+  // per row, so a 200-row CSV cost 400 strictly serialized round-trips. Existence
+  // is now one `in` query per 30-uid chunk, and the writes commit in batches of
+  // 500 (Firestore's hard limit).
+  const valid: { rowIndex: number; uid: string; entry: ImportProfileEntry }[] = [];
+
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
+    if (!entry.phone || !entry.ownerName || !entry.companyName) {
+      errors.push(`Row ${i + 1}: Missing required fields (phone, ownerName, companyName)`);
+      continue;
+    }
+    valid.push({ rowIndex: i, uid: entry.phone.replace(/\D/g, ''), entry });
+  }
+
+  const existingUids = new Set<string>();
+  const CHUNK = 30;
+  for (let i = 0; i < valid.length; i += CHUNK) {
+    const chunk = valid.slice(i, i + CHUNK).map((v) => v.uid);
+    if (chunk.length === 0) continue;
+    const snap = await getDocs(query(collection(db, 'profiles'), where('__name__', 'in', chunk)));
+    for (const d of snap.docs) existingUids.add(d.id);
+  }
+
+  const BATCH_LIMIT = 500;
+  let pending = writeBatch(db);
+  let pendingCount = 0;
+
+  for (const { rowIndex, uid, entry } of valid) {
     try {
-      if (!entry.phone || !entry.ownerName || !entry.companyName) {
-        errors.push(`Row ${i + 1}: Missing required fields (phone, ownerName, companyName)`);
+      if (existingUids.has(uid)) {
+        errors.push(`Row ${rowIndex + 1}: Phone ${entry.phone} already exists (uid: ${uid})`);
         continue;
       }
-      const uid = entry.phone.replace(/\D/g, '');
-      const exists = await getDoc(doc(db, 'profiles', uid));
-      if (exists.exists()) {
-        errors.push(`Row ${i + 1}: Phone ${entry.phone} already exists (uid: ${uid})`);
-        continue;
-      }
-      await setDoc(doc(db, 'profiles', uid), {
+      pending.set(doc(db, 'profiles', uid), {
         uid,
         ownerName: entry.ownerName,
         ownerSurname: entry.ownerSurname || '',
@@ -1015,11 +1699,21 @@ export async function bulkImportProfiles(entries: ImportProfileEntry[]): Promise
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
+      pendingCount++;
       success++;
+
+      // Firestore rejects a batch over 500 writes, so commit and start a new one.
+      if (pendingCount >= BATCH_LIMIT) {
+        await pending.commit();
+        pending = writeBatch(db);
+        pendingCount = 0;
+      }
     } catch (e) {
-      errors.push(`Row ${i + 1}: ${e instanceof Error ? e.message : e}`);
+      errors.push(`Row ${rowIndex + 1}: ${e instanceof Error ? e.message : e}`);
     }
   }
+
+  if (pendingCount > 0) await pending.commit();
 
   return { success, errors };
 }

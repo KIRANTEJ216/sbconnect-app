@@ -20,8 +20,6 @@ export interface UserProfile {
   updatedAt?: number;
 }
 
-export const ROLES = ['user', 'admin', 'super_admin'] as const;
-
 export interface BusinessProfile {
   uid: string;
   ownerName: string;
@@ -84,15 +82,43 @@ export interface Interest {
   updatedAt?: number;
 }
 
+/** A deal document doubles as a referral-revenue claim, discriminated by `source`. */
+export type DealSource = 'deal' | 'referral';
+
+/** Member-submitted revenue waits for admin verification; admin-entered revenue auto-approves. */
+export type DealStatus = 'pending' | 'approved' | 'rejected';
+
 export interface Deal {
   id: string;
   requestId: string;
   requestTitle: string;
+  /** Who generated the business. Registered member when clientUid is set, else external. */
+  clientUid?: string;
+  clientCompanyName?: string;
+  clientIsExternal?: boolean;
   giverUid: string;
   giverCompanyName: string;
   receiverUid: string;
   receiverCompanyName: string;
   amount: string;
+  /** Numeric amount parsed once at write time. `amount` stays the formatted display string. */
+  amountValue?: number;
+  /** Absent on legacy documents — treat as 'deal'. */
+  source?: DealSource;
+  /** Absent on legacy documents — treat as 'approved'. */
+  status?: DealStatus;
+  /** Referrer credited when `source === 'referral'`. */
+  referrerUid?: string;
+  referrerName?: string;
+  referrerCompanyName?: string;
+  referredMemberUid?: string;
+  referredMemberName?: string;
+  occurredOn?: number;
+  submittedBy?: string;
+  submittedByRole?: 'member' | 'admin';
+  reviewedBy?: string;
+  reviewedAt?: number;
+  reviewNote?: string;
   createdAt: number;
   updatedAt?: number;
 }
@@ -105,23 +131,47 @@ export interface LeaderboardEntry {
   dealCount: number;
 }
 
-export interface Conversation {
+export interface ReferralDealBreakdown {
   id: string;
-  participants: string[];
-  participantNames: Record<string, string>;
-  participantPhotos: Record<string, string>;
-  lastMessage: string;
-  lastMessageAt: number;
-  lastSenderId: string;
-  unreadCount: Record<string, number>;
+  /** Company that received the business. */
+  receivedBy: string;
+  /** Company/client that gave the business. */
+  givenBy: string;
+  value: number;
+  status: DealStatus;
+  createdAt: number;
 }
 
-export interface Message {
-  id: string;
-  senderId: string;
-  text: string;
-  timestamp: number;
-  read: boolean;
+export interface ReferralLeaderboardEntry {
+  uid: string;
+  name: string;
+  companyName: string;
+  phone: string;
+  /** True when the referrer has no profile and was entered as a typed name. */
+  isExternal: boolean;
+  /** How many profiles list this member as their referrer. */
+  referralCount: number;
+  /** Approved referral revenue credited to this referrer. */
+  approvedRevenue: number;
+  approvedCount: number;
+  /** Submitted but not yet verified. */
+  pendingRevenue: number;
+  pendingCount: number;
+  deals: ReferralDealBreakdown[];
+}
+
+export interface ReferralRevenueTotal {
+  totalValue: number;
+  pendingValue: number;
+}
+
+export interface PendingRevenueTotals {
+  pendingDeals: number;
+  pendingDealsCount: number;
+  pendingReferrals: number;
+  pendingReferralsCount: number;
+  total: number;
+  totalCount: number;
 }
 
 export const REQUEST_CATEGORIES = [
@@ -180,7 +230,17 @@ export interface AppNotification {
 export interface UserNotification {
   id: string;
   uid: string;
-  type: 'issue_resolved' | 'admin_message' | 'issue_reply' | 'deal_won' | 'deal_thanks' | 'business_given';
+  type:
+    | 'issue_resolved'
+    | 'admin_message'
+    | 'issue_reply'
+    | 'deal_won'
+    | 'deal_thanks'
+    | 'business_given'
+    | 'revenue_submitted'
+    | 'revenue_approved'
+    | 'revenue_rejected'
+    | 'referral_credited';
   title: string;
   message: string;
   relatedId: string;
