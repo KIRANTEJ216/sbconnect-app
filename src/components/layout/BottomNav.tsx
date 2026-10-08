@@ -1,21 +1,23 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePendingVerifications } from '../../hooks/usePendingVerifications';
+import { isRouteActive } from '../../lib/nav';
 import { isAdmin } from '../../lib/admin';
 
 function NavBtn({ to, label, children }: { to: string; label: string; children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const isActive = location.pathname === to;
+  const isActive = isRouteActive(location.pathname, to);
   return (
     <button
       onClick={() => navigate(to)}
-      className={`flex flex-col items-center gap-0.5 px-3 py-3 rounded-xl text-[10px] font-medium cursor-pointer min-h-[48px] ${
+      aria-current={isActive ? 'page' : undefined}
+      className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-xl text-xs font-medium cursor-pointer min-h-[56px] flex-1 min-w-0 transition-colors ${
         isActive ? 'text-primary bottom-nav-active' : 'text-muted hover:text-steel'
       }`}
     >
-      {children}
-      <span>{label}</span>
+      <span className="shrink-0" aria-hidden="true">{children}</span>
+      <span className="truncate max-w-full">{label}</span>
     </button>
   );
 }
@@ -26,8 +28,14 @@ export function BottomNav() {
   const pendingCount = usePendingVerifications();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-surface/85 backdrop-blur-xl border-t border-border lg:hidden safe-area-bottom shadow-nav">
-      <div className="flex items-center justify-around px-2 py-1.5">
+    // backdrop-blur-xl was a full-viewport-width blur on a bar that is always
+    // mounted below `lg` (including on desktop, where it is invisible), so it
+    // repainted on every scroll for nothing. An opaque bar reads the same here.
+    <nav
+      aria-label="Primary"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-surface/95 border-t border-border lg:hidden safe-area-bottom shadow-nav"
+    >
+      <div className="flex items-stretch justify-around px-1.5 py-1">
         <NavBtn to="/dashboard" label="Home">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="7" height="7" />

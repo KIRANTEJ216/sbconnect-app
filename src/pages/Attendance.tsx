@@ -72,8 +72,8 @@ export default function Attendance() {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="skeleton h-8 w-48" />
-        <div className="skeleton h-48 rounded-[2.5rem]" />
-        <div className="skeleton h-64 rounded-[2.5rem]" />
+        <div className="skeleton h-48 rounded-2xl" />
+        <div className="skeleton h-64 rounded-2xl" />
       </div>
     );
   }
@@ -82,22 +82,22 @@ export default function Attendance() {
     <AnimatedPage>
       <div className="max-w-4xl mx-auto space-y-3">
         <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
-          <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+          <p className="text-xs font-semibold text-muted uppercase tracking-wider">SB Connect</p>
           <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">Meeting Attendance</h1>
           <p className="text-steel text-sm">Mark your presence and RSVP for upcoming meetings</p>
           <div className="flex items-center justify-center gap-4 mt-2">
             <div>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Total Meetings</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Total Meetings</p>
               <p className="text-lg font-bold gradient-text">{meetings.length}</p>
             </div>
             <div className="w-px h-6 bg-border" />
             <div>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Attended</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Attended</p>
               <p className="text-lg font-bold text-success">{attendedCount}</p>
             </div>
             <div className="w-px h-6 bg-border" />
             <div>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Upcoming</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Upcoming</p>
               <p className="text-lg font-bold text-primary">{upcomingCount}</p>
             </div>
           </div>

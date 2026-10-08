@@ -50,8 +50,8 @@ export default function MyIssues() {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="skeleton h-8 w-48" />
-        <div className="skeleton h-32 rounded-[2.5rem]" />
-        <div className="skeleton h-32 rounded-[2.5rem]" />
+        <div className="skeleton h-32 rounded-2xl" />
+        <div className="skeleton h-32 rounded-2xl" />
       </div>
     );
   }
@@ -64,22 +64,22 @@ export default function MyIssues() {
     <AnimatedPage>
       <div className="max-w-3xl mx-auto space-y-3">
         <div className="rounded-card bg-gradient-to-br from-primary/5 via-primary-light/5 to-success/5 border border-primary/10 shadow-card px-4 py-3 text-center">
-          <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">SB Connect</p>
+          <p className="text-xs font-semibold text-muted uppercase tracking-wider">SB Connect</p>
           <h1 className="text-fluid-h1 font-bold gradient-text tracking-tight">My Reports</h1>
           <p className="text-steel text-sm">Track your issue reports and admin replies</p>
           <div className="flex items-center justify-center gap-4 mt-2">
             <div>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Issues Reported</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Issues Reported</p>
               <p className="text-lg font-bold gradient-text">{totalIssues}</p>
             </div>
             <div className="w-px h-6 bg-border" />
             <div>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Admin Replied</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Admin Replied</p>
               <p className="text-lg font-bold text-primary">{adminReplied}</p>
             </div>
             <div className="w-px h-6 bg-border" />
             <div>
-              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider">Issues Closed</p>
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">Issues Closed</p>
               <p className="text-lg font-bold text-success">{closedIssues}</p>
             </div>
           </div>
@@ -108,7 +108,7 @@ export default function MyIssues() {
                   <TiltCard>
                   <div
                     ref={r.id === highlightId ? highlightRef : undefined}
-                    className={`stat-accent-top rounded-card bg-surface border shadow-card transition-all duration-300 ${
+                    className={`rounded-card bg-surface border shadow-card transition-all duration-300 ${
                       r.id === highlightId ? 'border-primary ring-2 ring-primary-ring' : 'border-border'
                     }`}
                   >
@@ -118,13 +118,13 @@ export default function MyIssues() {
                           <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full shrink-0 ${r.status === 'open' ? 'bg-danger' : 'bg-success'}`} />
                             <p className="text-sm font-semibold text-charcoal">{r.subject}</p>
-                            <span className="text-[10px] font-mono text-muted bg-muted-bg px-1.5 py-0.5 rounded shrink-0">{ticketId}</span>
+                            <span className="text-xs font-mono text-muted bg-muted-bg px-1.5 py-0.5 rounded shrink-0">{ticketId}</span>
                             {unreadReply && (
                               <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" title="New admin reply" />
                             )}
                           </div>
                           <p className="text-xs text-steel">{r.description}</p>
-                          <p className="text-[10px] text-muted font-mono">
+                          <p className="text-xs text-muted font-mono">
                             {new Date(r.createdAt).toLocaleString('en-IN')}
                             {r.page && ` · on ${r.page}`}
                           </p>
@@ -138,7 +138,7 @@ export default function MyIssues() {
                         <div className="space-y-2 pl-3 border-l-2 border-border">
                           {(r.replies ?? []).map((reply) => (
                             <div key={reply.id} className="flex items-start gap-2">
-                              <span className={`text-[11px] font-semibold shrink-0 mt-0.5 ${
+                              <span className={`text-xs font-semibold shrink-0 mt-0.5 ${
                                 reply.authorRole === 'super_admin' || reply.authorRole === 'admin'
                                   ? 'text-primary'
                                   : 'text-steel'
@@ -147,7 +147,7 @@ export default function MyIssues() {
                                   ? 'Admin'
                                   : reply.authorName}
                                 {reply.authorRole !== 'user' && (
-                                  <span className="ml-1 px-1 py-0.5 text-[9px] font-medium rounded bg-primary-light text-primary">Staff</span>
+                                  <span className="ml-1 px-1 py-0.5 text-micro font-medium rounded bg-primary-light text-primary">Staff</span>
                                 )}
                               </span>
                               <p className="text-xs text-charcoal">{reply.text}</p>
@@ -161,7 +161,7 @@ export default function MyIssues() {
                           <input
                             type="text"
                             placeholder="Type a reply..."
-                            className="flex-1 min-w-0 rounded-[0.75rem] border border-border px-3 py-2 text-xs bg-canvas focus:outline-none focus:ring-2 focus:ring-primary-ring"
+                            className="flex-1 min-w-0 rounded-md border border-border px-3 py-2 text-xs bg-canvas focus:outline-none focus:ring-2 focus:ring-primary-ring"
                             value={replyTexts[r.id] ?? ''}
                             onChange={(e) => setReplyTexts((prev) => ({ ...prev, [r.id]: e.target.value }))}
                           />
@@ -187,7 +187,7 @@ export default function MyIssues() {
                       )}
 
                       {r.adminNote && (
-                        <p className="text-[11px] text-muted italic border-t border-border pt-2 mt-1">
+                        <p className="text-xs text-muted italic border-t border-border pt-2 mt-1">
                           Admin note: {r.adminNote}
                         </p>
                       )}

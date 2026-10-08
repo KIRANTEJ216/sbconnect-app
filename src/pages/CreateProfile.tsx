@@ -323,7 +323,7 @@ export default function CreateProfile() {
                 <div>
                   <label className="block text-sm font-medium text-charcoal tracking-tight mb-1.5">Phone Number <span className="text-danger">*</span></label>
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-2.5 rounded-[0.75rem] border border-border bg-muted-bg text-sm text-charcoal font-medium shrink-0">+91</span>
+                    <span className="px-3 py-2.5 rounded-md border border-border bg-muted-bg text-sm text-charcoal font-medium shrink-0">+91</span>
                     <input
                       type="tel"
                       placeholder="9876543210"
@@ -331,7 +331,7 @@ export default function CreateProfile() {
                       onChange={(e) => update('phone', e.target.value.replace(/\D/g, '').slice(0, 10))}
                       onBlur={(e) => { const n = normalizePhone(e.target.value); if (n !== e.target.value) update('phone', n); }}
                       required
-                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                      className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                     />
                   </div>
                 </div>
@@ -410,7 +410,7 @@ export default function CreateProfile() {
                       if (filtered.length > 0) setShowLocationDropdown(true);
                     }}
                     required
-                    className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                    className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                   />
                   {showLocationDropdown && (
                     <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-border bg-surface shadow-lg">
@@ -448,9 +448,9 @@ export default function CreateProfile() {
                       onChange={(e) => setKeywordInput(e.target.value)}
                       onKeyDown={handleKeywordKeyDown}
                       onBlur={() => { if (keywordInput.trim()) { addKeyword(keywordInput); setKeywordInput(''); } }}
-                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                      className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted font-mono">Enter</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted font-mono">Enter</span>
                   </div>
                   <p className="text-xs text-muted mt-1.5">Type a keyword and press Enter to add it. e.g. steel-supply, it-services, pvc-pipes, packaging, solar-panels</p>
                 </div>
@@ -530,16 +530,17 @@ export default function CreateProfile() {
                               alt={`Catalog ${i + 1}`}
                               className="w-full h-full object-cover"
                             />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/40 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <button
                                 type="button"
+                                aria-label={`Remove catalog image ${i + 1}`}
                                 onClick={() => setCatalogFiles((prev) => prev.filter((_, j) => j !== i))}
-                                className="w-7 h-7 rounded-full bg-white/90 text-danger flex items-center justify-center hover:bg-white transition-colors cursor-pointer"
+                                className="min-w-11 min-h-11 w-11 h-11 rounded-full bg-white/90 text-danger flex items-center justify-center hover:bg-white transition-colors cursor-pointer"
                               >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                               </button>
                             </div>
-                            <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-[9px] font-medium bg-black/50 text-white rounded-md">compressed</div>
+                            <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-micro font-medium bg-black/50 text-white rounded-md">compressed</div>
                           </div>
                         ))}
                       </div>
@@ -590,7 +591,7 @@ export default function CreateProfile() {
                           setReferredByStatus('not_found');
                         }
                       }}
-                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
+                      className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all"
                     />
                     {referredByStatus === 'found' && (
                       <p className="text-xs text-success mt-1">Referred by: <span className="font-medium">{referredByName}</span></p>
@@ -605,7 +606,7 @@ export default function CreateProfile() {
                       <span className="text-muted font-normal"> ({form.description.length}/500)</span>
                     </label>
                     <textarea
-                      className="w-full rounded-[0.75rem] border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
+                      className="w-full rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-charcoal placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary-ring focus:border-primary transition-all resize-none"
                       rows={4}
                       maxLength={500}
                       placeholder="Brief description of what your company does..."

@@ -4,8 +4,9 @@ import {
   getMeetings,
   getDeals,
   getLoginLogs,
-  getTotalBusinessValue,
   getLeaderboard,
+  getRevenueSummary,
+  getReferralLeaderboard,
 } from './firestore';
 import { getAttendanceCompliance } from './firestore';
 import type { MeetingRSVP } from '../types';
@@ -13,15 +14,18 @@ import type { MeetingRSVP } from '../types';
 export async function generateAuditReport() {
   const startedAt = Date.now();
 
-  const [profiles, users, meetings, deals, logs, totalBusinessValue, leaderboard] = await Promise.all([
+  const [profiles, users, meetings, deals, logs, revenue, leaderboard, referralBoard] = await Promise.all([
     getAllProfiles(999),
     getAllUsers(999),
     getMeetings(999),
     getDeals(),
     getLoginLogs(999),
-    getTotalBusinessValue(),
+    getRevenueSummary(),
     getLeaderboard(),
+    getReferralLeaderboard(),
   ]);
+  const totalBusinessValue = revenue.verifiedDeals;
+  const referralTotals = { totalValue: revenue.verifiedReferrals, pendingValue: revenue.pendingReferrals };
 
   const activeProfiles = profiles.filter((p) => p.membershipStatus === 'active');
   const expiredProfiles = profiles.filter((p) => p.membershipStatus !== 'active');
@@ -109,6 +113,13 @@ export async function generateAuditReport() {
       upcomingMeetings: meetings.filter((m) => m.active).length,
       totalDeals: deals.length,
       totalBusinessValue: totalBusinessValue,
+      totalReferralRevenue: referralTotals.totalValue,
+      pendingReferralRevenue: referralTotals.pendingValue,
+      totalRevenueRaised: revenue.headline,
+      revenueEntries: revenue.entryCount,
+      rejectedRevenueEntries: revenue.rejectedCount,
+      pendingRevenueVerification: revenue.pendingDealsCount + revenue.pendingReferralsCount,
+      membersReferred: profiles.filter((p) => p.referredByPhone).length,
       totalLogins: logs.length,
     },
     compliance: {
@@ -159,7 +170,14 @@ export async function generateAuditReport() {
       dealsReceived: d.dealsReceived,
       totalAmount: d.totalAmount,
     })),
-    leaderboard,
+leaderboard,
+    referralLeaderboard: referralBoard.map((r) => ({
+      name: r.name,
+      companyName: r.companyName,
+      referralCount: r.referralCount,
+      approvedRevenue: r.approvedRevenue,
+      pendingRevenue: r.pendingRevenue,
+    })),
     loginActivity: logs.map((l) => ({
       name: l.displayName,
       email: l.email,
@@ -242,6 +260,12 @@ function generateReportHTML(report: any): string {
   <div class="stat"><div class="num">${s.upcomingMeetings}</div><div class="lbl">Upcoming</div></div>
   <div class="stat"><div class="num">${s.totalDeals}</div><div class="lbl">Total Deals</div></div>
   <div class="stat"><div class="num">${toINR(s.totalBusinessValue)}</div><div class="lbl">Business Value</div></div>
+  <div class="stat"><div class="num">${toINR(s.totalReferralRevenue ?? 0)}</div><div class="lbl">Referral Revenue</div></div>
+  <div class="stat"><div class="num">${toINR(s.totalRevenueRaised ?? 0)}</div><div class="lbl">Total Raised</div></div>
+  <div class="stat"><div class="num">${toINR(s.pendingReferralRevenue ?? 0)}</div><div class="lbl">Referral Pending</div></div>
+  <div class="stat"><div class="num">${s.pendingRevenueVerification ?? 0}</div><div class="lbl">Awaiting Verification</div></div>
+  <div class="stat"><div class="num">${s.rejectedRevenueEntries ?? 0}</div><div class="lbl">Rejected Entries</div></div>
+  <div class="stat"><div class="num">${s.membersReferred ?? 0}</div><div class="lbl">Members Referred</div></div>
   <div class="stat"><div class="num">${s.totalLogins}</div><div class="lbl">Logins</div></div>
 </div>
 
@@ -273,11 +297,23 @@ ${report.meetings && report.meetings.length > 0 ? `
 ${report.meetings.map((m: any) => `<tr><td>${htmlEscape(m.label)}</td><td>${htmlEscape(m.date)}</td><td>${htmlEscape(m.location)}</td><td>${m.active ? 'Upcoming' : 'Past'}</td></tr>`).join('')}
 </table>` : ''}
 
-${report.deals && report.deals.length > 0 ? `
-<h2>Deals (${report.deals.length})</h2>
+${report.referralLeaderboard && report.referralLeaderboard.length > 0 ? `
+<h2>Referral Revenue Leaderboard</h2>
+<p style="font-size:10px;color:#666;margin-bottom:6px">Ranked by verified revenue generated through referrals. Credited to the referrer.</p>
 <table>
-<tr><th>Giver</th><th>Receiver</th><th>Amount</th><th>Date</th></tr>
-${report.deals.map((d: any) => `<tr><td>${htmlEscape(d.giverCompanyName)}</td><td>${htmlEscape(d.receiverCompanyName)}</td><td>${toINR(parseFloat(String(d.amount||'0').replace(/[^0-9.]/g,''))||0)}</td><td>${htmlEscape(new Date(d.createdAt).toLocaleDateString('en-IN'))}</td></tr>`).join('')}
+<tr><th>Referrer</th><th>Company</th><th>Referred</th><th>Verified Revenue</th><th>Pending</th></tr>
+${report.referralLeaderboard.map((r: any) => `<tr><td>${htmlEscape(r.name || '—')}</td><td>${htmlEscape(r.companyName || '—')}</td><td>${r.referralCount}</td><td>${toINR(r.approvedRevenue || 0)}</td><td>${toINR(r.pendingRevenue || 0)}</td></tr>`).join('')}
+</table>` : ''}
+
+${report.deals && report.deals.length > 0 ? `
+<h2>Revenue Entries (${report.deals.length})</h2>
+<table>
+<tr><th>Giver</th><th>Receiver</th><th>Type</th><th>Status</th><th>Amount</th><th>Date</th></tr>
+${report.deals.map((d: any) => {
+  const st = d.status || 'approved';
+  const stClass = st === 'approved' ? 'badge-active' : st === 'rejected' ? 'badge-expired' : 'badge-warn';
+  return `<tr><td>${htmlEscape(d.giverCompanyName)}</td><td>${htmlEscape(d.receiverCompanyName)}</td><td>${d.source === 'referral' ? 'Referral' : 'Deal'}</td><td><span class="badge ${stClass}">${st}</span></td><td>${toINR(parseFloat(String(d.amount||'0').replace(/[^0-9.]/g,''))||0)}</td><td>${htmlEscape(new Date(d.createdAt).toLocaleDateString('en-IN'))}</td></tr>`;
+}).join('')}
 </table>` : ''}
 
 ${report.admins && report.admins.length > 0 ? `

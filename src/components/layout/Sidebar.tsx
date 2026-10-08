@@ -111,7 +111,7 @@ export function Sidebar() {
             <line x1="1" y1="10" x2="23" y2="10" />
             <circle cx="12" cy="15" r="1" />
           </svg>
-          {expanded && <span className="ml-auto text-[10px] font-medium text-muted bg-muted-bg px-1.5 py-0.5 rounded-md">Soon</span>}
+          {expanded && <span className="ml-auto text-xs font-medium text-muted bg-muted-bg px-1.5 py-0.5 rounded-md">Soon</span>}
         </NavItem>
         {isAdminUser && (
           <NavItem to="/admin" label={pendingCount > 0 ? `Admin (${pendingCount})` : 'Admin'} expanded={expanded}>

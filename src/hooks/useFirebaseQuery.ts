@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  getAllProfiles, getMeetings, getLeaderboard,
-  getAllRequests, getTotalBusinessValue,
+  getAllProfiles, getMeetings,
+  getAllRequests,
   getAttendanceCompliance, getUserRSVPs, getBusinessProfile,
-  getMeetingRSVPs, getUnverifiedProfiles, getRevenueConfig,
-  getOnlineUsersCount, getUserDeals, getDeals,
+  getMeetingRSVPs, getRevenueConfig,
+  getOnlineUsersCount, getDeals,
+  getReferralLeaderboard,
+  getReferralRevenueEntries, getPendingRevenueEntries, getUserRevenueEntries,
+  getRevenueSummary,
 } from '../lib/firestore';
-import type { MeetingRSVP, Deal } from '../types';
+import type { MeetingRSVP } from '../types';
 
 export function useProfiles(max = 200) {
   return useQuery({
@@ -24,14 +27,6 @@ export function useMeetings(max = 50) {
   });
 }
 
-export function useLeaderboardQuery() {
-  return useQuery({
-    queryKey: ['leaderboard'],
-    queryFn: getLeaderboard,
-    staleTime: 1000 * 60 * 5,
-  });
-}
-
 export function useRequestsQuery(max = 999) {
   return useQuery({
     queryKey: ['requests', max],
@@ -40,12 +35,83 @@ export function useRequestsQuery(max = 999) {
   });
 }
 
+/**
+ * One read of the deal ledger feeds every revenue figure. The three aggregate
+ * hooks below share this query key, so TanStack dedupes them into a single fetch
+ * per interval instead of three separate full-collection scans.
+ */
 export function useTotalBusinessValue() {
   return useQuery({
-    queryKey: ['totalBusinessValue'],
-    queryFn: getTotalBusinessValue,
-    staleTime: 1000 * 60,
-    refetchInterval: 60000,
+    queryKey: ['revenueSummary'],
+    queryFn: getRevenueSummary,
+    select: (s) => s.verifiedDeals,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
+  });
+}
+
+export function useTotalReferralRevenue() {
+  return useQuery({
+    queryKey: ['revenueSummary'],
+    queryFn: getRevenueSummary,
+    select: (s) => ({ totalValue: s.verifiedReferrals, pendingValue: s.pendingReferrals }),
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
+  });
+}
+
+export function useReferralLeaderboardQuery() {
+  return useQuery({
+    queryKey: ['referralLeaderboard'],
+    queryFn: getReferralLeaderboard,
+    staleTime: 1000 * 60 * 10,
+    refetchInterval: 600000,
+  });
+}
+
+export function useReferralRevenueEntriesQuery() {
+  return useQuery({
+    queryKey: ['referralRevenueEntries'],
+    queryFn: getReferralRevenueEntries,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
+  });
+}
+
+export function usePendingRevenueQuery() {
+  return useQuery({
+    queryKey: ['pendingRevenue'],
+    queryFn: getPendingRevenueEntries,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
+  });
+}
+
+/** Value + count of member-submitted revenue still awaiting verification. */
+export function usePendingRevenueTotalsQuery() {
+  return useQuery({
+    queryKey: ['revenueSummary'],
+    queryFn: getRevenueSummary,
+    select: (s) => ({
+      pendingDeals: s.pendingDeals,
+      pendingDealsCount: s.pendingDealsCount,
+      pendingReferrals: s.pendingReferrals,
+      pendingReferralsCount: s.pendingReferralsCount,
+      total: s.pendingDeals + s.pendingReferrals,
+      totalCount: s.pendingDealsCount + s.pendingReferralsCount,
+    }),
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
+  });
+}
+
+export function useMyRevenueEntries(uid: string | undefined) {
+  return useQuery({
+    queryKey: ['myRevenueEntries', uid],
+    queryFn: () => getUserRevenueEntries(uid!),
+    enabled: !!uid,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
   });
 }
 
@@ -76,15 +142,6 @@ export function useBusinessProfile(uid: string | undefined) {
   });
 }
 
-export function useMeetingRSVPs(meetingId: string | null) {
-  return useQuery({
-    queryKey: ['meetingRSVPs', meetingId],
-    queryFn: () => getMeetingRSVPs(meetingId!),
-    enabled: !!meetingId,
-    staleTime: 1000 * 60 * 2,
-  });
-}
-
 export function useAllRsvpsByMeeting() {
   return useQuery({
     queryKey: ['allRsvpsByMeeting'],
@@ -96,15 +153,7 @@ export function useAllRsvpsByMeeting() {
       return Object.fromEntries(entries) as Record<string, MeetingRSVP[]>;
     },
     staleTime: 0,
-    refetchInterval: 30_000,
-  });
-}
-
-export function useUnverifiedProfiles() {
-  return useQuery({
-    queryKey: ['unverifiedProfiles'],
-    queryFn: getUnverifiedProfiles,
-    staleTime: 1000 * 60 * 2,
+    refetchInterval: 300_000,
   });
 }
 
@@ -122,17 +171,7 @@ export function useOnlineUsersCount() {
     queryKey: ['onlineUsersCount'],
     queryFn: getOnlineUsersCount,
     staleTime: 1000 * 30,
-    refetchInterval: 30_000,
-  });
-}
-
-export function useReceivedDealsQuery(uid: string | undefined) {
-  return useQuery({
-    queryKey: ['receivedDeals', uid],
-    queryFn: () => getUserDeals(uid!),
-    enabled: !!uid,
-    staleTime: 1000 * 60 * 2,
-    select: (deals: Deal[]) => deals.filter((d) => d.receiverUid === uid),
+    refetchInterval: 120_000,
   });
 }
 

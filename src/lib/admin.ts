@@ -2,10 +2,6 @@ export function isAdminViewer(role: string | undefined): boolean {
   return role === 'admin' || role === 'super_admin';
 }
 
-export function isSuperAdminRole(role: string | undefined): boolean {
-  return role === 'super_admin';
-}
-
 export function isAdmin(role: string | undefined): boolean {
   return role === 'admin' || role === 'super_admin';
 }

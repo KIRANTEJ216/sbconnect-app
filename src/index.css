@@ -1,44 +1,26 @@
 @import "tailwindcss";
 
+/* Exclude the throwaway visual harnesses in tmp/ from class scanning. They are
+   not gitignored, so Tailwind's heuristic source detection was reading them and
+   emitting 18 utilities (premium-surface, meter-fill, stat-accent-top, …) that
+   exist nowhere in src/. */
+@source not "../tmp";
+@source not "../dist";
+@source not "../shots";
+
+/* ── Local variable font (self-hosted, no network cost) ─────────────────────
+   Only the two subsets this app can actually render. The shipped Inter build
+   carried seven subsets; cyrillic, greek and vietnamese (134 KB) contained no
+   glyph reachable from an en-IN interface and were downloaded by every install.
+   latin-ext is retained because member and company names do carry accented
+   Latin characters. */
 @font-face {
   font-family: 'Inter';
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('/fonts/inter-cyrillic-ext.woff2') format('woff2');
-  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-cyrillic.woff2') format('woff2');
-  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-greek-ext.woff2') format('woff2');
-  unicode-range: U+1F00-1FFF;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-greek.woff2') format('woff2');
-  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-vietnamese.woff2') format('woff2');
-  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
   font-family: 'Inter';
@@ -48,349 +30,472 @@
   src: url('/fonts/inter-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
 
 @theme inline {
+  /* ── Brand ────────────────────────────────────────────────────────────────
+     A deep indigo authority colour with a magenta signal accent. The gold is
+     reserved for achievement/recognition moments — it is too light for text on
+     white, so it only ever appears as a fill, border, or large display glyph. */
   --color-primary: #2A11A6;
   --color-primary-hover: #1B0965;
-  --color-primary-light: #E8E3FF;
-  --color-primary-ring: #B536C5;
+  --color-primary-soft: #4A2ED0;
+  --color-primary-light: #EDE9FE;
+  --color-primary-lighter: #F6F4FF;
+  --color-primary-ring: #8B5CF6;
   --color-secondary: #B536C5;
-  --color-accent: #16A34A;
-  --color-accent-hover: #15803D;
+  --color-secondary-light: #FCEDFF;
+  --color-accent: #15803D;
+  --color-accent-hover: #166534;
   --color-accent-light: #F0FDF4;
-  --color-canvas: #FAF8F5;
+
+  /* ── Neutrals ──────────────────────────────────────────────────────────────
+     A single warm-violet ramp. Every step is contrast-checked against white:
+     charcoal 17.4:1 · steel 7.8:1 · muted 5.4:1 · faint 5.1:1. `faint` is the
+     lightest step and is still safe for small text and placeholders. */
+  --color-ink: #14131A;
+  --color-charcoal: #1A1922;
+  --color-steel: #55505F;
+  --color-muted: #6E6879;
+  --color-faint: #726B7B;
+  --color-border: #E7E3ED;
+  --color-border-strong: #D4CEDE;
+  --color-canvas: #FAF9FC;
   --color-surface: #FFFFFF;
-  --color-surface-warm: #FDFCFA;
-  --color-charcoal: #1C1B18;
-  --color-steel: #6B6560;
-  --color-muted: #8C8680;
-  --color-border: #E2DDD6;
-  --color-muted-bg: #F4F1EC;
-  --color-success: #16A34A;
-  --color-success-light: #F0FDF4;
-  --color-danger: #E7250C;
-  --color-danger-light: #FFF0EE;
-  --color-warning: #F59E0B;
+  --color-surface-warm: #FBFAFD;
+  --color-muted-bg: #F4F2F8;
+  --color-premium-warm: #F7F4FB;
+
+  /* ── Status ───────────────────────────────────────────────────────────────
+     Status colours sit on their own tinted backgrounds; text uses the dark
+     variant so every pill clears 4.5:1. */
+  --color-success: #15803D;
+  --color-success-strong: #14532D;
+  --color-success-light: #ECFDF3;
+  --color-danger: #C81E1E;
+  --color-danger-strong: #7F1D1D;
+  --color-danger-light: #FEF2F2;
+  --color-warning: #A16207;
   --color-warning-light: #FFFBEB;
-  --color-luxury-gold: #D4A853;
-  --color-luxury-gold-light: #FEF7E9;
-  --color-luxury-charcoal: #1A1025;
+  --color-info: #1D4ED8;
+  --color-info-light: #EFF6FF;
+
+  /* ── Premium accents ───────────────────────────────────────────────────────
+     `gold` carries text (4.97:1 on its own tint). `gold-bright` is for fills,
+     borders and large display glyphs only — it is far too light for text. */
+  --color-gold: #8A6420;
+  --color-gold-bright: #D4A853;
+  --color-gold-light: #FDF6E7;
+
+  /* ── Signature gradient ─────────────────────────────────────────────────── */
   --color-gradient-start: #2A11A6;
-  --color-gradient-mid: #B536C5;
-  --color-gradient-end: #552559;
-  --color-premium-warm: #F4F1EC;
-  --color-premium-cream: #FAF8F5;
+  --color-gradient-mid: #7C3AED;
+  --color-gradient-end: #B536C5;
+
+  /* ── Typography ─────────────────────────────────────────────────────────────
+     One scale, used everywhere. The previous build carried 161 arbitrary px
+     values (as low as 9px); `micro` at 11px is now the hard floor and is for
+     labels only, never body copy. */
+  --font-display: 'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif;
   --font-heading: 'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif;
-  --font-body: 'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
-  --radius-card: 1rem;
-  --radius-card-lg: 1.25rem;
-  --radius-btn: 0.625rem;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+
+  --text-display: clamp(2.5rem, 6vw, 3.75rem);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.035em;
+  --text-display--font-weight: 700;
+
+  --text-hero: clamp(2rem, 4.5vw, 2.75rem);
+  --text-hero--line-height: 1.05;
+  --text-hero--letter-spacing: -0.03em;
+  --text-hero--font-weight: 700;
+
+  --text-h1: clamp(1.375rem, 2.5vw, 1.75rem);
+  --text-h1--line-height: 1.2;
+  --text-h1--letter-spacing: -0.022em;
+  --text-h1--font-weight: 650;
+
+  --text-h2: 1.1875rem;
+  --text-h2--line-height: 1.3;
+  --text-h2--letter-spacing: -0.016em;
+  --text-h2--font-weight: 620;
+
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.4;
+  --text-h3--letter-spacing: -0.011em;
+  --text-h3--font-weight: 600;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.6;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.5;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.45;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.35;
+
+  /* ── Radii — one coherent scale ───────────────────────────────────────────── */
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.5rem;
+  --radius-btn: 0.5rem;
   --radius-input: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-card: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-card-lg: 1.25rem;
   --radius-badge: 9999px;
-  --shadow-card: 0 1px 3px rgba(28, 27, 24, 0.06), 0 1px 2px rgba(28, 27, 24, 0.04);
-  --shadow-card-hover: 0 4px 16px rgba(28, 27, 24, 0.08), 0 2px 4px rgba(28, 27, 24, 0.04);
-  --shadow-card-glow: 0 0 0 1px rgba(42, 17, 166, 0.08), 0 8px 24px rgba(28, 27, 24, 0.08);
-  --shadow-btn: 0 1px 3px rgba(42, 17, 166, 0.15);
-  --shadow-btn-hover: 0 2px 8px rgba(42, 17, 166, 0.25);
-  --shadow-luxury: 0 8px 32px rgba(26, 16, 37, 0.1);
-  --shadow-glow: 0 0 24px rgba(42, 17, 166, 0.12);
-  --shadow-nav: 0 -1px 4px rgba(28, 27, 24, 0.06);
+  --radius-pill: 9999px;
+
+  /* ── Elevation ──────────────────────────────────────────────────────────────
+     Premium depth comes from two stacked layers — a tight key light and a wide,
+     soft ambient one. The old build had a single flat 1px shadow, which is why
+     surfaces read as flat and cheap. */
+  --shadow-xs: 0 1px 2px rgba(20, 19, 26, 0.04);
+  --shadow-sm: 0 1px 2px rgba(20, 19, 26, 0.04), 0 2px 6px rgba(20, 19, 26, 0.04);
+  --shadow-card: 0 1px 2px rgba(20, 19, 26, 0.04), 0 4px 12px rgba(20, 19, 26, 0.045);
+  --shadow-md: 0 2px 4px rgba(20, 19, 26, 0.04), 0 8px 20px rgba(20, 19, 26, 0.06);
+  --shadow-card-hover: 0 2px 4px rgba(20, 19, 26, 0.04), 0 12px 28px rgba(20, 19, 26, 0.08);
+  --shadow-lg: 0 4px 8px rgba(20, 19, 26, 0.04), 0 16px 36px rgba(20, 19, 26, 0.09);
+  --shadow-card-glow: 0 2px 6px rgba(42, 17, 166, 0.08), 0 14px 32px rgba(42, 17, 166, 0.10);
+  --shadow-xl: 0 8px 16px rgba(20, 19, 26, 0.05), 0 32px 64px rgba(20, 19, 26, 0.11);
+  --shadow-btn: 0 1px 2px rgba(42, 17, 166, 0.16), 0 2px 8px rgba(42, 17, 166, 0.14);
+  --shadow-btn-hover: 0 2px 4px rgba(42, 17, 166, 0.18), 0 8px 20px rgba(42, 17, 166, 0.24);
+  --shadow-nav: 0 -1px 2px rgba(20, 19, 26, 0.03), 0 -8px 24px rgba(20, 19, 26, 0.045);
+  --shadow-luxury: 0 12px 40px rgba(26, 16, 37, 0.12);
+  --shadow-glow: 0 0 0 1px rgba(42, 17, 166, 0.10), 0 8px 28px rgba(42, 17, 166, 0.14);
+
+  /* ── Motion ──────────────────────────────────────────────────────────────── */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-body {
-  font-family: var(--font-body);
-  color: var(--color-charcoal);
-  background-color: var(--color-canvas);
-  min-width: 320px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  overscroll-behavior: none;
-  background-image:
-    radial-gradient(ellipse 70% 50% at 0% -10%, rgba(42, 17, 166, 0.03) 0%, transparent 100%),
-    radial-gradient(ellipse 50% 40% at 100% 90%, rgba(181, 54, 197, 0.03) 0%, transparent 100%);
-  background-attachment: fixed;
+/* ── Base ──────────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-body);
+    color: var(--color-charcoal);
+    background-color: var(--color-canvas);
+    min-width: 320px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+    background-image:
+      radial-gradient(ellipse 60% 45% at 50% -8%, rgba(42, 17, 166, 0.045) 0%, transparent 100%),
+      radial-gradient(ellipse 45% 40% at 100% 95%, rgba(181, 54, 197, 0.035) 0%, transparent 100%);
+    /* `fixed` here was doubly wasteful: the scroll container is <main>, not the
+       document, so the background never actually stayed put — it just forced a
+       full-viewport repaint on every scroll frame. `scroll` paints once. */
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: var(--color-charcoal);
+    text-wrap: balance;
+  }
+
+  p { text-wrap: pretty; }
+
+  /* Money and counts must not shift width as digits change. */
+  .tabular, .font-mono, table td, table th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+  }
+
+  /* Scrollbars — unobtrusive, themed to the neutral ramp. */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 9999px;
+    border: 3px solid var(--color-canvas);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-faint); }
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-}
-
-::selection {
-  background-color: var(--color-primary-light);
-  color: var(--color-primary);
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-.skeleton {
-  background: linear-gradient(90deg, var(--color-muted-bg) 25%, #E8E4DE 50%, var(--color-muted-bg) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: 0.75rem;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-4px); }
-}
-
-.float {
-  animation: float 3s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.pulse-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-@keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
+/* ── Signature gradient text ─────────────────────────────────────────────────
+   Static by default. The old build animated it on a 4s infinite loop, which
+   re-drew a 4xl number every frame and pulled the eye away from the figure. */
 .gradient-text {
-  background: linear-gradient(135deg, #2A11A6, #B536C5, #552559);
-  background-size: 200% 200%;
+  background: linear-gradient(135deg, var(--color-gradient-start) 0%, var(--color-gradient-mid) 50%, var(--color-gradient-end) 100%);
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: gradient-shift 4s ease infinite;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
-.gradient-border {
+/* ── Surfaces ──────────────────────────────────────────────────────────────── */
+.card-interactive {
+  cursor: pointer;
+  transition:
+    box-shadow 240ms var(--ease-out-quart),
+    border-color 240ms var(--ease-out-quart),
+    transform 240ms var(--ease-out-quart);
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-primary-ring);
+  transform: translateY(-2px);
+}
+.card-interactive:active { transform: translateY(0); }
+
+/* Hero panel for the dashboard revenue block and similar single-focus moments. */
+.premium-surface {
   position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, #FFFFFF 0%, #FBF9FF 45%, #F9F5FF 100%);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
 }
-
-.gradient-border::before {
+.premium-surface::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, #2A11A6, #B536C5, #552559);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
+  background: radial-gradient(ellipse 70% 60% at 50% -20%, rgba(42, 17, 166, 0.07) 0%, transparent 100%);
 }
 
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(226, 221, 214, 0.5);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(231, 227, 237, 0.7);
 }
 
-.glass-strong {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(226, 221, 214, 0.6);
-}
 
-.shine {
-  position: relative;
-  overflow: hidden;
-}
+/* Hairline sheen that sweeps once on hover — used on primary CTAs only. */
 
-.shine::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.1) 45%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.1) 55%,
-    transparent 60%
-  );
-  transform: rotate(45deg);
-  animation: none;
-}
-
-.shine:hover::after {
-  animation: shine-sweep 0.6s ease-in-out;
-}
-
-@keyframes shine-sweep {
-  0% { transform: translateX(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) rotate(45deg); }
-}
-
-.card-hover-glow:hover {
-  box-shadow: var(--shadow-card-glow);
-  border-color: rgba(42, 17, 166, 0.12);
-}
-
-.nav-active-indicator {
-  position: relative;
-}
-
-.nav-active-indicator::before {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 0 4px 4px 0;
-  background: linear-gradient(180deg, #2A11A6, #B536C5);
-}
-
-.bottom-nav-active {
-  position: relative;
-}
-
-.bottom-nav-active::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 3px;
-  border-radius: 0 0 4px 4px;
-  background: linear-gradient(90deg, #2A11A6, #B536C5);
-}
-
-.stat-accent-top {
-  position: relative;
-  overflow: hidden;
-}
+/* ── Accent rules ──────────────────────────────────────────────────────────── */
+/* A quiet 2px accent, not a full-saturation bar. This was on 31 sections at
+   once — Verification Requests, Business Directory, Audit Report, System Health,
+   every Dashboard section — so every card looked identical and the pages had no
+   hierarchy at all. It is now reserved for the single hero block of each view
+   (see the surviving uses in Dashboard/Admin/MyIssues); secondary sections are
+   separated by header weight and surface elevation instead. */
+.stat-accent-top { position: relative; overflow: hidden; }
 
 .stat-accent-top::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #2A11A6, #B536C5, #D4A853);
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-gradient-start) 55%, transparent),
+    color-mix(in srgb, var(--color-gradient-end) 55%, transparent)
+  );
 }
 
+.nav-active-indicator { position: relative; }
+.nav-active-indicator::before {
+  content: '';
+  position: absolute;
+  left: -12px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 22px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, var(--color-gradient-start), var(--color-gradient-end));
+}
+
+.bottom-nav-active { position: relative; }
+.bottom-nav-active::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 22px; height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, var(--color-gradient-start), var(--color-gradient-end));
+}
+
+/* ── Recognition badges ───────────────────────────────────────────────────────
+   The old `.rank-medal` existed but was never mounted. Wired here for the
+   leaderboard's top three, where gold/silver/bronze actually mean something. */
 .rank-medal {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 26px; height: 26px;
+  border-radius: 9999px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: -0.01em;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
-
 .rank-medal.gold {
-  background: linear-gradient(135deg, #F59E0B, #D97706);
+  background: linear-gradient(135deg, #E8B54A, #B8862F);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  box-shadow: 0 2px 8px rgba(184, 134, 47, 0.35);
 }
-
 .rank-medal.silver {
-  background: linear-gradient(135deg, #A1A1AA, #71717A);
+  background: linear-gradient(135deg, #B6B3BC, #8A8792);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(113, 113, 122, 0.3);
+  box-shadow: 0 2px 8px rgba(138, 135, 146, 0.3);
 }
-
 .rank-medal.bronze {
-  background: linear-gradient(135deg, #D4A853, #A16207);
+  background: linear-gradient(135deg, #C98A5B, #96603A);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(161, 98, 7, 0.3);
+  box-shadow: 0 2px 8px rgba(150, 96, 58, 0.3);
 }
-
 .rank-medal.default {
   background: var(--color-muted-bg);
-  color: var(--color-steel);
+  color: var(--color-muted);
   font-size: 10px;
 }
 
-.gradient-accent-btn {
-  position: relative;
-  overflow: hidden;
-}
-
+.gradient-accent-btn { position: relative; overflow: hidden; }
 .gradient-accent-btn::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.18), transparent 55%);
   pointer-events: none;
 }
 
-.gradient-accent-btn:hover {
-  box-shadow: var(--shadow-btn-hover);
+
+/* ── Motion ────────────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-muted-bg) 25%, #EDEAF3 50%, var(--color-muted-bg) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-md);
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.float { animation: float 6s ease-in-out infinite; }
+
+/* Report-issue FAB. Namespaced `rf-` because the previous `@keyframes float`
+   here re-declared the same name with different values, and @keyframes are
+   document-global with last-declared-wins — so these two silently fought.
+   `rf-ring` animates transform rather than box-shadow, which keeps it on the
+   compositor instead of repainting a permanently-visible button every 2s. */
+@keyframes rf-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes rf-ring {
+  0% { transform: scale(1); opacity: 0.45; }
+  70% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+@keyframes rf-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-10deg); }
+  40% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  80% { transform: rotate(4deg); }
+}
+@keyframes rf-antenna-l {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+@keyframes rf-antenna-r {
+  0%, 100% { transform: rotate(5deg); }
+  50% { transform: rotate(-5deg); }
+}
+.issue-btn {
+  animation: rf-float 3s ease-in-out infinite;
+}
+.issue-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid rgb(59 130 246 / 0.5);
+  pointer-events: none;
+  animation: rf-ring 2s ease-in-out infinite;
+}
+.issue-btn:hover { animation: rf-wiggle 0.5s ease-in-out; }
+.ant-l { transform-origin: 8px 10px; animation: rf-antenna-l 2s ease-in-out infinite; }
+.ant-r { transform-origin: 16px 10px; animation: rf-antenna-r 2s ease-in-out infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.88); }
+}
+.pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+
+
+/* ── Focus ────────────────────────────────────────────────────────────────────
+   A ring on a coloured surface needs a surface-coloured offset, otherwise it
+   disappears into the control it is supposed to sit outside of. */
 *:focus-visible {
   outline: 2px solid var(--color-primary-ring);
   outline-offset: 2px;
   border-radius: var(--radius-input);
 }
 
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+/* ── Utilities ──────────────────────────────────────────────────────────────── */
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 .marquee-bounce {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   animation: marquee-bounce 40s ease-in-out infinite alternate;
 }
-
 @keyframes marquee-bounce {
   0% { transform: translateX(0); }
   100% { transform: translateX(calc(100vw - 100%)); }
 }
-
-.marquee-bounce:hover {
-  animation-play-state: paused;
-}
+.marquee-bounce:hover { animation-play-state: paused; }
 
 .text-fluid-h1 { font-size: clamp(1.25rem, 4vw, 2.5rem); }
 .text-fluid-h2 { font-size: clamp(1.25rem, 3vw, 1.75rem); }
-.text-fluid-h3 { font-size: clamp(1rem, 2.5vw, 1.25rem); }
-.text-fluid-body { font-size: clamp(0.8125rem, 1.5vw, 1rem); }
-.text-fluid-sm { font-size: clamp(0.75rem, 1.25vw, 0.875rem); }
+
+/* Ledger rows read better with a quiet alternating tint than with grid lines. */
+.ledger tbody tr { transition: background-color 150ms ease; }
+.ledger tbody tr:hover { background-color: var(--color-canvas); }
+
+/* Progress meter — thicker track, rounded cap, subtle inner highlight. */
+.meter-track {
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--color-muted-bg);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--color-gradient-start), var(--color-gradient-end));
+  transition: width 700ms var(--ease-out-quart);
+  position: relative;
+}
+.meter-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 50% 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

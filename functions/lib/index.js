@@ -33,7 +33,10 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dailyFirestoreBackup = exports.onIssueUpdated = exports.onIssueCreated = exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserRegistered = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = void 0;
+exports.dailyFirestoreBackup = exports.onIssueUpdated = exports.onIssueCreated = exports.checkMembershipExpiry = exports.onMembershipActivated = exports.syncUserRole = exports.onUserRegistered = exports.onUserCreate = exports.verifyAdminCode = exports.sendAdminCode = exports.sendWelcomeEmail = exports.onMeetingCreated = exports.onAdminIssueCreated = exports.onPendingRevenueCreated = exports.onInterestCreated = exports.onProfileCreated = exports.onRequestDigest = exports.rebuildRevenueStats = exports.reconcileRevenueStats = exports.onDealWritten = void 0;
+// Side-effect import: populates process.env from functions/runtime-env.json
+// BEFORE the module-scope constants below read it. Keep it first.
+require("./runtimeEnv");
 const functions = __importStar(require("firebase-functions/v2"));
 const callable = __importStar(require("firebase-functions/v2/https"));
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -44,16 +47,29 @@ const firestore_2 = require("@google-cloud/firestore");
 const resend_1 = require("resend");
 const crypto_1 = require("crypto");
 const rateLimit_1 = require("./rateLimit");
+const html_1 = require("./html");
+// Re-exports so every trigger is registered with the Functions runtime on deploy.
+var revenueStats_1 = require("./revenueStats");
+Object.defineProperty(exports, "onDealWritten", { enumerable: true, get: function () { return revenueStats_1.onDealWritten; } });
+Object.defineProperty(exports, "reconcileRevenueStats", { enumerable: true, get: function () { return revenueStats_1.reconcileRevenueStats; } });
+Object.defineProperty(exports, "rebuildRevenueStats", { enumerable: true, get: function () { return revenueStats_1.rebuildRevenueStats; } });
+// Admin email alerts. See ./events.ts — each is an onDocumentCreated that mails
+// the super admin when something new needs an admin.
+var events_1 = require("./events");
+Object.defineProperty(exports, "onRequestDigest", { enumerable: true, get: function () { return events_1.onRequestDigest; } });
+Object.defineProperty(exports, "onProfileCreated", { enumerable: true, get: function () { return events_1.onProfileCreated; } });
+Object.defineProperty(exports, "onInterestCreated", { enumerable: true, get: function () { return events_1.onInterestCreated; } });
+Object.defineProperty(exports, "onPendingRevenueCreated", { enumerable: true, get: function () { return events_1.onPendingRevenueCreated; } });
+Object.defineProperty(exports, "onAdminIssueCreated", { enumerable: true, get: function () { return events_1.onAdminIssueCreated; } });
+Object.defineProperty(exports, "onMeetingCreated", { enumerable: true, get: function () { return events_1.onMeetingCreated; } });
 admin.initializeApp();
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'SB Connect <notifications@yourdomain.com>';
-function sanitize(input) {
-    return input
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#x27;');
+// Surfaced once at cold start: an unset key makes every email silently no-op,
+// and that is otherwise only visible in per-send logs.
+if (!RESEND_API_KEY) {
+    functions.logger.warn('RESEND_API_KEY is not set — all outbound email is disabled. ' +
+        'Set it in functions/runtime-env.json or as a platform env var.');
 }
 const DRIP_THRESHOLDS = [90, 60, 30, 14, 7, 1, 0];
 const DRIP_SUBJECTS = {
@@ -66,7 +82,7 @@ const DRIP_SUBJECTS = {
     0: 'SB Connect — Membership Expired',
 };
 function dripBody(companyName, daysUntilExpiry, paidDate) {
-    const safeName = sanitize(companyName);
+    const safeName = (0, html_1.sanitize)(companyName);
     if (daysUntilExpiry > 0) {
         return `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
@@ -92,7 +108,7 @@ function dripBody(companyName, daysUntilExpiry, paidDate) {
   `;
 }
 function dripWelcomeBody(companyName, paidDate, expiry) {
-    const safeName = sanitize(companyName);
+    const safeName = (0, html_1.sanitize)(companyName);
     const start = new Date(paidDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const end = new Date(expiry).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     return `
@@ -252,7 +268,7 @@ exports.onUserRegistered = (0, firestore_1.onDocumentCreated)('users/{uid}', asy
     const body = `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>👋 Welcome to SB Connect!</h2>
-      <p>Dear ${sanitize(displayName || 'Member')},</p>
+      <p>Dear ${(0, html_1.sanitize)(displayName || 'Member')},</p>
       <p>Thank you for registering with SB Connect — the premier business networking community.</p>
       <p><strong>Next steps:</strong></p>
       <ul>
@@ -394,12 +410,12 @@ exports.onIssueCreated = (0, firestore_1.onDocumentCreated)('issueReports/{id}',
                 html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>We received your report</h2>
-            <p>Dear ${sanitize(issue.userDisplayName || 'Member')},</p>
+            <p>Dear ${(0, html_1.sanitize)(issue.userDisplayName || 'Member')},</p>
             <p>Thank you for reporting an issue. Here's a summary:</p>
             <div style="background: #F5F0E8; border-radius: 12px; padding: 16px; margin: 16px 0;">
               <p><strong>Ticket ID:</strong> #${id.slice(0, 8)}</p>
-              <p><strong>Subject:</strong> ${sanitize(issue.subject)}</p>
-              <p><strong>Description:</strong> ${sanitize(issue.description)}</p>
+              <p><strong>Subject:</strong> ${(0, html_1.sanitize)(issue.subject)}</p>
+              <p><strong>Description:</strong> ${(0, html_1.sanitize)(issue.description)}</p>
             </div>
             <p>Our admin team will review it and get back to you shortly.</p>
             <p>You can track this issue in your dashboard under "My Reports".</p>
@@ -437,11 +453,11 @@ exports.onIssueUpdated = (0, firestore_1.onDocumentWritten)('issueReports/{id}',
                 html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>Issue Resolved</h2>
-            <p>Dear ${sanitize(after.userDisplayName || 'Member')},</p>
+            <p>Dear ${(0, html_1.sanitize)(after.userDisplayName || 'Member')},</p>
             <p>Your issue report has been marked as resolved:</p>
             <div style="background: #F5F0E8; border-radius: 12px; padding: 16px; margin: 16px 0;">
-              <p><strong>Subject:</strong> ${sanitize(after.subject)}</p>
-              ${after.adminNote ? `<p><strong>Admin note:</strong> ${sanitize(after.adminNote)}</p>` : ''}
+              <p><strong>Subject:</strong> ${(0, html_1.sanitize)(after.subject)}</p>
+              ${after.adminNote ? `<p><strong>Admin note:</strong> ${(0, html_1.sanitize)(after.adminNote)}</p>` : ''}
             </div>
             <p>If you have further questions, feel free to submit a new report.</p>
             <hr style="margin: 24px 0;" />
@@ -468,11 +484,11 @@ exports.onIssueUpdated = (0, firestore_1.onDocumentWritten)('issueReports/{id}',
                     html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>Admin Reply</h2>
-              <p>Dear ${sanitize(after.userDisplayName || 'Member')},</p>
+              <p>Dear ${(0, html_1.sanitize)(after.userDisplayName || 'Member')},</p>
               <p>Admin replied to your issue report:</p>
               <div style="background: #F5F0E8; border-radius: 12px; padding: 16px; margin: 16px 0;">
-                <p><strong>Subject:</strong> ${sanitize(after.subject)}</p>
-                <p><strong>Reply:</strong> ${sanitize(newReply.text)}</p>
+                <p><strong>Subject:</strong> ${(0, html_1.sanitize)(after.subject)}</p>
+                <p><strong>Reply:</strong> ${(0, html_1.sanitize)(newReply.text)}</p>
               </div>
               <p>Log in to your dashboard to continue the conversation.</p>
               <hr style="margin: 24px 0;" />

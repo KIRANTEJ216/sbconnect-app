@@ -65,45 +65,106 @@ export default function Login() {
   return (
     <AnimatedPage>
     <div className="min-h-[100dvh] flex bg-canvas">
-      <div className="hidden lg:flex w-1/2 items-center justify-center p-12 relative overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #F5F0E8 0%, #F0E8F5 30%, #FAF5F0 60%, #F5F0F5 100%)'
-      }}>
+      {/* Brand panel — a deep gradient field so the logo (navy artwork) has real
+          contrast. The logo sits on a raised glass plate rather than floating
+          directly on colour, which gives it depth without recolouring the asset. */}
+      <div className="hidden lg:flex w-[46%] xl:w-1/2 relative overflow-hidden bg-ink">
         <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(ellipse 60% 50% at 20% 30%, rgba(42,17,166,0.06) 0%, transparent 100%), radial-gradient(ellipse 50% 50% at 80% 60%, rgba(181,54,197,0.05) 0%, transparent 100%), radial-gradient(ellipse 40% 40% at 50% 80%, rgba(212,168,83,0.04) 0%, transparent 100%)`
+          background: 'linear-gradient(150deg, #2A11A6 0%, #4A1FBF 38%, #7C2FB8 68%, #B536C5 100%)'
         }} />
-        <div className="absolute top-12 left-12 w-32 h-32 border border-primary/5 rounded-full" />
-        <div className="absolute bottom-24 right-16 w-48 h-48 border border-secondary/5 rounded-full" />
-        <div className="absolute top-1/3 right-8 w-16 h-16 bg-primary/3 rounded-full" />
-        <div className="relative z-10 flex flex-col items-center animate-[fade-in_0.8s_ease-out]">
-          <img
-            src="/sbconnect-logo.png"
-            alt="SB Connect"
-            className="w-72 h-auto object-contain drop-shadow-lg animate-[float_6s_ease-in-out_infinite]"
-          />
-          <p className="text-steel/80 text-sm font-bold tracking-tight mt-6 animate-[fade-in_1s_ease-out_0.3s_both]">Only Business No Politics</p>
+        <div className="absolute inset-0" style={{
+          backgroundImage: 'radial-gradient(ellipse 70% 55% at 18% 12%, rgba(255,255,255,0.16) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 88% 92%, rgba(212,168,83,0.20) 0%, transparent 65%)'
+        }} />
+        {/* Hairline arcs — geometry, not decoration-for-its-sake. */}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.14]" aria-hidden="true">
+          <circle cx="18%" cy="78%" r="380" fill="none" stroke="white" strokeWidth="1" />
+          <circle cx="82%" cy="16%" r="240" fill="none" stroke="white" strokeWidth="1" />
+          <circle cx="52%" cy="46%" r="520" fill="none" stroke="white" strokeWidth="1" />
+        </svg>
+
+        <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-input bg-white/12 backdrop-blur-sm border border-white/20 grid place-items-center">
+              <span className="text-white text-h3 font-bold leading-none">S</span>
+            </div>
+            <span className="text-white/90 text-sm font-semibold tracking-tight">SB Connect</span>
+          </div>
+
+          <div className="max-w-md">
+            <div className="flex w-fit items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-sm mb-7">
+              <span className="w-1.5 h-1.5 rounded-full bg-gold-bright" />
+              <span className="text-micro font-semibold text-white/90 tracking-[0.08em] uppercase">
+                Member Network
+              </span>
+            </div>
+
+            {/* Raised plate keeps the navy logo legible on the gradient. */}
+            <div className="flex w-fit items-center justify-center bg-white rounded-2xl px-10 py-8 shadow-luxury">
+              <img
+                src="/sbconnect-logo.png"
+                alt="SB Connect"
+                className="h-24 w-auto object-contain"
+              />
+            </div>
+
+            <h2 className="mt-8 text-white text-fluid-h1 font-bold tracking-tight leading-[1.1]">
+              Only Business,
+              <br />
+              No Politics.
+            </h2>
+            <p className="mt-4 text-white/70 text-body leading-relaxed max-w-sm">
+              Refer business, track the revenue it generates, and keep every
+              introduction accounted for across the chapter.
+            </p>
+
+            <dl className="mt-10 grid grid-cols-3 gap-4 max-w-sm">
+              {[
+                { k: 'Revenue', v: 'Tracked' },
+                { k: 'Referrals', v: 'Credited' },
+                { k: 'Meetings', v: 'Verified' },
+              ].map((s) => (
+                <div key={s.k} className="border-l-2 border-white/20 pl-3">
+                  <dt className="text-micro text-white/55 tracking-[0.06em] uppercase">{s.k}</dt>
+                  <dd className="text-sm font-semibold text-white mt-0.5">{s.v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+
+          <p className="text-micro text-white/40">
+            &copy; {new Date().getFullYear()} SB Connect
+          </p>
         </div>
       </div>
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden flex flex-col items-center mb-10">
+
+      {/* Form panel */}
+      <div className="w-full lg:w-[54%] xl:w-1/2 flex items-center justify-center px-5 py-10 sm:px-8">
+        <div className="w-full max-w-[26rem]">
+          <div className="lg:hidden flex flex-col items-center mb-9 text-center">
             <img
               src="/sbconnect-logo.png"
               alt="SB Connect"
-              className="w-40 h-auto object-contain mb-4"
+              className="h-14 w-auto object-contain mb-4"
             />
+            <p className="text-h3 font-bold tracking-tight text-charcoal">Only Business, No Politics.</p>
+            <p className="text-sm text-muted mt-1.5 max-w-[16rem]">
+              Refer business and track the revenue it generates.
+            </p>
           </div>
-          <Card>
-            <CardContent className="p-10">
-              <div className="text-center mb-10">
-                <h1 className="text-fluid-h1 font-bold text-charcoal tracking-tight">Welcome back</h1>
-                <p className="text-sm text-steel mt-1.5">Sign in to your account</p>
-              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="mb-8">
+            <h1 className="text-h1 font-bold text-charcoal">Welcome back</h1>
+            <p className="text-body text-muted mt-1.5">Sign in to your account</p>
+          </div>
+
+          <Card className="shadow-lg">
+            <CardContent className="p-6 sm:p-7">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
-                  label="Email"
+                  label="Email or phone"
                   type="text"
-                  placeholder="Email address"
+                  autoComplete="username"
+                  placeholder="you@company.com"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   required
@@ -111,6 +172,7 @@ export default function Login() {
                 <Input
                   label="Password"
                   type="password"
+                  autoComplete="current-password"
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -118,31 +180,36 @@ export default function Login() {
                 />
 
                 {error && (
-                  <p className="text-sm text-danger bg-danger-light px-4 py-2.5 rounded-xl">{error}</p>
+                  <p role="alert" className="text-sm text-danger-strong bg-danger-light border border-danger/15 px-3.5 py-2.5 rounded-input">
+                    {error}
+                  </p>
                 )}
 
-                <Button type="submit" loading={loading} className="w-full">
+                <Button type="submit" loading={loading} className="w-full !h-11">
                   Sign in
                 </Button>
               </form>
 
-              <div className="mt-8 text-center space-y-3">
+              <div className="mt-6 pt-5 border-t border-border space-y-2.5 text-center">
                 <Link
                   to="/reset-password"
-                  className="text-sm text-muted hover:text-primary transition-colors"
+                  className="block text-sm text-steel hover:text-primary transition-colors"
                 >
                   Forgot password?
                 </Link>
                 <p className="text-sm text-muted">
                   Don't have an account?{' '}
-                  <Link to="/register" className="text-primary hover:text-primary-hover font-medium transition-colors">
+                  <Link to="/register" className="text-primary hover:text-primary-hover font-semibold transition-colors">
                     Register
                   </Link>
                 </p>
               </div>
             </CardContent>
           </Card>
-          <p className="text-center text-xs text-muted font-bold mt-6 lg:hidden">Only Business No Politics</p>
+
+          <p className="text-center text-micro text-faint mt-6">
+            By signing in you agree to the chapter's code of conduct.
+          </p>
         </div>
       </div>
     </div>

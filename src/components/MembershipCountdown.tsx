@@ -9,7 +9,7 @@ export function MembershipCountdown({ membershipExpiry }: { membershipExpiry: nu
       <div className="p-3 rounded-xl bg-danger/10 border border-danger/30 text-center">
         <p className="text-xs font-mono text-danger font-semibold">EXPIRED</p>
         <p className="text-3xl font-bold text-danger">{absDays}</p>
-        <p className="text-[10px] text-danger/70">days ago</p>
+        <p className="text-xs text-danger/70">days ago</p>
       </div>
     );
   }
@@ -33,7 +33,7 @@ export function MembershipCountdown({ membershipExpiry }: { membershipExpiry: nu
     <div className={`p-3 rounded-xl ${threshold.bg} ${threshold.border} border text-center`}>
       <p className={`text-xs font-mono font-semibold ${threshold.text}`}>{threshold.label}</p>
       <p className={`text-3xl font-bold ${threshold.text}`}>{days}</p>
-      <p className="text-[10px] text-muted">days remaining</p>
+      <p className="text-xs text-muted">days remaining</p>
     </div>
   );
 }

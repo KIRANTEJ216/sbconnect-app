@@ -1,23 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig, getOnlineUsers, resetProductionData } from '../lib/firestore';
+import { getAllUsers, getUserByEmail, setUserRole, getUnverifiedProfiles, verifyBusinessProfile, deleteBusinessProfile, getLoginLogs, createMeeting, getMeetings, getMeetingAttendance, addNotification, getMeetingRSVPs, getAllProfiles, deleteNotification, deleteMeeting, getAllRequests, deleteRequest, closeRequest, awardDeal, getDeals, getLeaderboard, getIssueReports, resolveIssueReport, deleteIssueReport, addIssueReply, saveWebhookUrl, getWebhookUrl, triggerWebhookExport, sendUserNotification, updateMembershipDates, bulkImportProfiles, getRevenueConfig, setRevenueConfig, getOnlineUsers, resetProductionData, reviewRevenueEntry, submitReferralRevenueAsAdmin, submitDealAsAdmin, recalculateTotalBusinessValue, recalculateReferralRevenueTotals, getProfileByPhone, parseAmount } from '../lib/firestore';
 import type { LoginLog, ImportProfileEntry } from '../lib/firestore';
 import { generateAuditReport, downloadReport } from '../lib/auditReport';
 import { runHealthCheck, type HealthReport } from '../lib/healthCheck';
 import { loadErrors, clearErrors, getRecentErrors } from '../lib/errorTracker';
-import { useAllRsvpsByMeeting, useOnlineUsersCount } from '../hooks/useFirebaseQuery';
-import { formatDate, formatTime, formatCurrency, getFinancialYear } from '../lib/format';
+import { useAllRsvpsByMeeting, useOnlineUsersCount, usePendingRevenueQuery, useReferralLeaderboardQuery, useTotalReferralRevenue, useReferralRevenueEntriesQuery, useTotalBusinessValue, usePendingRevenueTotalsQuery } from '../hooks/useFirebaseQuery';
+import { formatDate, formatTime, formatCompactINR, formatINR, toCompactINR, byCompanyName, getFinancialYear } from '../lib/format';
 import { isSuperAdmin } from '../lib/admin';
 import type { BusinessProfile, Meeting, Attendance, MeetingRSVP, UserProfile, Request, IssueReport, Deal, LeaderboardEntry, RevenueConfig } from '../types';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 
-import { QRCodeSVG } from 'qrcode.react';
 
 function exportMembershipCSV(profiles: BusinessProfile[]) {
   const headers = ['Owner Name', 'Owner Surname', 'Business Name', 'Phone', 'Email', 'Member Since', 'Expiry Date', 'Days Remaining', 'Status'];
@@ -70,6 +70,37 @@ function exportProfilesCSV(profiles: BusinessProfile[]) {
 
 
 const SUPER_ADMIN_EMAILS = ['kktej3d@gmail.com'];
+
+/**
+ * Renders a QR code by loading the encoder on demand.
+ *
+ * `qrcode.react` was statically imported, which put its chunk in the initial
+ * modulepreload list — every visitor downloaded a QR encoder to load a page where
+ * exactly one QR is rendered, and only after opening a meeting.
+ */
+function DeferredQR({ value, size }: { value: string; size: number }) {
+  const [Encoder, setEncoder] = useState<null | ((p: { value: string; size: number }) => React.ReactElement)>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void import('qrcode.react')
+      .then((mod) => {
+        if (!cancelled) setEncoder(() => mod.QRCodeSVG as never);
+      })
+      .catch(() => { /* A missing QR must not break the meeting panel. */ });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!Encoder) {
+    // Reserve the exact footprint so the panel doesn't resize when it lands.
+    return <div style={{ width: size, height: size }} aria-hidden="true" />;
+  }
+  return <Encoder value={value} size={size} />;
+}
 
 export default function Admin() {
   const { user, profile } = useAuth();
@@ -126,10 +157,117 @@ export default function Admin() {
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState('');
+  const [recalcLoading, setRecalcLoading] = useState(false);
+  const [recalcMsg, setRecalcMsg] = useState('');
+  const { data: totalBusinessValue = 0 } = useTotalBusinessValue();
 
   const { data: meetingRsvpMap = {} as Record<string, MeetingRSVP[]>, isLoading: rsvpMapLoading, refetch: refetchRsvps } = useAllRsvpsByMeeting();
   const { data: onlineCount = 0 } = useOnlineUsersCount();
   const [onlineUsers, setOnlineUsers] = useState<UserProfile[]>([]);
+
+  // Revenue verification
+  const { data: pendingRevenue = [], isLoading: revQueueLoading } = usePendingRevenueQuery();
+  const { data: referralLeaderboard = [], isLoading: referralBoardLoading } = useReferralLeaderboardQuery();
+  const { data: referralTotals = { totalValue: 0, pendingValue: 0 } } = useTotalReferralRevenue();
+  const { data: referralEntries = [] } = useReferralRevenueEntriesQuery();
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState('');
+  const [reviewMsg, setReviewMsg] = useState('');
+  const [addRefUid, setAddRefUid] = useState('');
+  const [addRefMemberName, setAddRefMemberName] = useState('');
+  const [addRefReferrerUid, setAddRefReferrerUid] = useState('');
+  const [addRefReferrerName, setAddRefReferrerName] = useState('');
+  const [addRefAmount, setAddRefAmount] = useState('');
+  const [addRefClient, setAddRefClient] = useState('');
+  const [addRefExternalName, setAddRefExternalName] = useState('');
+  const [addRefNote, setAddRefNote] = useState('');
+  const [addRefSaveReferrer, setAddRefSaveReferrer] = useState(false);
+  const [addRefSaving, setAddRefSaving] = useState(false);
+  const [addRefLookup, setAddRefLookup] = useState(false);
+  const [addRefMsg, setAddRefMsg] = useState('');
+
+  // Record a plain deal on a member's behalf — the member received business but
+  // never entered it. Distinct from the referral form below, which credits a
+  // referrer and is excluded from the Business Leaderboard by design.
+  const [behalfUid, setBehalfUid] = useState('');
+  const [behalfGiver, setBehalfGiver] = useState('');
+  const [behalfExternalName, setBehalfExternalName] = useState('');
+  const [behalfAmount, setBehalfAmount] = useState('');
+  const [behalfNote, setBehalfNote] = useState('');
+  const [behalfSaving, setBehalfSaving] = useState(false);
+  const [behalfMsg, setBehalfMsg] = useState('');
+
+  // Members who actually have a referrer on file. Used for stats/badges only —
+  // the Record Referral Revenue form deliberately lists every member, because
+  // people get referred verbally and the profile is often still empty.
+  const referredMembers = useMemo(
+    () => profiles.filter((p) => !!p.referredByPhone),
+    [profiles],
+  );
+
+  const profilesByUid = useMemo(() => {
+    const m = new Map<string, BusinessProfile>();
+    for (const p of profiles) m.set(p.uid, p);
+    return m;
+  }, [profiles]);
+
+  // getAllProfiles already returns A–Z; sorting again with the shared comparator
+  // keeps the admin pickers correct even if a future caller stops sorting.
+  const sortedProfiles = useMemo(
+    () => [...profiles].sort(byCompanyName),
+    [profiles],
+  );
+
+  const selectedReferralMember = addRefUid ? profilesByUid.get(addRefUid) : undefined;
+
+  // Referrer options exclude the member being credited, since self-referral is invalid.
+  const referrerOptions = useMemo(
+    () => sortedProfiles.filter((p) => p.uid !== addRefUid),
+    [sortedProfiles, addRefUid],
+  );
+
+  const resolvedClientName = addRefClient === '__others__'
+    ? addRefExternalName.trim()
+    : addRefClient
+      ? (profilesByUid.get(addRefClient)?.companyName || '')
+      : '';
+
+  // The "save referrer on profile" backfill only applies when both ends are real
+  // profiles — there is nothing to write when either side is a typed "Others".
+  const canSaveReferrerToProfile =
+    addRefUid !== '' && addRefUid !== '__others__'
+    && addRefReferrerUid !== '' && addRefReferrerUid !== '__others__';
+
+  // Pre-fills the referrer from the member's profile, and keeps it editable so a
+  // wrong or missing attribution can be corrected at entry time.
+  const selectReferralMember = async (uid: string) => {
+    setAddRefUid(uid);
+    setAddRefMsg('');
+    // Switching to "Others" clears any referrer carried over from a real profile.
+    if (uid === '__others__') {
+      setAddRefReferrerUid('');
+      setAddRefReferrerName('');
+      return;
+    }
+    setAddRefMemberName('');
+    const member = uid ? profilesByUid.get(uid) : undefined;
+    const phone = member?.referredByPhone;
+    if (!phone) {
+      setAddRefReferrerUid('');
+      return;
+    }
+    setAddRefLookup(true);
+    try {
+      const referrer = await getProfileByPhone(phone);
+      setAddRefReferrerUid(referrer?.uid || '');
+    } catch {
+      setAddRefReferrerUid('');
+    } finally {
+      setAddRefLookup(false);
+    }
+  };
+
+  const { data: pendingRevenueTotals = { total: 0, totalCount: 0, pendingDeals: 0, pendingDealsCount: 0, pendingReferrals: 0, pendingReferralsCount: 0 } } = usePendingRevenueTotalsQuery();
 
   useEffect(() => {
     getOnlineUsers().then(setOnlineUsers).catch(() => {});
@@ -426,6 +564,160 @@ export default function Admin() {
     setWebhookSyncing(false);
   };
 
+  const handleReviewRevenue = async (dealId: string, approve: boolean) => {
+    if (!canWrite) return;
+    setReviewingId(dealId);
+    setReviewMsg('');
+    try {
+      await reviewRevenueEntry(dealId, approve, reviewNote);
+      // Every surface that shows money has to move together.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['pendingRevenue'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['referralLeaderboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['referralRevenueEntries'] }),
+        queryClient.invalidateQueries({ queryKey: ['myRevenueEntries'] }),
+        queryClient.invalidateQueries({ queryKey: ['allDeals'] }),
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] }),
+      ]);
+      setReviewNote('');
+      setReviewMsg(approve ? '✅ Verified and added to the total.' : '🚫 Entry rejected.');
+      setTimeout(() => setReviewMsg(''), 4000);
+    } catch (e) {
+      setReviewMsg('Failed: ' + (e instanceof Error ? e.message : e));
+    }
+    setReviewingId(null);
+  };
+
+const handleAddReferralRevenue = async () => {
+    if (!canWrite) return;
+    const memberIsOthers = addRefUid === '__others__';
+    const referrerIsOthers = addRefReferrerUid === '__others__';
+    const clientIsOthers = addRefClient === '__others__';
+
+    if (!addRefUid) { setAddRefMsg('Select who received the business, or choose Others.'); return; }
+    if (memberIsOthers && !addRefMemberName.trim()) { setAddRefMsg('Enter the company that received the business.'); return; }
+    if (!addRefReferrerUid) { setAddRefMsg('Select the referrer to credit, or choose Others.'); return; }
+    if (referrerIsOthers && !addRefReferrerName.trim()) { setAddRefMsg('Enter the referrer name.'); return; }
+    if (!addRefClient) { setAddRefMsg('Select who gave the business, or choose Others.'); return; }
+    if (clientIsOthers && !addRefExternalName.trim()) { setAddRefMsg('Enter the client / business name.'); return; }
+    if (!addRefAmount.trim()) { setAddRefMsg('Enter the revenue amount.'); return; }
+
+    const memberUid = memberIsOthers ? '' : addRefUid;
+    const referrerUid = referrerIsOthers ? '' : addRefReferrerUid;
+    const clientUid = clientIsOthers ? '' : addRefClient;
+    const clientName = clientIsOthers
+      ? addRefExternalName.trim()
+      : (profilesByUid.get(addRefClient)?.companyName || '');
+
+    setAddRefSaving(true);
+    setAddRefMsg('');
+    try {
+      await submitReferralRevenueAsAdmin({
+        memberUid,
+        memberCompanyName: memberIsOthers ? addRefMemberName.trim() : undefined,
+        referrerUid,
+        referrerCompanyName: referrerIsOthers ? addRefReferrerName.trim() : undefined,
+        amount: addRefAmount,
+        clientUid: clientUid || undefined,
+        clientName,
+        clientIsExternal: clientIsOthers,
+        note: addRefNote,
+        // Only meaningful when both ends resolve to real profiles.
+        alsoSaveReferrerToProfile: addRefSaveReferrer && !!memberUid && !!referrerUid,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['referralLeaderboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['referralRevenueEntries'] }),
+        queryClient.invalidateQueries({ queryKey: ['pendingRevenue'] }),
+        queryClient.invalidateQueries({ queryKey: ['profiles'] }),
+      ]);
+      const creditTo = referrerIsOthers
+        ? addRefReferrerName.trim()
+        : (profilesByUid.get(referrerUid)?.companyName || 'the referrer');
+      setAddRefUid('');
+      setAddRefMemberName('');
+      setAddRefReferrerUid('');
+      setAddRefReferrerName('');
+      setAddRefAmount('');
+      setAddRefClient('');
+      setAddRefExternalName('');
+      setAddRefNote('');
+      setAddRefSaveReferrer(false);
+      setAddRefMsg(`✅ ${formatCompactINR(parseAmount(addRefAmount))} recorded — credited to ${creditTo}.`);
+      setTimeout(() => setAddRefMsg(''), 6000);
+    } catch (e) {
+      setAddRefMsg('Failed: ' + (e instanceof Error ? e.message : e));
+    }
+    setAddRefSaving(false);
+  };
+
+  const handleRecalcTotals = async () => {
+    if (!canWrite) return;
+    setRecalcLoading(true);
+    setRecalcMsg('');
+    try {
+      await recalculateTotalBusinessValue();
+      const referral = await recalculateReferralRevenueTotals();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['referralLeaderboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] }),
+      ]);
+      setRecalcMsg(`✅ Rebuilt — ${referral.pendingValue > 0 ? `${formatCompactINR(referral.pendingValue)} still awaiting verification.` : 'nothing pending.'}`);
+    } catch (e) {
+      setRecalcMsg('Failed: ' + (e instanceof Error ? e.message : e));
+    }
+    setRecalcLoading(false);
+  };
+
+  const handleRecordDealBehalf = async () => {
+    if (!canWrite) return;
+    if (!behalfUid) { setBehalfMsg('Select the member who received the business.'); return; }
+    const isExternal = behalfGiver === '__other__';
+    if (!behalfGiver) { setBehalfMsg('Select or enter the client / business.'); return; }
+    if (isExternal && !behalfExternalName.trim()) { setBehalfMsg('Enter the external business name.'); return; }
+    if (!behalfAmount.trim()) { setBehalfMsg('Enter the revenue amount.'); return; }
+
+    setBehalfSaving(true);
+    setBehalfMsg('');
+    try {
+      const giverName = isExternal
+        ? behalfExternalName.trim()
+        : (profilesByUid.get(behalfGiver)?.companyName || '');
+      await submitDealAsAdmin({
+        memberUid: behalfUid,
+        giverUid: isExternal ? undefined : behalfGiver,
+        giverName,
+        clientName: giverName,
+        amount: behalfAmount,
+        note: behalfNote,
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['revenueSummary'] }),
+        queryClient.invalidateQueries({ queryKey: ['pendingRevenueTotals'] }),
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['allDeals'] }),
+        queryClient.invalidateQueries({ queryKey: ['referralLeaderboard'] }),
+      ]);
+      const memberName = profilesByUid.get(behalfUid)?.companyName || 'the member';
+      setBehalfUid('');
+      setBehalfGiver('');
+      setBehalfExternalName('');
+      setBehalfAmount('');
+      setBehalfNote('');
+      setBehalfMsg(`✅ Recorded — ${memberName} now shows this on the dashboard, leaderboard and total.`);
+      setTimeout(() => setBehalfMsg(''), 6000);
+    } catch (e) {
+      setBehalfMsg('Failed: ' + (e instanceof Error ? e.message : e));
+    }
+    setBehalfSaving(false);
+  };
+
   const handleSaveRevenue = async () => {
     if (!canWrite || !user) return;
     setRevSaving(true);
@@ -453,7 +745,7 @@ export default function Admin() {
       await resetProductionData(user.uid);
       setResetMsg('All deals, requests, profiles, and revenue data have been reset for production launch.');
       setResetConfirm(false);
-      queryClient.invalidateQueries({ queryKey: ['totalBusinessValue'] });
+      queryClient.invalidateQueries({ queryKey: ['revenueSummary'] });
       queryClient.invalidateQueries({ queryKey: ['revenueConfig'] });
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
@@ -567,7 +859,7 @@ export default function Admin() {
 
           {/* Business Directory */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">👥 Business Directory ({profiles.length})</h3>
               </CardHeader>
@@ -580,7 +872,7 @@ export default function Admin() {
               ) : (
                 <>
                 <div className="flex justify-end mb-3">
-                  <Button size="sm" variant="outline" onClick={() => exportProfilesCSV(profiles)}>
+                  <Button size="sm" variant="outline" onClick={() => exportProfilesCSV(sortedProfiles)}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                       <polyline points="7 10 12 15 17 10" />
@@ -605,7 +897,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {profiles.map((p) => (
+                      {sortedProfiles.map((p) => (
                         <tr key={p.uid} className="hover:bg-canvas/50 transition-colors">
                           <td className="px-4 py-3 font-medium text-charcoal text-xs max-w-[140px] truncate">{p.companyName}</td>
                           <td className="px-4 py-3 text-steel text-xs">{p.ownerName || '—'}</td>
@@ -644,7 +936,7 @@ export default function Admin() {
 
           {/* Membership Expiry */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">💳 Membership Expiry ({profiles.length})</h3>
               </CardHeader>
@@ -655,7 +947,7 @@ export default function Admin() {
               ) : (
                 <>
                 <div className="flex justify-end mb-3">
-                  <Button size="sm" variant="outline" onClick={() => exportMembershipCSV(profiles)}>
+                  <Button size="sm" variant="outline" onClick={() => exportMembershipCSV(sortedProfiles)}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                       <polyline points="7 10 12 15 17 10" />
@@ -677,7 +969,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {profiles.map((p) => {
+                      {sortedProfiles.map((p) => {
                         const hasMembership = p.membershipExpiry > 0;
                         const days = hasMembership ? Math.floor((p.membershipExpiry - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
                         const isExpired = hasMembership && days <= 0;
@@ -726,7 +1018,7 @@ export default function Admin() {
         <div className="space-y-6">
           {/* Meeting Management */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">📅 Meeting Management</h3>
               </CardHeader>
@@ -770,30 +1062,30 @@ export default function Admin() {
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                       <div className="bg-primary-light/40 rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-primary">{meetingRsvps.filter((r) => r.response === 'yes').length} / {profiles.length}</p>
-                        <p className="text-[11px] text-steel font-medium mt-0.5">Confirmed / Total Members</p>
+                        <p className="text-xs text-steel font-medium mt-0.5">Confirmed / Total Members</p>
                       </div>
                       <div className="bg-accent-light/40 rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-accent">{meetingRsvps.filter((r) => r.response === 'yes').reduce((sum, r) => sum + 1 + (r.guestCount || 0), 0)}</p>
-                        <p className="text-[11px] text-steel font-medium mt-0.5">Estimated Headcount</p>
+                        <p className="text-xs text-steel font-medium mt-0.5">Estimated Headcount</p>
                       </div>
                       <div className="bg-success-light/30 rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-success">{meetingAttendance.length}</p>
-                        <p className="text-[11px] text-steel font-medium mt-0.5">Attendance Marked</p>
+                        <p className="text-xs text-steel font-medium mt-0.5">Attendance Marked</p>
                       </div>
                       <div className="bg-canvas rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-charcoal">{meetingRsvps.length}</p>
-                        <p className="text-[11px] text-steel font-medium mt-0.5">Total RSVPs</p>
+                        <p className="text-xs text-steel font-medium mt-0.5">Total RSVPs</p>
                       </div>
                       <div className="bg-danger-light/30 rounded-xl p-3 text-center">
                         <p className="text-2xl font-bold text-danger">{meetingRsvps.filter((r) => r.response === 'no').length}</p>
-                        <p className="text-[11px] text-steel font-medium mt-0.5">Not Going</p>
+                        <p className="text-xs text-steel font-medium mt-0.5">Not Going</p>
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4">
                       <div className="bg-surface border border-border rounded-xl p-4 flex flex-col items-center shrink-0">
                         <p className="text-xs font-medium text-muted font-mono mb-2 text-center">Scan to mark attendance</p>
-                        <QRCodeSVG value={selectedMeetingData.qrCodeURL} size={140} />
-                        <p className="text-[11px] text-muted text-center mt-2 font-mono">{selectedMeetingData.label}</p>
+                        <DeferredQR value={selectedMeetingData.qrCodeURL} size={140} />
+                        <p className="text-xs text-muted text-center mt-2 font-mono">{selectedMeetingData.label}</p>
                       </div>
                       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="bg-canvas rounded-xl p-3">
@@ -861,7 +1153,7 @@ export default function Admin() {
 
           {/* Meeting Attendance */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">✅ Meeting Attendance ({meetings.length})</h3>
               </CardHeader>
@@ -983,7 +1275,7 @@ export default function Admin() {
         <div className="space-y-6">
           {/* Send Update / Notification */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">🔔 Send Update</h3>
               </CardHeader>
@@ -1026,7 +1318,7 @@ export default function Admin() {
 
           {/* Issue Reports */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">🐛 Issue Reports ({issueReports.length})</h3>
               </CardHeader>
@@ -1065,7 +1357,7 @@ export default function Admin() {
                           </Badge>
                         </div>
                         <p className="text-sm text-charcoal pl-4">{r.description}</p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted font-mono pl-4">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted font-mono pl-4">
                           <span>Page: {r.page}</span>
                           <span>{new Date(r.createdAt).toLocaleString('en-IN')}</span>
                         </div>
@@ -1075,7 +1367,7 @@ export default function Admin() {
                             <input
                               type="text"
                               placeholder="Admin note (optional)..."
-                              className="flex-1 min-w-0 rounded-[0.5rem] border border-border px-2.5 py-1.5 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
+                              className="flex-1 min-w-0 rounded-sm border border-border px-2.5 py-1.5 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
                               id={`note-${r.id}`}
                             />
                             {canWrite && (
@@ -1116,7 +1408,7 @@ export default function Admin() {
                           <div className="pl-4 space-y-1.5 border-l-2 border-border ml-1">
                             {r.replies.map((reply) => (
                               <div key={reply.id} className="flex items-start gap-2">
-                                <span className="text-[11px] font-semibold text-steel shrink-0 mt-0.5">{reply.authorName}:</span>
+                                <span className="text-xs font-semibold text-steel shrink-0 mt-0.5">{reply.authorName}:</span>
                                 <p className="text-xs text-charcoal">{reply.text}</p>
                               </div>
                             ))}
@@ -1128,7 +1420,7 @@ export default function Admin() {
                             <input
                               type="text"
                               placeholder="Type a reply..."
-                              className="flex-1 min-w-0 rounded-[0.5rem] border border-border px-2.5 py-1.5 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
+                              className="flex-1 min-w-0 rounded-sm border border-border px-2.5 py-1.5 text-xs bg-surface focus:outline-none focus:ring-2 focus:ring-primary-ring"
                               value={replyTexts[r.id] ?? ''}
                               onChange={(e) => setReplyTexts((prev) => ({ ...prev, [r.id]: e.target.value }))}
                             />
@@ -1169,7 +1461,7 @@ export default function Admin() {
       {/* ── Requests Tab ── */}
       {activeTab === 'requests' && (
         <Card>
-          <div className="stat-accent-top">
+          <div>
             <CardHeader>
               <h3 className="font-semibold text-charcoal tracking-tight">📋 Request Activity ({requests.length})</h3>
             </CardHeader>
@@ -1178,7 +1470,11 @@ export default function Admin() {
             {requestsLoading ? (
               <div className="skeleton h-48 rounded-xl" />
             ) : requests.length === 0 ? (
-              <p className="text-sm text-muted text-center py-8">No requests posted yet.</p>
+              <EmptyState
+                noun="request"
+                title="No requests posted yet"
+                body="Requests you post for members appear here for review and awarding."
+              />
             ) : (
               <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-96 overflow-y-auto">
                 <table className="w-full text-sm min-w-[600px]">
@@ -1205,7 +1501,7 @@ export default function Admin() {
                         <tr key={req.id} className="hover:bg-canvas/50 transition-colors">
                           <td className="px-4 py-3 max-w-[180px]">
                             <p className="text-xs font-medium text-charcoal truncate">{req.title}</p>
-                            <p className="text-[10px] text-muted font-mono mt-0.5">{req.category}{req.budget ? ` · ${formatCurrency(req.budget)}` : ''}</p>
+                            <p className="text-xs text-muted font-mono mt-0.5">{req.category}{req.budget ? ` · ${toCompactINR(req.budget)}` : ''}</p>
                           </td>
                           <td className="px-4 py-3 text-xs text-steel font-mono">{req.companyName}</td>
                           <td className="px-4 py-3 text-xs text-muted font-mono whitespace-nowrap">{formatDate(req.createdAt)}</td>
@@ -1275,7 +1571,7 @@ export default function Admin() {
         <div className="space-y-6">
           {/* Audit & Compliance Report */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">📊 Audit & Compliance Report</h3>
               </CardHeader>
@@ -1316,7 +1612,7 @@ export default function Admin() {
 
           {/* System Health */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">🩺 System Health</h3>
               </CardHeader>
@@ -1371,7 +1667,7 @@ export default function Admin() {
                         {Object.entries(healthReport.counts).map(([col, count]) => (
                           <div key={col} className="bg-surface border border-border rounded-lg px-3 py-2 text-center">
                             <p className="text-lg font-bold text-charcoal">{count < 0 ? '—' : count}</p>
-                            <p className="text-[10px] text-muted font-medium uppercase tracking-wide">{col}</p>
+                            <p className="text-xs text-muted font-medium uppercase tracking-wide">{col}</p>
                           </div>
                         ))}
                       </div>
@@ -1422,7 +1718,7 @@ export default function Admin() {
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-danger mt-0.5 shrink-0" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                                 <div className="min-w-0">
                                   <p className="text-xs text-steel font-mono break-all">{e.message}</p>
-                                  <p className="text-[10px] text-muted mt-0.5">
+                                  <p className="text-xs text-muted mt-0.5">
                                     {e.source} · {new Date(e.timestamp).toLocaleString('en-IN')}
                                   </p>
                                 </div>
@@ -1433,7 +1729,7 @@ export default function Admin() {
                       </div>
                     )}
 
-                    <p className="text-[10px] text-muted text-right">
+                    <p className="text-xs text-muted text-right">
                       Last checked: {new Date(healthReport.generatedAt).toLocaleString('en-IN')}
                     </p>
                   </div>
@@ -1444,7 +1740,7 @@ export default function Admin() {
 
           {/* Webhook / Google Sheets Sync */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">🔗 Webhook / Google Sheets Sync</h3>
               </CardHeader>
@@ -1485,7 +1781,7 @@ export default function Admin() {
         <div className="space-y-6">
           {/* Login Activity */}
           <Card>
-            <div className="stat-accent-top">
+            <div>
               <CardHeader>
                 <h3 className="font-semibold text-charcoal tracking-tight">🕐 Login Activity ({logs.length})</h3>
               </CardHeader>
@@ -1511,8 +1807,8 @@ export default function Admin() {
                           <tr key={log.id} className="hover:bg-canvas/50 transition-colors">
                             <td className="px-4 py-2 text-charcoal text-xs">{log.displayName}</td>
                             <td className="px-4 py-2 text-steel text-xs font-mono">{log.email}</td>
-                            <td className="px-4 py-2 text-muted font-mono text-[11px] whitespace-nowrap">{formatDate(log.timestamp)} {formatTime(log.timestamp)}</td>
-                            <td className="px-4 py-2 text-muted font-mono text-[11px]">{log.ip || '—'}</td>
+                            <td className="px-4 py-2 text-muted font-mono text-xs whitespace-nowrap">{formatDate(log.timestamp)} {formatTime(log.timestamp)}</td>
+                            <td className="px-4 py-2 text-muted font-mono text-xs">{log.ip || '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1524,7 +1820,7 @@ export default function Admin() {
           </Card>
 
           {/* Admins */}
-          <div className="stat-accent-top rounded-card bg-surface border border-border shadow-card">
+          <div className="rounded-card bg-surface border border-border shadow-card">
                 <CardHeader>
                   <h3 className="font-semibold text-charcoal tracking-tight">🔑 Admins ({admins.length})</h3>
                 </CardHeader>
@@ -1563,64 +1859,320 @@ export default function Admin() {
       {/* ── Referrals Tab ── */}
       {activeTab === 'referrals' && (
         <div className="space-y-6">
+          {/* Referral revenue summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-xs font-medium text-muted uppercase tracking-wider mb-1.5">Referral Revenue (verified)</p>
+                <p className="text-2xl font-semibold text-charcoal tracking-tight">{formatCompactINR(referralTotals.totalValue)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-xs font-medium text-muted uppercase tracking-wider mb-1.5">Awaiting Verification</p>
+                <p className="text-2xl font-semibold text-charcoal tracking-tight">{formatCompactINR(referralTotals.pendingValue)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-5">
+                <p className="text-xs font-medium text-muted uppercase tracking-wider mb-1.5">Members Referred</p>
+                <p className="text-2xl font-semibold text-charcoal tracking-tight">{referredMembers.length}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Add referral revenue on a member's behalf */}
+          {canWrite && (
+            <Card>
+              <CardHeader>
+                <h3 className="font-semibold text-charcoal tracking-tight">➕ Record Referral Revenue</h3>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted mb-4">
+                  For when a member was referred and that business generated revenue, but nobody has entered the
+                  amount yet. Every member is listed — pick who received the business, and the referrer is pre-filled
+                  from their profile. If nothing is on file, or it is wrong, pick the right referrer here.
+                  Recorded entries are marked admin-entered and counted immediately.
+                </p>
+                {profilesLoading ? (
+                  <div className="skeleton h-24 rounded-xl" />
+                ) : profiles.length === 0 ? (
+                  <p className="text-sm text-muted py-4 text-center">No members registered yet.</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-steel mb-1.5">Received By (member)</label>
+                        <select
+                          value={addRefUid}
+                          onChange={(e) => selectReferralMember(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-input border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <option value="">Select member…</option>
+                          {sortedProfiles.map((m) => (
+                            <option key={m.uid} value={m.uid}>
+                              {m.companyName || '—'} — {m.ownerName}{m.referredByPhone ? '  ✓ ref' : ''}
+                            </option>
+                          ))}
+                          <option value="__others__">Others (not a member)</option>
+                        </select>
+                        {addRefUid === '__others__' && (
+                          <Input
+                            value={addRefMemberName}
+                            onChange={(e) => setAddRefMemberName(e.target.value)}
+                            placeholder="Company that received the business"
+                            className="mt-1.5"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-steel mb-1.5">
+                          Credited To (referrer)
+                        </label>
+                        <select
+                          value={addRefReferrerUid}
+                          onChange={(e) => setAddRefReferrerUid(e.target.value)}
+                          disabled={!addRefUid}
+                          className="w-full px-3 py-2 text-sm rounded-input border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <option value="">
+                            {!addRefUid ? 'Select a member first…' : addRefLookup ? 'Looking up…' : 'Select referrer…'}
+                          </option>
+                          {referrerOptions.map((p) => (
+                            <option key={p.uid} value={p.uid}>{p.companyName || '—'} — {p.ownerName}</option>
+                          ))}
+                          <option value="__others__">Others (not a member)</option>
+                        </select>
+                        {addRefReferrerUid === '__others__' && (
+                          <Input
+                            value={addRefReferrerName}
+                            onChange={(e) => setAddRefReferrerName(e.target.value)}
+                            placeholder="Referrer name / company"
+                            className="mt-1.5"
+                          />
+                        )}
+                        {addRefUid && addRefUid !== '__others__' && (
+                          selectedReferralMember?.referredByPhone ? (
+                            <p className="text-micro text-muted mt-1">
+                              From profile: {selectedReferralMember.referredByName || selectedReferralMember.referredByPhone}
+                              {!addRefReferrerUid && ' — not matched to a member'}
+                            </p>
+                          ) : (
+                            <p className="text-micro text-muted mt-1">No referrer on this profile — pick one above.</p>
+                          )
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-steel mb-1.5">Revenue Amount</label>
+                        <Input
+                          value={addRefAmount}
+                          onChange={(e) => setAddRefAmount(e.target.value)}
+                          placeholder="500000 or 5L"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-steel mb-1.5">Given By (client / business)</label>
+                        <select
+                          value={addRefClient}
+                          onChange={(e) => setAddRefClient(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-input border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <option value="">Select client…</option>
+                          {sortedProfiles
+                            .filter((p) => p.uid !== addRefUid)
+                            .map((p) => (
+                              <option key={p.uid} value={p.uid}>{p.companyName || '—'}</option>
+                            ))}
+                          <option value="__others__">Others (not a member)</option>
+                        </select>
+                        {addRefClient === '__others__' && (
+                          <Input
+                            value={addRefExternalName}
+                            onChange={(e) => setAddRefExternalName(e.target.value)}
+                            placeholder="Company that gave the business"
+                            className="mt-1.5"
+                          />
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-steel mb-1.5">Note (optional)</label>
+                        <Input
+                          value={addRefNote}
+                          onChange={(e) => setAddRefNote(e.target.value)}
+                          placeholder="Verified over call"
+                        />
+                      </div>
+                    </div>
+
+                    {canSaveReferrerToProfile && addRefReferrerUid !== '__others__' && (
+                      <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={addRefSaveReferrer}
+                          onChange={(e) => setAddRefSaveReferrer(e.target.checked)}
+                          className="w-3.5 h-3.5 accent-[var(--color-primary)]"
+                        />
+                        <span className="text-micro text-muted">
+                          Also save this referrer on the member's profile. Writes permanently to their record — leave
+                          off if this is a one-off correction.
+                        </span>
+                      </label>
+                    )}
+                  </>
+                )}
+                {addRefMsg && (
+                  <p className={`text-xs mt-3 ${addRefMsg.startsWith('✅') ? 'text-success' : 'text-danger'}`}>{addRefMsg}</p>
+                )}
+                <div className="mt-4 flex items-center gap-3">
+                  <Button
+                    onClick={handleAddReferralRevenue}
+                    disabled={addRefSaving || !addRefUid || !addRefReferrerUid || !resolvedClientName || !addRefAmount}
+                  >
+                    {addRefSaving ? 'Recording…' : 'Record & Credit Referrer'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Revenue-ranked referral leaderboard */}
           <Card>
             <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-1">
                 <h2 className="text-lg font-semibold text-charcoal">Referral Leaderboard</h2>
                 <span className="text-xs text-muted bg-canvas px-2.5 py-1 rounded-lg">
-                  {profiles.filter((p) => p.referredByPhone).length} referred
+                  {referredMembers.length} referred
                 </span>
               </div>
-              {profilesLoading ? (
+              <p className="text-xs text-muted mb-4">Ranked by verified revenue generated through referrals.</p>
+              {referralBoardLoading || profilesLoading ? (
                 <p className="text-sm text-muted text-center py-8">Loading...</p>
+              ) : referralLeaderboard.length === 0 ? (
+                <p className="text-sm text-muted text-center py-8">No referrals yet.</p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="space-y-3">
+                  {referralLeaderboard.map((entry, i) => (
+                    <div key={entry.uid} className="rounded-lg border border-border overflow-hidden">
+                      <div className="flex items-center gap-3 px-3 py-2.5 bg-canvas border-b border-border">
+                        <span className={`rank-medal ${i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default'}`}>
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-charcoal truncate">
+                            {entry.name || 'Unnamed referrer'}
+                            {entry.isExternal && (
+                              <Badge variant="neutral" className="ml-1.5">External</Badge>
+                            )}
+                          </p>
+                          <p className="text-micro text-muted truncate">
+                            {entry.companyName || '—'}{entry.phone ? ` · ${entry.phone}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold text-charcoal tabular" title={formatINR(entry.approvedRevenue)}>
+                            {formatCompactINR(entry.approvedRevenue)}
+                          </p>
+                          <p className="text-micro text-muted">
+                            {entry.referralCount} referred
+                            {entry.pendingRevenue > 0 && (
+                              <> · <span className="text-warning">{formatCompactINR(entry.pendingRevenue)} pending</span></>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      {entry.deals.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border text-left">
+                              <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-micro">Received By</th>
+                              <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-micro">Given By</th>
+                              <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-micro">Status</th>
+                              <th className="px-3 py-2 font-medium text-muted font-mono tracking-tight text-micro text-right">Deal Value</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {entry.deals.map((d) => (
+                              <tr key={d.id} className="hover:bg-canvas/50 transition-colors">
+                                <td className="px-3 py-2 text-xs font-medium text-charcoal truncate max-w-[180px]" title={d.receivedBy}>
+                                  {d.receivedBy}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-steel truncate max-w-[180px]" title={d.givenBy}>
+                                  {d.givenBy}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <Badge variant={d.status === 'approved' ? 'success' : d.status === 'rejected' ? 'danger' : 'neutral'}>
+                                    {d.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-3 py-2 text-xs font-semibold text-charcoal text-right tabular" title={formatINR(d.value)}>
+                                  {formatCompactINR(d.value)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Referral revenue ledger */}
+          <Card>
+            <CardHeader>
+              <h3 className="font-semibold text-charcoal tracking-tight">📄 Referral Revenue Ledger ({referralEntries.length})</h3>
+            </CardHeader>
+            <CardContent>
+              {referralEntries.length === 0 ? (
+                <p className="text-sm text-muted text-center py-8">No referral revenue recorded yet.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-80 overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">#</th>
-                        <th className="text-left py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">Referrer</th>
-                        <th className="text-left py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">Phone</th>
-                        <th className="text-right py-3 px-2 text-xs font-medium text-muted uppercase tracking-wider">Referrals</th>
+                      <tr className="border-b border-border text-left">
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Date</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Referred Member</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Credited To</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Client</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Entered By</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Amount</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {(() => {
-                        const grouped = new Map<string, { count: number }>();
-                        const referrerMap = new Map<string, BusinessProfile | undefined>();
-                        for (const p of profiles) {
-                          const phone = p.referredByPhone;
-                          if (!phone) continue;
-                          if (!referrerMap.has(phone)) {
-                            referrerMap.set(phone, profiles.find((bp) => bp.phone === phone));
-                          }
-                          grouped.set(phone, { count: (grouped.get(phone)?.count ?? 0) + 1 });
-                        }
-                        const entries = [...grouped.entries()].sort((a, b) => b[1].count - a[1].count);
-                        if (entries.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan={4} className="text-center text-muted py-8">No referrals yet.</td>
-                            </tr>
-                          );
-                        }
-                        return entries.map(([phone, { count }], i) => {
-                          const referrer = referrerMap.get(phone);
-                          const name = referrer ? `${referrer.ownerName} ${referrer.ownerSurname}`.trim() : null;
-                          return (
-                            <tr key={phone} className="border-b border-border last:border-0 hover:bg-canvas/50 transition-colors">
-                              <td className="py-3 px-2 text-muted text-xs">{i + 1}</td>
-                              <td className="py-3 px-2 font-medium text-charcoal">
-                                {name || <span className="text-muted italic">No profile</span>}
-                              </td>
-                              <td className="py-3 px-2 text-muted font-mono text-xs">{phone}</td>
-                              <td className="py-3 px-2 text-right">
-                                <span className="inline-flex items-center justify-center min-w-[2rem] h-6 px-2 rounded-full bg-primary-light text-primary text-xs font-semibold">{count}</span>
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()}
+                    <tbody className="divide-y divide-border">
+                      {referralEntries.map((entry) => {
+                        const status = entry.status || 'approved';
+                        return (
+                          <tr key={entry.id} className="hover:bg-canvas/50 transition-colors">
+                            <td className="px-4 py-2.5 text-xs text-muted font-mono whitespace-nowrap">{formatDate(entry.createdAt)}</td>
+                            <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{entry.referredMemberName || entry.receiverCompanyName}</td>
+                            <td className="px-4 py-2.5 text-xs text-charcoal">{entry.referrerName || '—'}</td>
+                            <td className="px-4 py-2.5 text-xs text-steel max-w-[150px] truncate" title={entry.requestTitle}>
+                              {entry.requestTitle}
+                              {entry.clientIsExternal
+                                ? <span className="block text-xs text-muted">External</span>
+                                : entry.clientUid
+                                  ? <span className="block text-xs text-muted">Member</span>
+                                  : null}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-muted">
+                              {entry.submittedByRole === 'admin' ? 'Admin' : 'Member'}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <Badge variant={status === 'approved' ? 'success' : status === 'rejected' ? 'danger' : 'neutral'}>
+                                {status}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{toCompactINR(entry.amount)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1633,6 +2185,217 @@ export default function Admin() {
       {/* ── Deals Tab ── */}
       {activeTab === 'deals' && (
         <div className="space-y-6">
+          {/* Record a deal the member never entered */}
+          {canWrite && (
+            <Card>
+              <CardHeader>
+                <h3 className="font-semibold text-charcoal tracking-tight">➕ Record Deal on Behalf</h3>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted mb-4">
+                  For when a member received business but never recorded it. Filed as a plain deal, so it appears on
+                  the dashboard total and the Business Leaderboard. For business that arrived <em>through a referral</em>,
+                  use Record Referral Revenue in the Referrals tab instead — that credits the referrer.
+                </p>
+                {profilesLoading ? (
+                  <div className="skeleton h-20 rounded-xl" />
+                ) : profiles.length === 0 ? (
+                  <p className="text-sm text-muted py-4 text-center">No members registered yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-steel mb-1.5">Member (received)</label>
+                      <select
+                        value={behalfUid}
+                        onChange={(e) => setBehalfUid(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-input border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">Select member…</option>
+                        {sortedProfiles.map((m) => (
+                          <option key={m.uid} value={m.uid}>{m.companyName || '—'} — {m.ownerName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-steel mb-1.5">Client / Business</label>
+                      <select
+                        value={behalfGiver}
+                        onChange={(e) => setBehalfGiver(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-input border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">Select client…</option>
+                        {sortedProfiles
+                          .filter((p) => p.uid !== behalfUid)
+                          .map((p) => (
+                            <option key={p.uid} value={p.uid}>{p.companyName || '—'}</option>
+                          ))}
+                        <option value="__other__">External business (not a member)</option>
+                      </select>
+                    </div>
+                    {behalfGiver === '__other__' && (
+                      <div>
+                        <label className="block text-xs font-medium text-steel mb-1.5">External Business Name</label>
+                        <Input
+                          value={behalfExternalName}
+                          onChange={(e) => setBehalfExternalName(e.target.value)}
+                          placeholder="Acme Corp"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-xs font-medium text-steel mb-1.5">Revenue Amount</label>
+                      <Input
+                        value={behalfAmount}
+                        onChange={(e) => setBehalfAmount(e.target.value)}
+                        placeholder="500000 or 5L"
+                      />
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mt-3">
+                  <div className="xl:col-span-3">
+                    <label className="block text-xs font-medium text-steel mb-1.5">Note (optional)</label>
+                    <Input
+                      value={behalfNote}
+                      onChange={(e) => setBehalfNote(e.target.value)}
+                      placeholder="Confirmed over call"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={handleRecordDealBehalf}
+                      loading={behalfSaving}
+                      disabled={!behalfUid || !behalfGiver || !behalfAmount}
+                      className="w-full"
+                    >
+                      {behalfSaving ? 'Recording…' : 'Record Deal'}
+                    </Button>
+                  </div>
+                </div>
+                {behalfMsg && (
+                  <p className={`text-xs mt-3 ${behalfMsg.startsWith('✅') ? 'text-success' : 'text-danger'}`}>
+                    {behalfMsg}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Revenue verification queue — every member-submitted amount waits here */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-charcoal tracking-tight">
+                  ⏳ Revenue Awaiting Verification ({pendingRevenue.length})
+                </h3>
+                <span className="text-xs text-muted bg-canvas px-2.5 py-1 rounded-lg text-right">
+                  <span className="font-semibold text-charcoal">{formatCompactINR(pendingRevenueTotals.total)}</span> pending
+                  <span className="block text-xs">
+                    {formatCompactINR(pendingRevenueTotals.pendingDeals)} deals · {formatCompactINR(pendingRevenueTotals.pendingReferrals)} referrals
+                  </span>
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted mb-4">
+                Members report revenue they were given. Nothing here counts toward the total or the leaderboard
+                until you verify it. Revenue on behalf of a referred business is credited to that member's referrer.
+              </p>
+              {reviewMsg && (
+                <p className={`text-xs mb-3 ${reviewMsg.startsWith('✅') ? 'text-success' : 'text-danger'}`}>{reviewMsg}</p>
+              )}
+              {revQueueLoading ? (
+                <div className="skeleton h-24 rounded-xl" />
+              ) : pendingRevenue.length === 0 ? (
+                <p className="text-sm text-muted text-center py-6">Nothing awaiting verification.</p>
+              ) : (
+                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Submitted</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Type</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Reported By</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">From</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Credited To</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Detail</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Amount</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {pendingRevenue.map((entry) => {
+                        const ageDays = Math.floor((Date.now() - entry.createdAt) / 86400000);
+                        const isReferral = entry.source === 'referral';
+                        // A member-submitted claim can carry a referrer phone that no
+                        // longer matches a profile. It counts toward the total but
+                        // cannot be credited, so flag it rather than letting it pass.
+                        const orphanReferral = isReferral && !entry.referrerUid;
+                        return (
+                          <tr key={entry.id} className="hover:bg-canvas/50 transition-colors align-top">
+                            <td className="px-4 py-2.5 text-xs text-muted font-mono whitespace-nowrap">
+                              {formatDate(entry.createdAt)}
+                              <span className={`block text-xs ${ageDays >= 7 ? 'text-danger' : 'text-muted'}`}>
+                                {ageDays === 0 ? 'today' : `${ageDays}d ago`}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs">
+                              <Badge variant={orphanReferral ? 'danger' : isReferral ? 'accent' : 'neutral'}>
+                                {isReferral ? 'Referral' : 'Deal'}
+                              </Badge>
+                              {orphanReferral && (
+                                <span className="block text-xs text-danger mt-0.5" title="The referrer on this member's profile does not match any member profile, so this cannot be credited. Fix the referrer on the Referrals tab, then record again.">
+                                  referrer unresolved
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs font-medium text-charcoal">
+                              {entry.receiverCompanyName || entry.giverCompanyName}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-steel">{isReferral ? '—' : entry.giverCompanyName}</td>
+                            <td className="px-4 py-2.5 text-xs text-charcoal">
+                              {isReferral ? (entry.referrerName || '—') : entry.receiverCompanyName}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs text-steel max-w-[160px] truncate" title={entry.requestTitle}>
+                              {entry.requestTitle}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right whitespace-nowrap">
+                              {toCompactINR(entry.amount)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <input
+                                  value={reviewingId === entry.id ? reviewNote : ''}
+                                  onChange={(e) => setReviewNote(e.target.value)}
+                                  onFocus={() => setReviewingId(entry.id)}
+                                  placeholder="Note (optional)"
+                                  className="w-28 px-2 py-1 text-xs rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                />
+                                <Button
+                                  onClick={() => handleReviewRevenue(entry.id, true)}
+                                  disabled={!canWrite}
+                                  className="!px-2.5 !py-1 !text-xs"
+                                >
+                                  Verify
+                                </Button>
+                                <Button
+                                  onClick={() => handleReviewRevenue(entry.id, false)}
+                                  disabled={!canWrite}
+                                  className="!px-2.5 !py-1 !text-xs"
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           {/* Revenue Target Config (super admin) */}
           <Card>
             <CardHeader>
@@ -1643,7 +2406,7 @@ export default function Admin() {
                 <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
                   <div>
                     <p className="text-xs text-muted">Current Target · {getFinancialYear().fyLabel}</p>
-                    <p className="text-lg font-bold text-charcoal">{formatCurrency(String(revenueConfig.target))}</p>
+                    <p className="text-lg font-bold text-charcoal">{formatCompactINR(revenueConfig.target)}</p>
                   </div>
                 </div>
               )}
@@ -1654,6 +2417,26 @@ export default function Admin() {
               <div className="flex items-center gap-3">
                 {canWrite && <Button onClick={handleSaveRevenue} loading={revSaving}>Save Target</Button>}
                 {revMsg && <span className={`text-xs ${revMsg.includes('saved') ? 'text-success' : 'text-danger'}`}>{revMsg}</span>}
+              </div>
+              <div className="pt-3 mt-1 border-t border-border">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
+                    <p className="text-xs font-medium text-charcoal">Totals Breakdown</p>
+                    <p className="text-xs text-muted">
+                      Verified deal revenue {formatCompactINR(totalBusinessValue)} + verified referral revenue {formatCompactINR(referralTotals.totalValue)}
+                      {pendingRevenueTotals.total > 0 && (
+                        <> + unverified submissions {formatCompactINR(pendingRevenueTotals.total)} ({pendingRevenueTotals.totalCount})</>
+                      )}
+                      {' '}= {formatCompactINR(totalBusinessValue + referralTotals.totalValue + pendingRevenueTotals.total)} shown on the dashboard. Verifying moves a submission from unverified into verified; rejecting removes it from the total.
+                    </p>
+                  </div>
+                  {canWrite && (
+                    <Button onClick={handleRecalcTotals} loading={recalcLoading} className="!text-xs">
+                      Rebuild Totals From Ledger
+                    </Button>
+                  )}
+                </div>
+                {recalcMsg && <p className="text-xs text-muted mt-2">{recalcMsg}</p>}
               </div>
             </CardContent>
           </Card>
@@ -1726,7 +2509,11 @@ export default function Admin() {
               {dealsLoading ? (
                 <div className="skeleton h-48 rounded-xl" />
               ) : allLeaderboard.length === 0 ? (
-                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+                <EmptyState
+                  noun="trophy"
+                  title="No deals recorded yet"
+                  body="Recorded business revenue builds the leaderboard and the FY totals."
+                />
               ) : (
                 <div className="overflow-x-auto max-h-64 overflow-y-auto">
                   <table className="w-full text-sm">
@@ -1745,9 +2532,9 @@ export default function Admin() {
                           <td className="px-4 py-2.5 text-xs text-muted">{i + 1}</td>
                           <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{entry.companyName}</td>
                           <td className="px-4 py-2.5 text-xs text-steel">{entry.ownerName || '—'}</td>
-                          <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{formatCurrency(String(entry.totalRevenue))}</td>
+                          <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{formatCompactINR(entry.totalRevenue)}</td>
                           <td className="px-4 py-2.5 text-xs text-right">
-                            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1.5 rounded-full bg-primary-light text-primary text-[10px] font-semibold">{entry.dealCount}</span>
+                            <span className="inline-flex items-center justify-center min-w-[1.5rem] h-5 px-1.5 rounded-full bg-primary-light text-primary text-xs font-semibold">{entry.dealCount}</span>
                           </td>
                         </tr>
                       ))}
@@ -1761,13 +2548,17 @@ export default function Admin() {
           {/* All Deals */}
           <Card>
             <CardHeader>
-              <h3 className="font-semibold text-charcoal tracking-tight">📝 All Deals ({deals.length})</h3>
+              <h3 className="font-semibold text-charcoal tracking-tight">📝 All Revenue Entries ({deals.length})</h3>
             </CardHeader>
             <CardContent>
               {dealsLoading ? (
                 <div className="skeleton h-48 rounded-xl" />
               ) : deals.length === 0 ? (
-                <p className="text-sm text-muted text-center py-8">No deals recorded yet.</p>
+                <EmptyState
+                  noun="trophy"
+                  title="No deals recorded yet"
+                  body="Recorded business revenue builds the leaderboard and the FY totals."
+                />
               ) : (
                 <div className="overflow-x-auto max-h-80 overflow-y-auto">
                   <table className="w-full text-sm">
@@ -1777,19 +2568,34 @@ export default function Admin() {
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Giver</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Receiver</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Request</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Type</th>
+                        <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs">Status</th>
                         <th className="px-4 py-3 font-medium text-muted font-mono tracking-tight text-xs text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {deals.sort((a, b) => b.createdAt - a.createdAt).map((d) => (
-                        <tr key={d.id} className="hover:bg-canvas/50 transition-colors">
-                          <td className="px-4 py-2.5 text-xs text-muted font-mono whitespace-nowrap">{formatDate(d.createdAt)}</td>
-                          <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{d.giverCompanyName}</td>
-                          <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{d.receiverCompanyName}</td>
-                          <td className="px-4 py-2.5 text-xs text-steel max-w-[160px] truncate" title={d.requestTitle}>{d.requestTitle}</td>
-                          <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{formatCurrency(d.amount)}</td>
-                        </tr>
-                      ))}
+                      {[...deals].sort((a, b) => b.createdAt - a.createdAt).map((d) => {
+                        const status = d.status || 'approved';
+                        return (
+                          <tr key={d.id} className="hover:bg-canvas/50 transition-colors">
+                            <td className="px-4 py-2.5 text-xs text-muted font-mono whitespace-nowrap">{formatDate(d.createdAt)}</td>
+                            <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{d.giverCompanyName || '—'}</td>
+                            <td className="px-4 py-2.5 text-xs font-medium text-charcoal">{d.receiverCompanyName}</td>
+                            <td className="px-4 py-2.5 text-xs text-steel max-w-[160px] truncate" title={d.requestTitle}>{d.requestTitle}</td>
+                            <td className="px-4 py-2.5 text-xs">
+                              <Badge variant={d.source === 'referral' ? 'accent' : 'neutral'}>
+                                {d.source === 'referral' ? 'Referral' : 'Deal'}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs">
+                              <Badge variant={status === 'approved' ? 'success' : status === 'rejected' ? 'danger' : 'neutral'}>
+                                {status}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-2.5 text-xs font-semibold text-charcoal text-right">{toCompactINR(d.amount)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
