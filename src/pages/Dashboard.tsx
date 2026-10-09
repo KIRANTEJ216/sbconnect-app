@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserRequests, recordDeal, getMyNotifications, getAwardedRequests, submitReferralRevenue, countsTowardDealsTotal } from '../lib/firestore';
-import { useProfiles, useRequestsQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useAllDealsQuery, useTotalReferralRevenue, useMyRevenueEntries, usePendingRevenueTotalsQuery } from '../hooks/useFirebaseQuery';
+import { useProfiles, useRequestsQuery, useBusinessProfile, useTotalBusinessValue, useRevenueConfig, useAllDealsQuery, useTotalReferralRevenue, useMyRevenueEntries, usePendingRevenueTotalsQuery, useDealsWonCount } from '../hooks/useFirebaseQuery';
 import type { UserNotification, Request as BusinessRequest } from '../types';
 import { formatDate, formatCompactINR, formatINR, toCompactINR, getFinancialYear } from '../lib/format';
 import { buildBusinessLeaderboard, toLeaderboardDeal } from '../lib/leaderboard';
@@ -15,6 +15,9 @@ import { Input } from '../components/ui/Input';
 import { AnimatedPage } from '../components/motion/AnimatedPage';
 import { DashboardUpdates } from '../components/DashboardUpdates';
 
+
+/** How many members the Business Leaderboard ranks. */
+const LEADERBOARD_TOP_N = 3;
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -45,6 +48,7 @@ export default function Dashboard() {
   const { data: totalBusinessValue = 0 } = useTotalBusinessValue();
   const { data: revenueConfig } = useRevenueConfig();
   const { data: referralTotals = { totalValue: 0, pendingValue: 0 } } = useTotalReferralRevenue();
+  const { data: dealsWonCount = 0 } = useDealsWonCount();
   const { data: pendingRevenue = { total: 0, totalCount: 0, pendingDeals: 0, pendingDealsCount: 0, pendingReferrals: 0, pendingReferralsCount: 0 } } = usePendingRevenueTotalsQuery();
 
   useEffect(() => {
@@ -216,6 +220,16 @@ export default function Dashboard() {
     [allReqs],
   );
 
+  // The board is a podium, not a full table: only the top three members are
+  // ranked, since the value is in the leaders rather than in scrolling a long
+  // list. Rows are already sorted by value then recency, so slicing here is
+  // exactly "top 3" with no re-sorting.
+  const visibleLeaderboardRows = useMemo(
+    () => leaderboardRows.slice(0, LEADERBOARD_TOP_N),
+    [leaderboardRows],
+  );
+  const rankedOutCount = leaderboardRows.length - visibleLeaderboardRows.length;
+
   // Plain deals still awaiting verification. They stay off the board until an
   // admin approves them, but the count is surfaced so the omission is explicit.
   const hiddenFromLeaderboard = allDeals.length - leaderboardRows.reduce(
@@ -371,23 +385,31 @@ export default function Dashboard() {
           <div className="mt-5 pt-4 border-t border-border">
             <dl className="grid grid-cols-3 gap-3">
               {[
-                { k: 'Deals', v: totalBusinessValue },
-                { k: 'Referrals', v: referralTotals.totalValue },
-                { k: 'Unverified', v: pendingRevenue.total },
+                { k: 'Deals', v: formatCompactINR(totalBusinessValue), sub: `${dealsWonCount} won` },
+                {
+                  k: 'Referrals',
+                  v: formatCompactINR(referralTotals.totalValue),
+                  sub: 'referral revenue',
+                },
+                {
+                  k: 'Unverified',
+                  v: formatCompactINR(pendingRevenue.total),
+                  sub: pendingRevenue.totalCount > 0 ? `${pendingRevenue.totalCount} pending` : undefined,
+                },
               ].map((s) => (
                 <div key={s.k}>
                   <dt className="text-micro font-semibold text-muted uppercase tracking-[0.06em]">
                     {s.k}
-                    {s.k === 'Unverified' && pendingRevenue.totalCount > 0 && (
-                      <span className="text-faint"> · {pendingRevenue.totalCount}</span>
-                    )}
                   </dt>
                   <dd
                     className={`text-sm font-semibold tabular mt-0.5 ${
                       s.k === 'Unverified' && pendingRevenue.total > 0 ? 'text-warning' : 'text-charcoal'
                     }`}
                   >
-                    {formatCompactINR(s.v)}
+                    {s.v}
+                    {s.sub && (
+                      <span className="block text-micro font-normal text-faint">{s.sub}</span>
+                    )}
                   </dd>
                 </div>
               ))}
@@ -576,7 +598,7 @@ export default function Dashboard() {
                     <tbody className="divide-y divide-border">
                       {/* One row per receiving company: wins summed, value summed,
                           clients collapsed into a single cell. */}
-                      {leaderboardRows.map((row, rankIndex) => {
+                      {visibleLeaderboardRows.map((row, rankIndex) => {
                         const latestGiver = row.givers[0];
                         const secondGiver = row.givers[1];
                         const extraGivers = row.givers.length - 2;
@@ -627,6 +649,12 @@ export default function Dashboard() {
                 <p className="text-micro text-muted mt-2 px-3">
                   {hiddenFromLeaderboard} {hiddenFromLeaderboard === 1 ? 'entry' : 'entries'} awaiting
                   verification {hiddenFromLeaderboard === 1 ? 'is' : 'are'} not ranked yet.
+                </p>
+              )}
+              {rankedOutCount > 0 && (
+                <p className="text-micro text-muted mt-1 px-3">
+                  Showing the top {LEADERBOARD_TOP_N}. {rankedOutCount} more{' '}
+                  {rankedOutCount === 1 ? 'member is' : 'members are'} ranked below.
                 </p>
               )}
             </CardContent>

@@ -60,6 +60,27 @@ export function useTotalReferralRevenue() {
   });
 }
 
+/**
+ * Count of deals won — every approved plain deal, whether a member submitted it
+ * for review or a super admin recorded it directly.
+ *
+ * Deliberately `verifiedDealsCount` (plain deals only), matching the
+ * "Deals Won" column the Business Leaderboard shows: a referral is a
+ * giver→receiver *transfer claim*, not business won, and counting it here
+ * would double-count against the leaderboard. `verifiedDealsCount` covers both
+ * submission paths because admin-recorded deals carry source 'deal' with
+ * status 'approved', so members and super admin are both represented.
+ */
+export function useDealsWonCount() {
+  return useQuery({
+    queryKey: ['revenueSummary'],
+    queryFn: getRevenueSummary,
+    select: (s) => s.verifiedDealsCount,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 300000,
+  });
+}
+
 export function useReferralLeaderboardQuery() {
   return useQuery({
     queryKey: ['referralLeaderboard'],

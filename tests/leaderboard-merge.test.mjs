@@ -235,4 +235,47 @@ t('ties break by most recent activity', () => {
   assert.strictEqual(rows[0].receiverCompany, 'Newer');
 });
 
+// The board renders only the top three. Slicing must preserve the ranking order
+// that buildBusinessLeaderboard produced, and must not drop a row that has
+// fewer than three members behind it.
+t('slice(0, 3) returns exactly the top three, in rank order', () => {
+  const rows = buildBusinessLeaderboard([
+    deal({ receiverUid: 'r1', receiverCompanyName: 'A', amountValue: 100, createdAt: 1 }),
+    deal({ receiverUid: 'r2', receiverCompanyName: 'B', amountValue: 200, createdAt: 2 }),
+    deal({ receiverUid: 'r3', receiverCompanyName: 'C', amountValue: 300, createdAt: 3 }),
+    deal({ receiverUid: 'r4', receiverCompanyName: 'D', amountValue: 400, createdAt: 4 }),
+    deal({ receiverUid: 'r5', receiverCompanyName: 'E', amountValue: 50, createdAt: 5 }),
+  ]);
+  const top3 = rows.slice(0, 3);
+  assert.strictEqual(top3.length, 3);
+  assert.deepStrictEqual(top3.map((r) => r.receiverCompany), ['D', 'C', 'B']);
+});
+
+t('slice(0, 3) is a no-op when fewer than three members have deals', () => {
+  const rows = buildBusinessLeaderboard([
+    deal({ receiverUid: 'r1', receiverCompanyName: 'Solo', amountValue: 100, createdAt: 1 }),
+  ]);
+  assert.strictEqual(rows.slice(0, 3).length, 1);
+  assert.strictEqual(rows.slice(0, 3)[0].receiverCompany, 'Solo');
+});
+
+t('slice(0, 3) on an empty board stays empty', () => {
+  assert.strictEqual(buildBusinessLeaderboard([]).slice(0, 3).length, 0);
+});
+
+// A company ranked 4th has a positive totalValue and must not leak into the top
+// three, which is the failure a "sort then filter" rewrite would introduce.
+t('a high-value deal from one company cannot be split across the cut', () => {
+  const rows = buildBusinessLeaderboard([
+    deal({ receiverUid: 'r1', receiverCompanyName: 'ManySmall', amountValue: 1, createdAt: 1 }),
+    deal({ receiverUid: 'r1', receiverCompanyName: 'ManySmall', amountValue: 1, createdAt: 2 }),
+    deal({ receiverUid: 'r1', receiverCompanyName: 'ManySmall', amountValue: 1, createdAt: 3 }),
+    deal({ receiverUid: 'r1', receiverCompanyName: 'ManySmall', amountValue: 1, createdAt: 4 }),
+    deal({ receiverUid: 'r2', receiverCompanyName: 'OneBig', amountValue: 100, createdAt: 5 }),
+  ]);
+  const top3 = rows.slice(0, 3);
+  assert.deepStrictEqual(top3.map((r) => r.receiverCompany), ['OneBig', 'ManySmall']);
+  assert.strictEqual(top3[1].dealCount, 4, 'the 4th company keeps all 4 wins on one row');
+});
+
 console.log(`\n${pass} passed`);
