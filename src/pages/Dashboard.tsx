@@ -385,11 +385,11 @@ export default function Dashboard() {
           <div className="mt-5 pt-4 border-t border-border">
             <dl className="grid grid-cols-3 gap-3">
               {[
-                { k: 'Deals', v: formatCompactINR(totalBusinessValue), sub: `${dealsWonCount} won` },
+                { k: 'Deals', v: formatCompactINR(totalBusinessValue), sub: undefined },
                 {
                   k: 'Referrals',
                   v: formatCompactINR(referralTotals.totalValue),
-                  sub: 'referral revenue',
+                  sub: `${dealsWonCount} won`,
                 },
                 {
                   k: 'Unverified',
