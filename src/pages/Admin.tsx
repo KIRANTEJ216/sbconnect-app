@@ -768,6 +768,17 @@ const handleAddReferralRevenue = async () => {
     { id: 'import', label: 'Import', icon: '📥' },
   ] as const;
 
+  // Revenue awaiting verification is the one queue with no persistent breadcrumb:
+  // the Members tab badges its verification queue (see below), but the Deals tab
+  // only revealed its revenue queue to whoever happened to open it. With approval
+  // restricted to super_admin, an admin reviewing the panel had no way to notice
+  // member revenue was sitting unverified, and no way to tell the super admin
+  // that the queue was non-empty. This surfaces it in both places.
+  const pendingRevenueCount = pendingRevenue.length;
+  const tabBadge: Partial<Record<(typeof tabs)[number]['id'], number>> = {
+    deals: pendingRevenueCount,
+  };
+
   return (
     <AnimatedPage>
     <div className="max-w-5xl mx-auto">
@@ -789,9 +800,30 @@ const handleAddReferralRevenue = async () => {
             }`}
           >
             {tab.icon} {tab.label}
+            {tabBadge[tab.id] ? (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-warning text-[10px] font-bold text-white align-middle">
+                {tabBadge[tab.id]}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
+
+      {/* Points the reviewer at the queue without needing to go hunting for it. */}
+      {pendingRevenueCount > 0 && (
+        <button
+          onClick={() => setActiveTab('deals')}
+          className="w-full mb-6 px-4 py-2.5 bg-warning-light/30 border border-warning/20 rounded-lg text-xs text-warning font-medium flex items-center gap-2 text-left hover:bg-warning-light/50 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+          <span>
+            {pendingRevenueCount} revenue {pendingRevenueCount === 1 ? 'entry awaits' : 'entries await'} verification
+            {' · '}
+            {formatCompactINR(pendingRevenueTotals.total)} is not yet counted as confirmed revenue.
+            {canWrite ? ' Open the Deals tab to review.' : ' Only the Super Admin can approve these.'}
+          </span>
+        </button>
+      )}
 
       {!canWrite && (
         <div className="px-4 py-2 bg-warning-light/30 border border-warning/20 rounded-lg text-xs text-warning font-medium flex items-center gap-2">

@@ -18,6 +18,30 @@ service cloud.firestore {
       );
     }
 
+    // Fields a member may never assert on a deal at creation time. Each one
+    // would let a submitter influence a figure or an attribution the rules
+    // cannot verify:
+    //   reviewedBy / reviewedAt — forge a completed review trail
+    //   reviewNote               — forge a reviewer's stated reason
+    //   occurredOn               — choose the fiscal-year bucket, since
+    //                              revenueStats.ts:45 falls back to it
+    //   referrerUid / giverUid   — divert referral credit to any member;
+    //                              submitReferralRevenue derives these from
+    //                              the profile, but rules cannot re-derive it
+    //
+    // Declared as a helper rather than inlined in the create rule: a line
+    // beginning with '!' directly after the preceding rule's comment block
+    // fails to parse ("Unexpected '!'"), so the negations cannot lead a line
+    // in that position.
+    function memberDealFieldsPinned() {
+      return !('reviewedBy' in request.resource.data)
+        && !('reviewedAt' in request.resource.data)
+        && !('reviewNote' in request.resource.data)
+        && !('occurredOn' in request.resource.data)
+        && !('referrerUid' in request.resource.data)
+        && !('giverUid' in request.resource.data);
+    }
+
     // Users: owner can read/write own doc; admin/super_admin can read all; super_admin can write all
     match /users/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdminOrSuperAdmin());
@@ -78,9 +102,41 @@ service cloud.firestore {
             request.resource.data.receiverUid == request.auth.uid
             && request.resource.data.status == 'pending'
             && request.resource.data.submittedByRole == 'member'
+            && memberDealFieldsPinned()
           )
         );
-      allow update, delete: if isSuperAdmin();
+      // Super admin only, on purpose: approval stays with kktej3d, and deletion
+      // of ledger records is not part of approving anything.
+      //
+      // Diff-validated so approval cannot be used as a backdoor to rewrite the
+      // ledger. reviewRevenueEntry (:566) writes only status, reviewedBy,
+      // reviewedAt, reviewNote and updatedAt, so every field protected here is
+      // one that a legitimate review never touches. Without this, an approved
+      // deal's amountValue could be edited after the fact, silently restating
+      // revenue on the leaderboard and the headline total.
+      allow update: if isSuperAdmin()
+        && (
+          // Reopening a decided entry is never allowed: the stats transaction in
+          // reviewRevenueEntry only moves value INTO the total, so flipping an
+          // approved or rejected deal back to pending would double-count.
+          resource.data.status == 'pending'
+          || request.resource.data.status == resource.data.status
+        )
+        // get() rather than a bare field read: a PATCH with an updateMask only
+        // presents the masked fields on request.resource, so reading an unmasked
+        // one raises "Property X is undefined on object" and denies the whole
+        // update. get().data.<field> yields null for an absent field, which
+        // compares equal to itself and lets the update through.
+        && request.resource.data.get('amountValue', null) == resource.data.get('amountValue', null)
+        && request.resource.data.get('receiverUid', null) == resource.data.get('receiverUid', null)
+        && request.resource.data.get('giverUid', null) == resource.data.get('giverUid', null)
+        && request.resource.data.get('source', null) == resource.data.get('source', null)
+        && request.resource.data.get('referrerUid', null) == resource.data.get('referrerUid', null)
+        && request.resource.data.get('referredMemberUid', null) == resource.data.get('referredMemberUid', null)
+        && request.resource.data.get('occurredOn', null) == resource.data.get('occurredOn', null)
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && request.resource.data.get('submittedBy', null) == resource.data.get('submittedBy', null);
+      allow delete: if isSuperAdmin();
     }
 
     // Materialized revenue aggregates (functions/src/revenueStats.ts).
