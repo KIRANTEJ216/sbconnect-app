@@ -388,8 +388,12 @@ export default function Dashboard() {
                 { k: 'Deals', v: formatCompactINR(totalBusinessValue), sub: undefined },
                 {
                   k: 'Referrals',
-                  v: formatCompactINR(referralTotals.totalValue),
-                  sub: `${dealsWonCount} won`,
+                  // Count is the headline: "how many deals have we won", which is
+                  // what a member reads this cell for. The rupee referral
+                  // revenue stays as a sub-line, and only when non-zero — a
+                  // lone "₹0" read as an error rather than as "none yet".
+                  v: `${dealsWonCount} won`,
+                  sub: referralTotals.totalValue > 0 ? formatCompactINR(referralTotals.totalValue) : undefined,
                 },
                 {
                   k: 'Unverified',
